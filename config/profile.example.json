@@ -1,0 +1,51 @@
+{
+  "personal_info": {
+    "full_name": "Alex Mercer",
+    "email": "alex.mercer.dev@example.com",
+    "phone": "+1 (555) 019-2834",
+    "location": "Buenos Aires, Argentina",
+    "linkedin_url": "https://www.linkedin.com/in/alexmercer-example/",
+    "github_url": "https://github.com/alexmercer-dev",
+    "portfolio_url": "https://alexmercer.dev",
+    "current_company": "Acme Cloud Corp",
+    "requires_us_visa_sponsorship": "No"
+  },
+  "search_criteria": {
+    "target_roles": [
+      "Senior Software Engineer",
+      "Full Stack Engineer",
+      "Backend Engineer",
+      "Frontend Engineer",
+      "QA Automation Engineer",
+      "SDET"
+    ],
+    "keywords": [
+      "TypeScript",
+      "Python",
+      "React",
+      "Node.js",
+      "PostgreSQL",
+      "AWS",
+      "Docker"
+    ],
+    "location_keywords": [
+      "remote",
+      "latam",
+      "latin america",
+      "worldwide",
+      "global",
+      "anywhere",
+      "americas"
+    ],
+    "min_salary_usd": 3500
+  },
+  "ats_settings": {
+    "enabled_platforms": [
+      "ashby",
+      "greenhouse",
+      "lever"
+    ],
+    "auto_upload_resume": true,
+    "stealth_mode": true
+  }
+}

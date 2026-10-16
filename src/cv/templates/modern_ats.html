@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ personal.full_name }} - {{ tailored_title }}</title>
+<style>
+  @page {
+    size: letter;
+    margin: 6mm 10mm 6mm 10mm;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.22;
+    font-size: 8.2pt;
+    background: #ffffff;
+  }
+  .header {
+    text-align: center;
+    border-bottom: 1.5px solid #0f2d59;
+    padding-bottom: 3px;
+    margin-bottom: 4px;
+  }
+  .name {
+    font-size: 17.5pt;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: #091e42;
+    text-transform: uppercase;
+  }
+  .title {
+    font-size: 9.8pt;
+    font-weight: 600;
+    color: #035388;
+    margin-top: 1px;
+    letter-spacing: 0.2px;
+  }
+  .contact {
+    font-size: 8pt;
+    color: #475569;
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+  .contact a {
+    color: #035388;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .section-title {
+    font-size: 8.9pt;
+    font-weight: 700;
+    color: #091e42;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 1px;
+    margin-top: 4px;
+    margin-bottom: 3px;
+  }
+  .summary {
+    font-size: 8.1pt;
+    color: #334155;
+    text-align: justify;
+    line-height: 1.25;
+  }
+  .skills-grid {
+    display: grid;
+    grid-template-columns: 145px 1fr;
+    row-gap: 2px;
+    column-gap: 8px;
+    font-size: 8.1pt;
+  }
+  .skill-cat {
+    font-weight: 600;
+    color: #035388;
+  }
+  .skill-items {
+    color: #334155;
+  }
+  .job {
+    margin-bottom: 3.5px;
+  }
+  .job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .job-title {
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 8.4pt;
+  }
+  .company {
+    font-weight: 600;
+    color: #035388;
+  }
+  .job-dates {
+    font-size: 7.9pt;
+    color: #64748b;
+    font-weight: 500;
+  }
+  ul.bullets {
+    margin-left: 14px;
+    margin-top: 1px;
+  }
+  ul.bullets li {
+    font-size: 8.05pt;
+    color: #334155;
+    margin-bottom: 1px;
+    line-height: 1.22;
+  }
+  .edu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 8.1pt;
+    margin-bottom: 1.5px;
+  }
+  .edu-degree {
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .edu-inst {
+    color: #035388;
+  }
+  .edu-date {
+    font-size: 7.9pt;
+    color: #64748b;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="name">{{ personal.full_name }}</div>
+  <div class="title">{{ tailored_title }}</div>
+  <div class="contact">
+    {{ personal.location }} &bull; {{ personal.phone }} &bull; <a href="mailto:{{ personal.email }}">{{ personal.email }}</a><br>
+    LinkedIn: <a href="{{ personal.linkedin_url }}">{{ personal.linkedin_url }}</a>
+    {% if personal.github_url %} &bull; GitHub: <a href="{{ personal.github_url }}">{{ personal.github_url }}</a>{% endif %}
+    {% if personal.portfolio_url %} &bull; Portfolio: <a href="{{ personal.portfolio_url }}">{{ personal.portfolio_url }}</a>{% endif %}
+  </div>
+</div>
+
+<div class="section-title">Professional Summary</div>
+<p class="summary">
+  {{ summary }}
+</p>
+
+{% if skills_categories %}
+<div class="section-title">Technical Expertise</div>
+<div class="skills-grid">
+  {% for cat, items in skills_categories.items() %}
+  <div class="skill-cat">{{ cat }}:</div>
+  <div class="skill-items">{{ items }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="section-title">Professional Experience</div>
+{% for exp in experiences %}
+<div class="job">
+  <div class="job-header">
+    <div><span class="job-title">{{ exp.role }}</span> &ndash; <span class="company">{{ exp.company }}</span></div>
+    <div class="job-dates">{{ exp.period }} | {{ exp.location }}</div>
+  </div>
+  <ul class="bullets">
+    {% for b in exp.highlights %}
+    <li>{{ b }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+
+{% if education %}
+<div class="section-title">Education &amp; Certifications</div>
+{% for edu in education %}
+<div class="edu-item">
+  <div><span class="edu-degree">{{ edu.degree }}</span> &ndash; <span class="edu-inst">{{ edu.institution }}</span></div>
+  <div class="edu-date">{{ edu.details }}</div>
+</div>
+{% endfor %}
+{% endif %}
+
+</body>
+</html>

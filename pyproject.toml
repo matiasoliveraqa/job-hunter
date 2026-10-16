@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-hunter"
+version = "1.0.0"
+description = "Autonomous, human-in-the-loop job search & application assistant powered by local AI agents and Playwright."
+readme = "README.md"
+authors = [{ name = "Open Source Community" }]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.40.0",
+    "aiohttp>=3.9.0",
+    "beautifulsoup4>=4.12.0",
+    "pydantic>=2.0.0",
+    "jinja2>=3.1.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+job-hunter = "src.cli:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
