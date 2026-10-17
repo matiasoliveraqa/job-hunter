@@ -32,25 +32,24 @@ The modern tech job search is broken:
 ## 🏗️ Architecture
 
 ```mermaid
-graph TD
-    subgraph Discovery ["1. High-Speed Discovery"]
-        A["15,000+ Company Slugs<br/>(Ashby, Greenhouse, Lever)"] --> B["Concurrent Async API Scanner<br/>(aiohttp)"]
-        B --> C["Filtered Job Pool<br/>(Role & Location Match)"]
-    end
+sequenceDiagram
+    autonumber
+    actor You as Candidate
+    participant AI as Local AI Agent
+    participant ATS as Ashby / Greenhouse / Lever
+    participant Browser as Stealth Browser
 
-    subgraph Intelligence ["2. Agentic Tailoring"]
-        D["Candidate Base CV<br/>(my_cv/)"] --> E["AI Agent / LLM<br/>(Cursor / Claude Code / Windsurf)"]
-        C --> E
-        E --> F["Tailored ATS HTML Resume"]
-        F --> G["1-Page Letter PDF Compiler<br/>(Playwright)"]
-    end
-
-    subgraph Automation ["3. Supervised Execution"]
-        G --> H["Stealth Headed Browser<br/>(Anti-Bot Masking)"]
-        H --> I["Automated Form Pre-fill<br/>(Name, Email, Links, CV)"]
-        I --> J["Desktop Window Open<br/>Candidate Reviews & Submits"]
-    end
+    AI->>ATS: Scan 15,000+ public company boards
+    ATS-->>AI: Filtered remote opportunities
+    AI->>AI: Tailor 1-Page ATS Resume (PDF)
+    AI->>Browser: Launch & Pre-fill application form
+    Browser-->>You: Headed window opens on desktop
+    You->>Browser: Review, verify & click Submit
 ```
+
+> [!IMPORTANT]
+> **Human-in-the-Loop by Design:**  
+> Job Hunter is not a blind auto-apply spam bot. It is an intelligent acceleration tool engineered to eliminate repetitive data entry. The AI handles the tedious discovery, tailoring, and form pre-filling, but you always review, verify, and click Submit. Quality and trust over spam, always.
 
 ---
 
