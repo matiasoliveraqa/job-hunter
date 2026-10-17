@@ -50,9 +50,24 @@ class ATSSettings(BaseModel):
     auto_upload_resume: bool = True
     stealth_mode: bool = True
 
+class CandidatePreferences(BaseModel):
+    desired_salary_usd: Optional[int] = Field(None, description="Expected monthly or annual compensation in USD")
+    salary_period: str = Field("monthly", description="'monthly' or 'annual'")
+    notice_period: str = Field("Immediately", description="e.g. 'Immediately', '2 weeks', '1 month'")
+    english_level: Optional[str] = Field("Fluent / Professional", description="e.g. 'B2', 'Fluent', 'Native'")
+    legally_authorized_to_work: str = Field("Yes", description="'Yes' or 'No'")
+
+    @property
+    def formatted_salary(self) -> str:
+        if not self.desired_salary_usd:
+            return ""
+        period_str = "/ month" if self.salary_period.lower() == "monthly" else "/ year"
+        return f"${self.desired_salary_usd:,} USD {period_str}"
+
 class CandidateProfile(BaseModel):
     personal_info: PersonalInfo
     search_criteria: SearchCriteria
+    preferences: CandidatePreferences = Field(default_factory=CandidatePreferences)
     ats_settings: ATSSettings = Field(default_factory=ATSSettings)
 
 class JobPosting(BaseModel):

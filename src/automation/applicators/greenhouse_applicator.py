@@ -38,4 +38,7 @@ class GreenhouseApplicator(BaseApplicator):
             if val:
                 await self.safe_fill(sel, val, lbl)
 
+        # 6. Salary & Preferences
+        await self.fill_common_preferences()
+
         return True

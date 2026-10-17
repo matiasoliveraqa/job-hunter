@@ -21,3 +21,13 @@ def test_personal_info_properties():
     )
     assert p.first_name == "Alex"
     assert p.last_name == "Mercer"
+
+def test_candidate_preferences():
+    from src.core.models import CandidatePreferences
+    prefs = CandidatePreferences(
+        desired_salary_usd=3500,
+        salary_period="monthly",
+        notice_period="2 weeks"
+    )
+    assert prefs.formatted_salary == "$3,500 USD / month"
+    assert prefs.notice_period == "2 weeks"

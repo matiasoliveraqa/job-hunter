@@ -59,4 +59,7 @@ class AshbyApplicator(BaseApplicator):
             except Exception:
                 pass
 
+        # 6. Salary & Preferences
+        await self.fill_common_preferences()
+
         return True

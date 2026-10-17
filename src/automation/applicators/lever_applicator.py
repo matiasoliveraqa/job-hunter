@@ -34,4 +34,7 @@ class LeverApplicator(BaseApplicator):
             if val:
                 await self.safe_fill(sel, val, lbl)
 
+        # 5. Salary & Preferences
+        await self.fill_common_preferences()
+
         return True

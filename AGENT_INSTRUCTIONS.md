@@ -27,7 +27,10 @@ flowchart TD
    - Read `config/profile.example.json`.
    - Populate `config/profile.json` with the candidate's verified name, email, phone, location, LinkedIn, GitHub, and portfolio URLs.
    - Configure `target_roles` and `keywords` based strictly on the candidate's actual experience.
-3. **Strict Truth Rule:** Never fabricate companies, degrees, dates, or technical skills not present in the candidate's CV or verified profile.
+3. **Conversational Preferences (Zero-JSON for Users):**
+   - If the user specifies salary expectations (e.g. "$3,000 USD/month"), availability/notice period (e.g. "Immediate"), or English proficiency in the chat, automatically populate or update `config/profile.json` under `preferences` behind the scenes.
+   - The user should never be forced to edit `.json` files manually.
+4. **Strict Truth Rule:** Never fabricate companies, degrees, dates, or technical skills not present in the candidate's CV or verified profile.
 
 ---
 

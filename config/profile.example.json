@@ -39,6 +39,13 @@
     ],
     "min_salary_usd": 3500
   },
+  "preferences": {
+    "desired_salary_usd": 3500,
+    "salary_period": "monthly",
+    "notice_period": "Immediately",
+    "english_level": "Professional / B2",
+    "legally_authorized_to_work": "Yes"
+  },
   "ats_settings": {
     "enabled_platforms": [
       "ashby",
