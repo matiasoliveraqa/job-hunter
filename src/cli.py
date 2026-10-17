@@ -33,18 +33,18 @@ def init_command():
     if not prof_dest.exists() and prof_src.exists():
         import shutil
         shutil.copy(prof_src, prof_dest)
-        console.print(f"[green]✓ Created config file:[/green] {prof_dest}")
+        console.print(f"[green][CREATED][/green] Config file: {prof_dest}")
     else:
-        console.print(f"[yellow]i Config file already exists:[/yellow] {prof_dest}")
+        console.print(f"[yellow][INFO][/yellow] Config file already exists: {prof_dest}")
 
     excl_dest = CONFIG_DIR / "exclusions.py"
     excl_src = CONFIG_DIR / "exclusions.example.py"
     if not excl_dest.exists() and excl_src.exists():
         import shutil
         shutil.copy(excl_src, excl_dest)
-        console.print(f"[green]✓ Created exclusions file:[/green] {excl_dest}")
+        console.print(f"[green][CREATED][/green] Exclusions file: {excl_dest}")
 
-    console.print("\n[bold green]Setup Complete![/bold green] Next steps:")
+    console.print("\n[bold green]Setup Complete.[/bold green] Next steps:")
     console.print("1. Edit [cyan]config/profile.json[/cyan] with your contact info and target roles.")
     console.print("2. Run [cyan]job-hunter scan[/cyan] to discover remote openings.")
 
@@ -59,7 +59,7 @@ def scan_command(args):
         f"[bold]Target Roles:[/bold] {', '.join(roles)}\n"
         f"[bold]Locations:[/bold] {', '.join(locations)}\n"
         f"[bold]Platforms:[/bold] {', '.join(platforms)}",
-        title="🔍 ATS Scanner Active",
+        title="ATS Scanner Active",
         border_style="blue"
     ))
 
@@ -83,7 +83,7 @@ def scan_command(args):
         table.add_row(str(i), p.ats.value.upper(), p.company, p.title, p.location or "Remote", p.url)
 
     console.print(table)
-    console.print(f"\n[green]✓ Results saved to:[/green] {OUTPUT_DIR / 'scan_results.json'}")
+    console.print(f"\n[green][SAVED][/green] Results written to: {OUTPUT_DIR / 'scan_results.json'}")
 
 def apply_command(args):
     """Launch headed browser and pre-fill application form."""
@@ -95,7 +95,7 @@ def apply_command(args):
         f"[bold]URL:[/bold] {url}\n"
         f"[bold]Candidate:[/bold] {profile.personal_info.full_name}\n"
         f"[bold]CV Attached:[/bold] {cv_path.name if cv_path else 'None'}",
-        title="🚀 Headed Application Assistant",
+        title="Headed Application Assistant",
         border_style="green"
     ))
 
@@ -120,7 +120,7 @@ def apply_command(args):
 
         await applicator.fill_form(cv_path)
 
-        console.print("\n[bold green]✅ All fields pre-filled![/bold green]")
+        console.print("\n[bold green][SUCCESS] All fields pre-filled.[/bold green]")
         console.print("Please review the details in the opened browser, complete any employer-specific questions, and click Submit.")
         console.print("[dim]The session will close when you close the browser window.[/dim]\n")
 
@@ -144,7 +144,7 @@ def build_cv_command(args):
 
     console.print(f"[cyan]Compiling PDF from {html_path}...[/cyan]")
     asyncio.run(builder.compile_to_pdf(html_path, out_pdf))
-    console.print(f"[bold green]✓ PDF compiled successfully:[/bold green] {out_pdf}")
+    console.print(f"[bold green][SUCCESS][/bold green] PDF compiled successfully: {out_pdf}")
 
 def main():
     parser = argparse.ArgumentParser(

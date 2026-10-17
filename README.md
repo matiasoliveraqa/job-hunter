@@ -1,6 +1,4 @@
-<div align="center">
-
-# 🎯 Job Hunter
+# Job Hunter
 
 **Autonomous, Human-in-the-Loop Job Search & Application Assistant**  
 *Powered by Local AI Agents, Concurrent ATS Scanners & Headed Playwright Automation.*
@@ -14,7 +12,7 @@
 
 ---
 
-## 💡 Why Job Hunter?
+## Why Job Hunter?
 
 The modern tech job search is broken:
 - **Endless manual data entry:** Filling the exact same contact, experience, and link fields dozens of times per week.
@@ -29,7 +27,7 @@ The modern tech job search is broken:
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 sequenceDiagram
@@ -53,7 +51,7 @@ sequenceDiagram
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 - **Python 3.10+**
@@ -86,7 +84,7 @@ This creates:
 
 ---
 
-## 🤖 Using with AI Coding Assistants
+## Using with AI Coding Assistants
 
 Job Hunter is engineered to be **LLM-agnostic**. It includes a standardized prompt file (`AGENT_INSTRUCTIONS.md`) designed for autonomous agents.
 
@@ -104,7 +102,7 @@ Job Hunter is engineered to be **LLM-agnostic**. It includes a standardized prom
 
 ---
 
-## 💻 CLI Reference
+## CLI Reference
 
 You can also run all components manually via the CLI:
 
@@ -127,7 +125,7 @@ python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id/applicati
 
 ---
 
-## 🛡️ Security & Privacy Guarantee
+## Security & Privacy Guarantee
 
 - **100% Local Execution:** No third-party servers, tracking pixels, or remote database logging.
 - **Strict Git Protection:** `.gitignore` comes pre-configured to strictly ignore `config/profile.json`, `my_cv/`, generated PDFs, and application logs. Your personal details will never be accidentally pushed to GitHub.
@@ -135,7 +133,7 @@ python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id/applicati
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! If you want to add new ATS platform adapters (e.g., Workable, SmartRecruiters, BambooHR) or expand company registries:
 1. Fork the Project
@@ -146,6 +144,6 @@ Contributions are welcome! If you want to add new ATS platform adapters (e.g., W
 
 ---
 
-## 📄 License
+## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for more information.

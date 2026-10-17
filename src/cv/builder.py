@@ -58,9 +58,9 @@ class CVBuilder:
                 if "Pages:" in line:
                     pages = int(line.split(":")[1].strip())
                     if pages > 1:
-                        print(f"⚠️ [WARNING] CV has {pages} pages! Ensure strict ATS 1-page rule by reducing margins or content.")
+                        print(f"[WARNING] CV has {pages} pages. Ensure strict ATS 1-page rule by reducing margins or content.")
                     else:
-                        print("✅ [SUCCESS] Strict 1-Page ATS Rule Verified.")
+                        print("[SUCCESS] Strict 1-Page ATS Rule Verified.")
                     return pages
         except Exception:
             pass

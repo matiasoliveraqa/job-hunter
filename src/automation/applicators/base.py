@@ -29,7 +29,7 @@ class BaseApplicator(ABC):
             if await loc.count() > 0 and await loc.first.is_visible():
                 await loc.first.fill(value)
                 if description:
-                    print(f"  [✓] Filled {description}")
+                    print(f"  [OK] Filled {description}")
                 return True
         except Exception:
             pass
@@ -43,7 +43,7 @@ class BaseApplicator(ABC):
             file_input = self.page.locator(selector)
             if await file_input.count() > 0:
                 await file_input.first.set_input_files(str(file_path))
-                print(f"  [✓] Uploaded {description}: {file_path.name}")
+                print(f"  [OK] Uploaded {description}: {file_path.name}")
                 await asyncio.sleep(1.5)
                 return True
         except Exception as e:

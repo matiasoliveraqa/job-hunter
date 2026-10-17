@@ -29,7 +29,7 @@ class AshbyApplicator(BaseApplicator):
             opt = self.page.locator(f"[role='option']:has-text('{city}')")
             if await opt.count() > 0:
                 await opt.first.click()
-                print(f"  [✓] Selected location: {city}")
+                print(f"  [OK] Selected location: {city}")
             else:
                 await loc_inp.first.fill(self.p_info.location)
 
@@ -55,7 +55,7 @@ class AshbyApplicator(BaseApplicator):
         if await spons_btn.count() > 0:
             try:
                 await spons_btn.first.click()
-                print(f"  [✓] Selected Sponsorship: {btn_text}")
+                print(f"  [OK] Selected Sponsorship: {btn_text}")
             except Exception:
                 pass
 
