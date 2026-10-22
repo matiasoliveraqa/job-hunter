@@ -8,8 +8,6 @@
 [![ATS Support](https://img.shields.io/badge/ATS-Ashby%20%7C%20Greenhouse%20%7C%20Lever-purple.svg)](#supported-ats-platforms)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-</div>
-
 ---
 
 ## Why Job Hunter?
@@ -20,10 +18,10 @@ The modern tech job search is broken:
 - **Dangerous spam bots:** Blind auto-apply scripts that spray generic resumes across LinkedIn, triggering bot bans and recruiter spam filters.
 
 **Job Hunter takes a fundamentally different, human-in-the-loop approach:**
-1. **Direct Public ATS APIs:** Queries official endpoints across **15,000+ top tech companies** on **Ashby**, **Greenhouse**, and **Lever** in seconds.
-2. **Fact-Grounded Dynamic Resumes:** Generates tailored, strictly 1-page ATS-compliant PDF resumes that match job criteria without hallucinating experience.
-3. **Stealth Headed Pre-Filling:** Launches an anti-detection Chromium instance that fills the application, attaches your tailored CV, and pauses on your desktop.
-4. **Human Review & One-Click Submit:** You retain 100% control to review, solve any employer challenges, and click **Submit**.
+1. **Direct Public ATS APIs:** Queries official endpoints across **15,000+ top tech companies** on **Ashby**, **Greenhouse**, and **Lever** in seconds using semaphore-bounded concurrency.
+2. **Experience & Modality Aware:** Filters out roles demanding more years of experience than you have, and automatically switches between your **dependent employee salary** (default) and **contractor salary** based on the job posting.
+3. **Dedicated Folder & Tailored 1-Page CV per Role:** Generates an isolated folder for each application (`output/applications/<YYYY-MM>_<Company>_<Role>/`) containing your tailored 1-page ATS PDF, HTML source, and a standalone `open_application.py` script with the application URL and all completed field values.
+4. **Stealth Headed Pre-Filling & Human Review:** Launches a persistent Chromium/Chrome instance with native OS fingerprint that switches to the Application tab, splits First/Last Name accurately, attaches your tailored CV, and pauses on your desktop so you retain 100% control to review and click **Submit**.
 
 ---
 
@@ -37,10 +35,10 @@ sequenceDiagram
     participant ATS as Ashby / Greenhouse / Lever
     participant Browser as Stealth Browser
 
-    AI->>ATS: Scan 15,000+ public company boards
-    ATS-->>AI: Filtered remote opportunities
-    AI->>AI: Tailor 1-Page ATS Resume (PDF)
-    AI->>Browser: Launch & Pre-fill application form
+    AI->>ATS: Scan 15,000+ public company boards (Semaphore-bounded)
+    ATS-->>AI: Filtered remote opportunities (<= candidate experience)
+    AI->>AI: Create per-company folder & Tailor 1-Page ATS Resume (PDF)
+    AI->>Browser: Launch & Pre-fill application form + save open_application.py
     Browser-->>You: Headed window opens on desktop
     You->>Browser: Review, verify & click Submit
 ```
@@ -61,11 +59,11 @@ sequenceDiagram
 Clone this repository and set up a virtual environment:
 
 ```bash
-git clone https://github.com/your-username/job-hunter.git
+git clone https://github.com/matiasoliveraqa/job-hunter.git
 cd job-hunter
 
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv venv          # On Linux/macOS if needed: python3 -m venv venv
+source venv/bin/activate     # On Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
 playwright install chromium
@@ -79,26 +77,28 @@ python -m src.cli init
 ```
 
 This creates:
-- `config/profile.json`: Fill this with your personal details, target roles, technical keywords, and location preferences.
-- `config/exclusions.py`: Add any companies or recruitment agencies you wish to skip.
+- `config/profile.json`: Fill this with your personal details, `years_of_experience`, target roles, and dual salary expectations (`dependent_salary_usd` and `contractor_salary_usd`).
+- `config/exclusions.py`: Starts completely empty so you can add any companies you have already applied to or wish to skip.
 
 ---
 
 ## Using with AI Coding Assistants
 
-Job Hunter is engineered to be **LLM-agnostic**. It includes a standardized prompt file (`AGENT_INSTRUCTIONS.md`) designed for autonomous agents.
+Job Hunter is engineered to be **LLM-agnostic**. It includes:
+- `AGENT_INSTRUCTIONS.md`: Standardized instructions for autonomous execution.
+- `.claude/settings.json`: Pre-configured CLI permissions so **Claude Code** can run `scan`, `build-cv`, and `apply` out-of-the-box without permission blocks.
 
 ### Example Workflow with Cursor / Claude Code / Windsurf:
 1. Place your current master resume (PDF or Markdown) in `my_cv/`.
 2. Open the project folder in your AI editor.
 3. In the agent chat, prompt:
-   > *"Read `AGENT_INSTRUCTIONS.md`, configure my profile from `my_cv/`, and start searching for remote opportunities."*
+   > *"Read `AGENT_INSTRUCTIONS.md`, configure my profile from `my_cv/`, and start applying to matching remote opportunities."*
 4. Your agent will automatically:
-   - Extract your skills into `config/profile.json`.
-   - Scan the ATS registries for matching positions.
-   - Tailor your resume into an ATS single-page PDF.
-   - Launch the headed browser on your screen with all fields filled.
-5. Review the application on your screen, click **Submit**, and close the window. The agent will immediately proceed to the next high-match position!
+   - Extract your skills and years of experience into `config/profile.json`.
+   - Scan the ATS registries for matching positions that do not exceed your years of experience.
+   - Create a dedicated folder per company under `output/applications/<YYYY-MM>_<Company>_<Role>/` with a tailored 1-page ATS PDF.
+   - Immediately launch the headed browser on your screen with all fields filled and save `open_application.py` with the job URL and field log.
+5. Review the application on your screen, click **Submit**, and close the window!
 
 ---
 
@@ -108,19 +108,19 @@ You can also run all components manually via the CLI:
 
 ### Discover Positions
 ```bash
-# Scan across Ashby, Greenhouse, and Lever for remote roles
-python -m src.cli scan --roles "Software Engineer,Full Stack" --locations "remote,latam" --limit 30
+# Scan across Ashby, Greenhouse, and Lever for remote roles matching your experience
+python -m src.cli scan --roles "Software Engineer,Full Stack" --locations "remote,latam" --max-years 6 --limit 30
 ```
 
-### Compile a 1-Page ATS CV
+### Compile a 1-Page ATS CV (Per-Company Folder)
 ```bash
-python -m src.cli build-cv --html output/my_cv.html --out output/my_cv.pdf
+python -m src.cli build-cv --company "AcmeCorp" --role "Senior_Engineer" --html output/applications/2026-10_AcmeCorp_Senior_Engineer/cv_tailored.html
 ```
 
 ### Pre-fill an Application
 ```bash
-# Opens headed browser with stealth anti-detection
-python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id/application" --cv output/my_cv.pdf
+# Opens headed browser, navigates to Application tab, fills form, and saves open_application.py
+python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id" --company "AcmeCorp" --role "Senior_Engineer" --cv output/applications/2026-10_AcmeCorp_Senior_Engineer/CV_AcmeCorp.pdf
 ```
 
 ---
@@ -128,8 +128,8 @@ python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id/applicati
 ## Security & Privacy Guarantee
 
 - **100% Local Execution:** No third-party servers, tracking pixels, or remote database logging.
-- **Strict Git Protection:** `.gitignore` comes pre-configured to strictly ignore `config/profile.json`, `my_cv/`, generated PDFs, and application logs. Your personal details will never be accidentally pushed to GitHub.
-- **Anti-Bot Evasion:** Launches Chromium instances with `navigator.webdriver` masked and `--disable-blink-features=AutomationControlled` to avoid false-positive bot flags on recruitment portals.
+- **Strict Git Protection:** `.gitignore` comes pre-configured to strictly ignore `config/profile.json`, `config/exclusions.py`, `my_cv/`, `output/`, generated PDFs, and browser profiles. Your personal details will never be accidentally pushed to GitHub.
+- **Native OS Anti-Bot Evasion:** Launches persistent Chrome/Chromium sessions preserving your native OS User-Agent and platform while masking `navigator.webdriver`, preventing false-positive hCaptcha/Cloudflare verification errors on Lever, Greenhouse, and Ashby.
 
 ---
 

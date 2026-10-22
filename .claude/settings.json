@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m src.cli *)",
+      "Bash(python -m src.cli init*)",
+      "Bash(python -m src.cli scan*)",
+      "Bash(python -m src.cli build-cv*)",
+      "Bash(python -m src.cli apply*)",
+      "Bash(python3 -m src.cli *)",
+      "Bash(pip install -r requirements.txt)",
+      "Bash(playwright install chromium)",
+      "Bash(pytest*)"
+    ]
+  }
+}

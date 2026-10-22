@@ -45,12 +45,14 @@ resumes/
 
 # Playwright & Browser Artefacts
 .playwright/
+.playwright_profile/
 test-results/
 playwright-report/
 
 # IDE & Editor files
 .vscode/
 .idea/
+.claude/settings.local.json
 *.swp
 *.swo
 .DS_Store
