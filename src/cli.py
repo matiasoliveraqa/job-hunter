@@ -2,36 +2,120 @@
 Job Hunter Command Line Interface.
 """
 
-import sys
-import os
+import re
+import json
+import shutil
 import asyncio
 import argparse
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
+from urllib.parse import urlparse
 
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
-from src.core.config import load_candidate_profile, CONFIG_DIR, OUTPUT_DIR
-from src.core.models import ATSPlatform
+from src.core.config import load_candidate_profile, CONFIG_DIR, OUTPUT_DIR, PROJECT_ROOT
 from src.scanners.orchestrator import ScannerOrchestrator
 from src.automation.browser import launch_stealth_browser
 from src.automation.applicators.ashby_applicator import AshbyApplicator
 from src.automation.applicators.greenhouse_applicator import GreenhouseApplicator
 from src.automation.applicators.lever_applicator import LeverApplicator
-from src.cv.builder import CVBuilder
+from src.cv.builder import CVBuilder, get_or_create_application_dir, sanitize_slug, APPLICATIONS_DIR
 
 console = Console()
+
+def _infer_company_from_url(url: str) -> str:
+    """Extract company name/slug from an Ashby, Greenhouse, or Lever URL."""
+    try:
+        parsed = urlparse(url)
+        parts = [p for p in parsed.path.split("/") if p]
+        if parts:
+            if parts[0].lower() in ("boards", "jobs", "v1", "posting-api") and len(parts) > 1:
+                return parts[1]
+            return parts[0]
+    except Exception:
+        pass
+    return "Company"
+
+def _save_application_artifacts(
+    app_dir: Path,
+    url: str,
+    company: str,
+    role: str,
+    cv_path: Optional[Path],
+    filled_fields: Dict[str, str],
+) -> Path:
+    """
+    Save both application_info.json and a standalone executable script open_application.py
+    inside the company's application folder containing the application URL and all filled fields.
+    """
+    app_dir.mkdir(parents=True, exist_ok=True)
+    cv_str = str(cv_path.resolve()) if cv_path and cv_path.exists() else ""
+
+    info_payload = {
+        "company": company,
+        "role": role,
+        "application_url": url,
+        "tailored_cv_pdf": cv_str,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "completed_fields": filled_fields,
+    }
+    info_path = app_dir / "application_info.json"
+    with open(info_path, "w", encoding="utf-8") as f:
+        json.dump(info_payload, f, indent=2, ensure_ascii=False)
+
+    fields_repr = json.dumps(filled_fields, indent=4, ensure_ascii=False)
+    script_content = f'''#!/usr/bin/env python3
+"""
+Auto-generated Application Execution Script
+Company: {company}
+Role: {role or "Target Role"}
+Application URL: {url}
+"""
+
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path({repr(str(PROJECT_ROOT.resolve()))})
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# Direct link to the job posting / application
+APPLICATION_URL = {repr(url)}
+
+# Tailored 1-Page ATS CV used for this application
+TAILORED_CV_PDF = {repr(cv_str)}
+
+# Summary of fields pre-filled by Job Hunter on this application form
+COMPLETED_FIELDS = {fields_repr}
+
+if __name__ == "__main__":
+    from src.cli import main
+    sys.argv = [
+        "job-hunter",
+        "apply",
+        "--url", APPLICATION_URL,
+        "--company", {repr(company)},
+    ]
+    if TAILORED_CV_PDF:
+        sys.argv.extend(["--cv", TAILORED_CV_PDF])
+    main()
+'''
+    script_path = app_dir / "open_application.py"
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(script_content)
+
+    return script_path
 
 def init_command():
     """Initialize local user configuration from examples."""
     console.print(Panel.fit("[bold cyan]Job Hunter[/bold cyan] - Project Initializer", border_style="cyan"))
-    
+
     prof_dest = CONFIG_DIR / "profile.json"
     prof_src = CONFIG_DIR / "profile.example.json"
     if not prof_dest.exists() and prof_src.exists():
-        import shutil
         shutil.copy(prof_src, prof_dest)
         console.print(f"[green][CREATED][/green] Config file: {prof_dest}")
     else:
@@ -40,13 +124,12 @@ def init_command():
     excl_dest = CONFIG_DIR / "exclusions.py"
     excl_src = CONFIG_DIR / "exclusions.example.py"
     if not excl_dest.exists() and excl_src.exists():
-        import shutil
         shutil.copy(excl_src, excl_dest)
-        console.print(f"[green][CREATED][/green] Exclusions file: {excl_dest}")
+        console.print(f"[green][CREATED][/green] Exclusions file (empty by default): {excl_dest}")
 
     console.print("\n[bold green]Setup Complete.[/bold green] Next steps:")
-    console.print("1. Edit [cyan]config/profile.json[/cyan] with your contact info and target roles.")
-    console.print("2. Run [cyan]job-hunter scan[/cyan] to discover remote openings.")
+    console.print("1. Edit [cyan]config/profile.json[/cyan] with your contact info, years of experience, and target roles.")
+    console.print("2. Run [cyan]python -m src.cli scan[/cyan] to discover remote openings.")
 
 def scan_command(args):
     """Run concurrent ATS scanner."""
@@ -54,10 +137,13 @@ def scan_command(args):
     roles = [r.strip() for r in args.roles.split(",")] if args.roles else profile.search_criteria.target_roles
     locations = [l.strip() for l in args.locations.split(",")] if args.locations else profile.search_criteria.location_keywords
     platforms = [p.strip().lower() for p in args.platforms.split(",")] if args.platforms else profile.ats_settings.enabled_platforms
+    max_years = args.max_years if args.max_years is not None else profile.effective_max_years
 
+    exp_str = f"<= {max_years} years" if max_years is not None else "Any"
     console.print(Panel.fit(
         f"[bold]Target Roles:[/bold] {', '.join(roles)}\n"
         f"[bold]Locations:[/bold] {', '.join(locations)}\n"
+        f"[bold]Experience Filter:[/bold] {exp_str}\n"
         f"[bold]Platforms:[/bold] {', '.join(platforms)}",
         title="ATS Scanner Active",
         border_style="blue"
@@ -68,7 +154,8 @@ def scan_command(args):
         platforms=platforms,
         custom_roles=roles,
         custom_locations=locations,
-        concurrency_limit=args.concurrency
+        concurrency_limit=args.concurrency,
+        max_years_experience=max_years,
     ))
 
     table = Table(title=f"Discovered Job Openings ({len(postings)} found)")
@@ -76,32 +163,67 @@ def scan_command(args):
     table.add_column("ATS", style="magenta")
     table.add_column("Company", style="green")
     table.add_column("Job Title", style="bold")
+    table.add_column("Exp", justify="center", style="cyan")
     table.add_column("Location", style="yellow")
     table.add_column("URL", style="blue")
 
     for i, p in enumerate(postings[:args.limit], 1):
-        table.add_row(str(i), p.ats.value.upper(), p.company, p.title, p.location or "Remote", p.url)
+        exp_col = f"{p.required_years}+ yrs" if p.required_years else "-"
+        table.add_row(str(i), p.ats.value.upper(), p.company, p.title, exp_col, p.location or "Remote", p.url)
 
     console.print(table)
     console.print(f"\n[green][SAVED][/green] Results written to: {OUTPUT_DIR / 'scan_results.json'}")
 
 def apply_command(args):
-    """Launch headed browser and pre-fill application form."""
+    """Launch headed browser, pre-fill application form, and save per-company folder & script."""
     profile = load_candidate_profile()
-    cv_path = Path(args.cv) if args.cv else None
     url = args.url
+    company = args.company or _infer_company_from_url(url)
+    role = args.role or ""
+
+    # Organize inside output/applications/<YYYY-MM>_<Company>_<Role>/
+    cv_path = Path(args.cv) if args.cv else None
+    if cv_path and cv_path.exists():
+        # If the CV is not already inside a dedicated subfolder under output/applications,
+        # create a dedicated folder for this company and copy the tailored CV into it.
+        try:
+            is_in_app_subdir = (
+                APPLICATIONS_DIR.resolve() in cv_path.resolve().parents
+                and cv_path.resolve().parent != APPLICATIONS_DIR.resolve()
+            )
+        except Exception:
+            is_in_app_subdir = False
+
+        if is_in_app_subdir:
+            app_dir = cv_path.resolve().parent
+        else:
+            app_dir = get_or_create_application_dir(company, role)
+            cand_slug = sanitize_slug(profile.personal_info.full_name)
+            comp_slug = sanitize_slug(company)
+            dest_cv = app_dir / f"CV_{cand_slug}_{comp_slug}.pdf"
+            if cv_path.resolve() != dest_cv.resolve():
+                shutil.copy2(cv_path, dest_cv)
+                # Also copy HTML if it exists alongside the source PDF
+                src_html = cv_path.with_suffix(".html")
+                if src_html.exists():
+                    shutil.copy2(src_html, app_dir / "cv_tailored.html")
+                cv_path = dest_cv
+    else:
+        app_dir = get_or_create_application_dir(company, role)
 
     console.print(Panel.fit(
+        f"[bold]Company:[/bold] {company}\n"
         f"[bold]URL:[/bold] {url}\n"
         f"[bold]Candidate:[/bold] {profile.personal_info.full_name}\n"
-        f"[bold]CV Attached:[/bold] {cv_path.name if cv_path else 'None'}",
+        f"[bold]Application Folder:[/bold] {app_dir}\n"
+        f"[bold]CV Attached:[/bold] {cv_path.name if cv_path and cv_path.exists() else 'None'}",
         title="Headed Application Assistant",
         border_style="green"
     ))
 
     async def _run():
         browser, context, page = await launch_stealth_browser(headless=False)
-        
+
         console.print(f"[cyan]Navigating to {url}...[/cyan]")
         await page.goto(url, wait_until="domcontentloaded")
         await asyncio.sleep(2)
@@ -115,12 +237,22 @@ def apply_command(args):
         elif "lever" in url_lower:
             applicator = LeverApplicator(page, profile)
         else:
-            # Fallback to general form filling
             applicator = AshbyApplicator(page, profile)
 
         await applicator.fill_form(cv_path)
 
+        # Save execution script and metadata with URL + completed fields inside the company folder
+        script_path = _save_application_artifacts(
+            app_dir=app_dir,
+            url=page.url,
+            company=company,
+            role=role,
+            cv_path=cv_path,
+            filled_fields=applicator.filled_fields,
+        )
+
         console.print("\n[bold green][SUCCESS] All fields pre-filled.[/bold green]")
+        console.print(f"[green][SAVED][/green] Application script & field log saved to: [cyan]{script_path}[/cyan]")
         console.print("Please review the details in the opened browser, complete any employer-specific questions, and click Submit.")
         console.print("[dim]The session will close when you close the browser window.[/dim]\n")
 
@@ -137,10 +269,20 @@ def apply_command(args):
     asyncio.run(_run())
 
 def build_cv_command(args):
-    """Compile HTML CV into 1-page PDF."""
+    """Compile HTML CV into 1-page PDF inside a dedicated company folder if specified."""
     builder = CVBuilder()
     html_path = Path(args.html)
-    out_pdf = Path(args.out)
+
+    if args.company:
+        app_dir = get_or_create_application_dir(args.company, args.role or "")
+        out_pdf = Path(args.out) if args.out else app_dir / f"CV_{sanitize_slug(args.company)}.pdf"
+        # Copy HTML into the application folder if it isn't already there
+        target_html = app_dir / "cv_tailored.html"
+        if html_path.exists() and html_path.resolve() != target_html.resolve():
+            shutil.copy2(html_path, target_html)
+            html_path = target_html
+    else:
+        out_pdf = Path(args.out) if args.out else html_path.with_suffix(".pdf")
 
     console.print(f"[cyan]Compiling PDF from {html_path}...[/cyan]")
     asyncio.run(builder.compile_to_pdf(html_path, out_pdf))
@@ -162,17 +304,22 @@ def main():
     scan_parser.add_argument("--locations", help="Comma-separated location filters")
     scan_parser.add_argument("--platforms", help="Comma-separated platforms: ashby,greenhouse,lever")
     scan_parser.add_argument("--limit", type=int, default=30, help="Display limit")
-    scan_parser.add_argument("--concurrency", type=int, default=50, help="Concurrent HTTP connections")
+    scan_parser.add_argument("--concurrency", type=int, default=200, help="Concurrent HTTP connections")
+    scan_parser.add_argument("--max-years", type=int, default=None, help="Maximum required years of experience")
 
     # apply
     apply_parser = subparsers.add_parser("apply", help="Launch headed browser and pre-fill job application")
     apply_parser.add_argument("--url", required=True, help="Job application URL")
     apply_parser.add_argument("--cv", required=False, help="Path to tailored CV PDF")
+    apply_parser.add_argument("--company", required=False, help="Company name for application folder")
+    apply_parser.add_argument("--role", required=False, help="Job role title for application folder")
 
     # build-cv
     cv_parser = subparsers.add_parser("build-cv", help="Compile tailored HTML CV to ATS PDF")
     cv_parser.add_argument("--html", required=True, help="Input HTML file path")
-    cv_parser.add_argument("--out", required=True, help="Destination PDF file path")
+    cv_parser.add_argument("--out", required=False, help="Destination PDF file path")
+    cv_parser.add_argument("--company", required=False, help="Company name to create dedicated application folder")
+    cv_parser.add_argument("--role", required=False, help="Role title for dedicated application folder")
 
     args = parser.parse_args()
 
