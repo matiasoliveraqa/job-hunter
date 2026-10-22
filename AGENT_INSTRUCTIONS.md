@@ -88,4 +88,4 @@ For **each** matching opportunity:
    - Selects `contractor_salary_usd` if the posting specifies contractor/B2B, or defaults to `dependent_salary_usd` otherwise.
    - Uploads the tailored 1-page PDF CV.
    - Automatically generates **`open_application.py`** and **`application_info.json`** inside `output/applications/<YYYY-MM>_<Company>_<Role>/` containing the direct application URL and the exact dictionary of completed fields.
-3. Once the user reviews, clicks **Submit**, and closes the browser window, add the company slug to `config/exclusions.py` and immediately launch the next matching opportunity!
+3. Once the user reviews, clicks **Submit**, and closes the browser window, record the company in `config/exclusions.py` by adding one `"company-slug": "reason"` line to `EXCLUSION_REASONS` (e.g. `"acme": "Already applied"`) and immediately launch the next matching opportunity!
