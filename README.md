@@ -58,12 +58,25 @@ sequenceDiagram
 ### 2. Installation
 Clone this repository and set up a virtual environment:
 
+**Windows (PowerShell / CMD / Git Bash):**
+```powershell
+git clone https://github.com/matiasoliveraqa/job-hunter.git
+cd job-hunter
+
+python -m venv venv
+venv\Scripts\activate
+
+pip install -r requirements.txt
+playwright install chromium
+```
+
+**Linux & macOS:**
 ```bash
 git clone https://github.com/matiasoliveraqa/job-hunter.git
 cd job-hunter
 
-python -m venv venv          # On Linux/macOS if needed: python3 -m venv venv
-source venv/bin/activate     # On Windows: venv\Scripts\activate
+python3 -m venv venv
+source venv/bin/activate
 
 pip install -r requirements.txt
 playwright install chromium

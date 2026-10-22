@@ -1,54 +1,54 @@
 """
 Stealth Playwright Browser Manager.
 Configures browser context with anti-bot detection evasion while preserving
-native OS/Platform consistency so hCaptcha and Cloudflare Turnstile pass cleanly.
+native OS/Platform consistency across Windows, Linux, and macOS.
 """
 
-from pathlib import Path
+import sys
 from typing import Tuple, Optional
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
-from src.core.config import PROJECT_ROOT
 
-PROFILE_DATA_DIR = PROJECT_ROOT / ".playwright_profile"
-
-async def launch_stealth_browser(headless: bool = False) -> Tuple[Optional[Browser], BrowserContext, Page]:
+async def launch_stealth_browser(headless: bool = False) -> Tuple[Browser, BrowserContext, Page]:
     """
-    Launch a browser configured with anti-detection properties.
-    Important: Does NOT override User-Agent with a mismatched OS string (e.g. Linux UA on Windows),
-    and avoids bot-flagged switches like --no-sandbox or --disable-infobars so ATS captchas
-    (Lever hCaptcha, Greenhouse reCAPTCHA, Cloudflare) validate cleanly.
+    Launch a browser configured with anti-detection properties across Windows, Linux, and macOS.
+    - Preserves native OS User-Agent and navigator.platform (Win32 on Windows, MacIntel on macOS,
+      Linux x86_64 on Linux) so Lever hCaptcha, Greenhouse reCAPTCHA, and Cloudflare pass cleanly.
+    - Avoids bot-flagged flags (--no-sandbox, --disable-infobars).
+    - Uses isolated browser instances per invocation so multiple application windows can stay
+      open simultaneously without profile lock ('ProcessSingleton') errors on Windows/macOS/Linux.
     """
     p = await async_playwright().start()
 
     args = [
-        "--start-maximized",
         "--disable-blink-features=AutomationControlled",
     ]
+    # On Windows and Linux, --start-maximized maximizes the window cleanly
+    if sys.platform in ("win32", "linux"):
+        args.insert(0, "--start-maximized")
 
-    PROFILE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    context: Optional[BrowserContext] = None
     browser: Optional[Browser] = None
 
-    # Prefer persistent context with installed Chrome if available (best captcha trust score),
-    # falling back to bundled Playwright Chromium persistent context.
-    for channel in ("chrome", None):
+    # Prefer system Chrome (or Edge on Windows) for authentic TLS/fingerprint score,
+    # falling back seamlessly to Playwright's bundled Chromium.
+    channels_to_try = ["chrome", "msedge", None] if sys.platform == "win32" else ["chrome", None]
+    for channel in channels_to_try:
         try:
-            launch_kwargs = {
-                "user_data_dir": str(PROFILE_DATA_DIR),
-                "headless": headless,
-                "args": args,
-                "no_viewport": True,
-            }
+            launch_kwargs = {"headless": headless, "args": args}
             if channel:
                 launch_kwargs["channel"] = channel
-            context = await p.chromium.launch_persistent_context(**launch_kwargs)
+            browser = await p.chromium.launch(**launch_kwargs)
             break
         except Exception:
             continue
 
-    if context is None:
+    if browser is None:
         browser = await p.chromium.launch(headless=headless, args=args)
+
+    # On macOS, no_viewport=True can sometimes open a small default window if not maximized;
+    # setting a generous viewport on macOS while using no_viewport=True on Windows/Linux works best.
+    if sys.platform == "darwin" and not headless:
+        context = await browser.new_context(viewport={"width": 1440, "height": 900})
+    else:
         context = await browser.new_context(no_viewport=True)
 
     # Mask navigator.webdriver without spoofing OS platform
@@ -58,5 +58,5 @@ async def launch_stealth_browser(headless: bool = False) -> Tuple[Optional[Brows
         });
     """)
 
-    page = context.pages[0] if context.pages else await context.new_page()
+    page = await context.new_page()
     return browser, context, page

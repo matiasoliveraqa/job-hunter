@@ -82,6 +82,9 @@ class ScannerOrchestrator:
                 if isinstance(res, list):
                     all_postings.extend(res)
 
+        # Allow underlying SSL transports to close cleanly on Windows ProactorEventLoop
+        await asyncio.sleep(0.1)
+
         # Save results to output
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         out_file = OUTPUT_DIR / "scan_results.json"

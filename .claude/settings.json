@@ -7,9 +7,13 @@
       "Bash(python -m src.cli build-cv*)",
       "Bash(python -m src.cli apply*)",
       "Bash(python3 -m src.cli *)",
+      "Bash(py -m src.cli *)",
       "Bash(pip install -r requirements.txt)",
+      "Bash(pip3 install -r requirements.txt)",
       "Bash(playwright install chromium)",
-      "Bash(pytest*)"
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(python3 -m pytest*)"
     ]
   }
 }

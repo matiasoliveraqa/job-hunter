@@ -3,6 +3,7 @@ Job Hunter Command Line Interface.
 """
 
 import re
+import sys
 import json
 import shutil
 import asyncio
@@ -23,6 +24,14 @@ from src.automation.applicators.ashby_applicator import AshbyApplicator
 from src.automation.applicators.greenhouse_applicator import GreenhouseApplicator
 from src.automation.applicators.lever_applicator import LeverApplicator
 from src.cv.builder import CVBuilder, get_or_create_application_dir, sanitize_slug, APPLICATIONS_DIR
+
+# Ensure UTF-8 output across Windows (cp1252), Linux, and macOS terminals
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 console = Console()
 
@@ -50,8 +59,10 @@ def _save_application_artifacts(
     """
     Save both application_info.json and a standalone executable script open_application.py
     inside the company's application folder containing the application URL and all filled fields.
+    Works across Windows, Linux, and macOS.
     """
     app_dir.mkdir(parents=True, exist_ok=True)
+    cv_name = cv_path.name if cv_path and cv_path.exists() else ""
     cv_str = str(cv_path.resolve()) if cv_path and cv_path.exists() else ""
 
     info_payload = {
@@ -69,7 +80,7 @@ def _save_application_artifacts(
     fields_repr = json.dumps(filled_fields, indent=4, ensure_ascii=False)
     script_content = f'''#!/usr/bin/env python3
 """
-Auto-generated Application Execution Script
+Auto-generated Application Execution Script (Windows / Linux / macOS)
 Company: {company}
 Role: {role or "Target Role"}
 Application URL: {url}
@@ -78,15 +89,20 @@ Application URL: {url}
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path({repr(str(PROJECT_ROOT.resolve()))})
+# Resolve project root dynamically across Windows, Linux, and macOS
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent.parent
+if not (PROJECT_ROOT / "src" / "cli.py").exists():
+    PROJECT_ROOT = Path({repr(str(PROJECT_ROOT.resolve()))})
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # Direct link to the job posting / application
 APPLICATION_URL = {repr(url)}
 
-# Tailored 1-Page ATS CV used for this application
-TAILORED_CV_PDF = {repr(cv_str)}
+# Tailored 1-Page ATS CV used for this application (resolved relative to this folder)
+TAILORED_CV_PDF = str(SCRIPT_DIR / {repr(cv_name)}) if {repr(cv_name)} else ""
 
 # Summary of fields pre-filled by Job Hunter on this application form
 COMPLETED_FIELDS = {fields_repr}
@@ -99,7 +115,7 @@ if __name__ == "__main__":
         "--url", APPLICATION_URL,
         "--company", {repr(company)},
     ]
-    if TAILORED_CV_PDF:
+    if TAILORED_CV_PDF and Path(TAILORED_CV_PDF).exists():
         sys.argv.extend(["--cv", TAILORED_CV_PDF])
     main()
 '''
