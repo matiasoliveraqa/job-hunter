@@ -2,7 +2,7 @@
 Ashby ATS Job Board Scanner.
 """
 
-from typing import List
+from typing import List, Optional
 import aiohttp
 from src.scanners.base import BaseScanner
 from src.core.models import JobPosting, ATSPlatform
@@ -16,12 +16,14 @@ class AshbyScanner(BaseScanner):
         session: aiohttp.ClientSession,
         company_slug: str,
         role_keywords: List[str],
-        location_keywords: List[str]
+        location_keywords: List[str],
+        max_years_experience: Optional[int] = None,
     ) -> List[JobPosting]:
         url = f"https://api.ashbyhq.com/posting-api/job-board/{company_slug}"
         postings: List[JobPosting] = []
+        timeout = aiohttp.ClientTimeout(total=12, sock_connect=5, sock_read=8)
         try:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            async with session.get(url, timeout=timeout) as resp:
                 if resp.status != 200:
                     return []
                 data = await resp.json()
@@ -29,15 +31,27 @@ class AshbyScanner(BaseScanner):
                 for j in jobs:
                     title = j.get("title", "")
                     loc = j.get("location") or ""
-                    
+                    if j.get("isRemote"):
+                        loc = f"{loc} (Remote)".strip()
+
                     if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords):
+                        desc = (
+                            f"{title} "
+                            f"{j.get('descriptionPlain') or ''} "
+                            f"{j.get('descriptionHtml') or ''}"
+                        )
+                        if not self.matches_experience(desc, max_years_experience):
+                            continue
+
+                        req_years = self.extract_required_years(desc)
                         job_url = j.get("jobUrl") or f"https://jobs.ashbyhq.com/{company_slug}/{j.get('id')}"
                         postings.append(JobPosting(
                             ats=self.platform,
                             company=company_slug,
                             title=title,
                             location=loc,
-                            url=job_url
+                            url=job_url,
+                            required_years=req_years
                         ))
         except Exception:
             pass

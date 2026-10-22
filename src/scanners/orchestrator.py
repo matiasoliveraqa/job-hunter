@@ -6,10 +6,10 @@ Coordinates multi-platform scanning across thousands of company boards.
 import asyncio
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 import aiohttp
 
-from src.core.models import JobPosting, CandidateProfile, ATSPlatform
+from src.core.models import JobPosting, CandidateProfile
 from src.core.config import DATA_DIR, OUTPUT_DIR, get_exclusion_checker
 from src.scanners.ashby import AshbyScanner
 from src.scanners.greenhouse import GreenhouseScanner
@@ -38,16 +38,34 @@ class ScannerOrchestrator:
         platforms: Optional[List[str]] = None,
         custom_roles: Optional[List[str]] = None,
         custom_locations: Optional[List[str]] = None,
-        concurrency_limit: int = 50
+        concurrency_limit: int = 200,
+        max_years_experience: Optional[int] = None,
     ) -> List[JobPosting]:
         active_platforms = platforms or self.profile.ats_settings.enabled_platforms
         roles = custom_roles or self.profile.search_criteria.target_roles
         locations = custom_locations or self.profile.search_criteria.location_keywords
+        max_years = (
+            max_years_experience
+            if max_years_experience is not None
+            else self.profile.effective_max_years
+        )
 
+        # Use a semaphore so tasks do not start their HTTP timeout timer while waiting in the queue
+        sem = asyncio.Semaphore(concurrency_limit)
         conn = aiohttp.TCPConnector(limit=concurrency_limit, ssl=False)
-        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
         all_postings: List[JobPosting] = []
+
+        async def _bounded_scan(scanner, session, slug):
+            async with sem:
+                return await scanner.scan_company(
+                    session,
+                    slug,
+                    roles,
+                    locations,
+                    max_years_experience=max_years,
+                )
 
         async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
             tasks = []
@@ -57,7 +75,7 @@ class ScannerOrchestrator:
                     scanner = self.scanners[plat_key]
                     slugs = self._load_company_slugs(plat_key)
                     for slug in slugs:
-                        tasks.append(scanner.scan_company(session, slug, roles, locations))
+                        tasks.append(_bounded_scan(scanner, session, slug))
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for res in results:
