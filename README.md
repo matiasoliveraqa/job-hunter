@@ -91,7 +91,7 @@ python -m src.cli init
 
 This creates:
 - `config/profile.json`: Fill this with your personal details, `years_of_experience`, target roles, and dual salary expectations (`dependent_salary_usd` and `contractor_salary_usd`).
-- `config/exclusions.py`: Starts completely empty so you can add any companies you have already applied to or wish to skip.
+- `config/exclusions.py`: Companies or recruitment agencies you wish to skip, as `"slug": "reason"` entries in `EXCLUSION_REASONS`.
 
 ---
 

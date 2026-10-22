@@ -1,0 +1,25 @@
+{
+  "name": "job-hunter-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "@mdi/font": "^7.4.47",
+    "dompurify": "^3.4.17",
+    "express": "^4.22.3",
+    "marked": "^18.1.1",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0",
+    "vuetify": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.10",
+    "vite": "^8.3.5"
+  }
+}

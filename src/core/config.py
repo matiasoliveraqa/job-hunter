@@ -18,7 +18,14 @@ TEMPLATES_DIR = PROJECT_ROOT / "src" / "cv" / "templates"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 
 def get_profile_path() -> Path:
-    """Return active profile.json if exists, else fallback to example."""
+    """Return active profile.json if exists, else fallback to example.
+
+    JOBHUNTER_PROFILE overrides the location (used by the web app's demo mode
+    so demos never load the real candidate profile).
+    """
+    override = os.environ.get("JOBHUNTER_PROFILE")
+    if override and Path(override).exists():
+        return Path(override)
     active_path = CONFIG_DIR / "profile.json"
     if active_path.exists():
         return active_path

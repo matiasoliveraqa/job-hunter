@@ -60,3 +60,7 @@ playwright-report/
 # Environment variables
 .env
 .env.local
+
+# Web app build artifacts
+web/node_modules/
+web/dist/

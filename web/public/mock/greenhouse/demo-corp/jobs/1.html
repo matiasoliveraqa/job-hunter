@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Senior Frontend Engineer - Demo Corp (DEMO)</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f5f7; color: #1f2937; margin: 0; }
+  .banner { background: #fde68a; padding: 10px 16px; text-align: center; font-size: 14px; }
+  main { max-width: 720px; margin: 24px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .meta { color: #6b7280; margin-bottom: 20px; }
+  label { display: block; font-weight: 600; margin: 16px 0 6px; font-size: 14px; }
+  input[type=text], input[type=email], input[type=tel], input[type=url], textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
+  textarea { min-height: 90px; }
+  button { margin-top: 24px; background: #2563eb; color: #fff; border: 0; padding: 11px 22px; border-radius: 6px; font-size: 15px; cursor: pointer; }
+  .ok { background: #dcfce7; border: 1px solid #86efac; padding: 16px; border-radius: 6px; }
+  .ok pre { white-space: pre-wrap; margin: 8px 0 0; font-size: 13px; }
+  .err { color: #b91c1c; font-size: 13px; margin-top: 4px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="banner"><strong>PÁGINA DE DEMOSTRACIÓN.</strong> Empresa y puesto ficticios. Al enviar, no se manda nada a ninguna parte.</div>
+<main>
+  <h1>Senior Frontend Engineer</h1>
+  <div class="meta">Demo Corp · Remote, LatAm</div>
+  <p>Buscamos a alguien con experiencia en React, Next.js y TypeScript para construir nuestra plataforma. Esta oferta no existe: sirve para probar el flujo de postulación.</p>
+
+  <form id="application_form" novalidate>
+    <label for="resume">Resume/CV</label>
+    <input id="resume" name="resume" type="file" accept=".pdf" />
+
+    <label for="first_name">Nombre *</label>
+    <input id="first_name" name="first_name" type="text" />
+
+    <label for="last_name">Apellido *</label>
+    <input id="last_name" name="last_name" type="text" />
+
+    <label for="email">Email *</label>
+    <input id="email" name="email" type="email" />
+
+    <label for="phone">Teléfono</label>
+    <input id="phone" name="phone" type="tel" />
+
+    <label for="job_application_location">Ubicación</label>
+    <input id="job_application_location" name="job_application_location" type="text" />
+
+    <label for="linkedin">LinkedIn</label>
+    <input id="linkedin" name="linkedin_url" type="url" />
+
+    <label for="desired_salary">Pretensión salarial</label>
+    <input id="desired_salary" name="desired_salary" type="text" />
+
+    <label for="notice_period">Disponibilidad</label>
+    <input id="notice_period" name="notice_period" type="text" />
+
+    <label for="why">¿Por qué quieres trabajar en Demo Corp? * <small>(pregunta propia de la empresa: la responde la persona)</small></label>
+    <textarea id="why" name="why"></textarea>
+    <div id="error" class="err" hidden></div>
+
+    <button type="submit">Enviar postulación</button>
+  </form>
+
+  <div id="done" class="ok" hidden>
+    <strong>¡Postulación enviada! (demo)</strong>
+    <p>No se envió nada fuera de esta ventana. Ahora puedes cerrarla y registrar la postulación en el panel.</p>
+    <pre id="summary"></pre>
+  </div>
+</main>
+<script>
+  const form = document.getElementById('application_form')
+  form.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const data = Object.fromEntries(new FormData(form))
+    const missing = ['first_name', 'last_name', 'email', 'why'].filter((k) => !String(data[k] || '').trim())
+    const error = document.getElementById('error')
+    if (missing.length) {
+      error.textContent = 'Faltan campos obligatorios: ' + missing.join(', ')
+      error.hidden = false
+      return
+    }
+    error.hidden = true
+    const cv = form.resume.files[0]
+    document.getElementById('summary').textContent = [
+      'Nombre: ' + data.first_name + ' ' + data.last_name,
+      'Email: ' + data.email,
+      'Teléfono: ' + (data.phone || '-'),
+      'Ubicación: ' + (data.job_application_location || '-'),
+      'LinkedIn: ' + (data.linkedin_url || '-'),
+      'Salario: ' + (data.desired_salary || '-'),
+      'Disponibilidad: ' + (data.notice_period || '-'),
+      'CV adjunto: ' + (cv ? cv.name : 'ninguno'),
+    ].join('\n')
+    form.hidden = true
+    document.getElementById('done').hidden = false
+  })
+</script>
+</body>
+</html>
