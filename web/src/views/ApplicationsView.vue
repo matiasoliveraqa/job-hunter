@@ -224,6 +224,10 @@ function toggleStatusFilter(key) {
 }
 
 // ---- Filtering and Sorting ----
+function getArrivalDate(item) {
+  return item.createdAt || item.history?.[0]?.at || item.updatedAt || ''
+}
+
 const filteredItems = computed(() => {
   const q = search.value.trim().toLowerCase()
   const plat = selectedPlatform.value
@@ -251,14 +255,16 @@ const filteredItems = computed(() => {
 
   result.sort((a, b) => {
     if (selectedSort.value === 'recent') {
-      const dateA = a.appliedAt || a.updatedAt || a.createdAt || ''
-      const dateB = b.appliedAt || b.updatedAt || b.createdAt || ''
-      return dateB.localeCompare(dateA)
+      const dateA = getArrivalDate(a)
+      const dateB = getArrivalDate(b)
+      if (dateB !== dateA) return dateB.localeCompare(dateA)
+      return 0
     }
     if (selectedSort.value === 'oldest') {
-      const dateA = a.appliedAt || a.updatedAt || a.createdAt || ''
-      const dateB = b.appliedAt || b.updatedAt || b.createdAt || ''
-      return dateA.localeCompare(dateB)
+      const dateA = getArrivalDate(a)
+      const dateB = getArrivalDate(b)
+      if (dateA !== dateB) return dateA.localeCompare(dateB)
+      return 0
     }
     if (selectedSort.value === 'company') {
       return (a.company || '').localeCompare(b.company || '')
@@ -333,13 +339,17 @@ async function batchMarkApplied() {
   const today = new Date().toISOString().slice(0, 10)
   for (const app of targets) {
     try {
-      await api.updateApplication(app.id, {
+      const updated = await api.updateApplication(app.id, {
         status: 'applied',
         appliedAt: today,
         event: 'Postulación marcada como enviada por acción en lote',
       })
-      app.status = 'applied'
-      app.appliedAt = today
+      if (updated) {
+        Object.assign(app, updated)
+      } else {
+        app.status = 'applied'
+        app.appliedAt = today
+      }
       if (app.company && !app.demo) {
         await api.addExclusion({ company: app.company, reason: `Ya postulado (${today})` }).catch(() => {})
       }
@@ -347,7 +357,7 @@ async function batchMarkApplied() {
   }
   notify(`${targets.length} postulaciones marcadas como enviadas`)
   clearSelection()
-  await load()
+  await refreshAppStats()
 }
 
 async function batchDelete() {
@@ -481,8 +491,9 @@ async function tailorAppCv(item) {
     if (res?.cv) {
       item.cv = res.cv
       await api.updateApplication(item.id, { cv: res.cv })
+      files.value = await api.listFiles().catch(() => files.value)
       notify(`CV adaptado generado para ${item.company} (${res.cv})`)
-      await load()
+      await refreshAppStats()
     }
   } catch (err) {
     // If no AI engine is available, seamlessly fall back to master base CV
@@ -490,8 +501,9 @@ async function tailorAppCv(item) {
       const fallback = await api.useBaseCv(item.id)
       if (fallback?.cv) {
         item.cv = fallback.cv
+        files.value = await api.listFiles().catch(() => files.value)
         notify(`Sin motor de IA activo. Se asignó automáticamente tu CV base (${fallback.cv})`, 'warning')
-        await load()
+        await refreshAppStats()
         return
       }
     } catch {}
@@ -506,8 +518,9 @@ async function assignBaseCv(item) {
     const res = await api.useBaseCv(item.id)
     if (res?.cv) {
       item.cv = res.cv
+      files.value = await api.listFiles().catch(() => files.value)
       notify(`CV base asignado a ${item.company}`)
-      await load()
+      await refreshAppStats()
     }
   } catch (err) {
     notify('Error al asignar CV base: ' + err.message, 'error')
@@ -521,16 +534,22 @@ async function confirmSent(item) {
   }
   const today = new Date().toISOString().slice(0, 10)
   try {
-    await api.updateApplication(item.id, {
+    const updated = await api.updateApplication(item.id, {
       status: 'applied',
       appliedAt: today,
       event: 'Postulación confirmada y enviada manualmente por el candidato',
     })
+    if (updated) {
+      Object.assign(item, updated)
+    } else {
+      item.status = 'applied'
+      item.appliedAt = today
+    }
     if (item.company && !item.demo) {
       await api.addExclusion({ company: item.company, reason: `Ya postulado (${today})` }).catch(() => {})
     }
     notify(`Postulación a ${item.company} confirmada y agregada a exclusiones`)
-    await load()
+    await refreshAppStats()
   } catch (e) {
     notify(e.message, 'error')
   }

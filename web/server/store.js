@@ -58,6 +58,7 @@ export function createStore(file) {
           cv: input.cv || '',
           demo: Boolean(input.demo),
           history: [{ at: now, status, note: status === 'pending' ? 'Publicación cargada desde el chat' : 'Registrada como enviada' }],
+          createdAt: input.createdAt || now,
           updatedAt: now,
         }
         data.push(item)
