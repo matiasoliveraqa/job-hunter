@@ -95,7 +95,79 @@ export const form = reactive({
   concurrency: 50,
 })
 
-let abortController = null
+let eventSource = null
+let currentExistingApps = []
+
+export function connectEventSource(existingApps = []) {
+  if (Array.isArray(existingApps) && existingApps.length) {
+    currentExistingApps = existingApps
+  }
+  if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+    return
+  }
+
+  eventSource = new EventSource('/api/scan/events')
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      handleEvent(data, currentExistingApps)
+    } catch {
+      // ignora errores de parseo
+    }
+  }
+
+  eventSource.onerror = () => {
+    // EventSource reconecta de forma automatica
+  }
+}
+
+export function disconnectEventSource() {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
+}
+
+export async function initScanSync(existingApps = []) {
+  if (Array.isArray(existingApps) && existingApps.length) {
+    currentExistingApps = existingApps
+  }
+
+  connectEventSource(currentExistingApps)
+
+  try {
+    const status = await api.getScanStatus()
+    if (status) {
+      scanning.value = Boolean(status.isScanning)
+      if (typeof status.checked === 'number') progress.checked = status.checked
+      if (typeof status.total === 'number') progress.total = status.total
+      if (status.platform) progress.platform = status.platform
+      if (status.company) progress.company = status.company
+      if (typeof status.errorCount === 'number') errorCount.value = status.errorCount
+
+      if (Array.isArray(status.matches) && status.matches.length > 0) {
+        for (const p of status.matches) {
+          if (!matches.value.some((m) => m.url === p.url)) {
+            p.matchScore = calculateMatchScore(p)
+            const matchedApp = currentExistingApps.find(
+              (a) => a.url === p.url || (a.company?.toLowerCase() === p.company?.toLowerCase() && a.role?.toLowerCase() === p.title?.toLowerCase())
+            )
+            if (matchedApp?.cv) p.cv = matchedApp.cv
+            matches.value.unshift(p)
+          }
+        }
+        saveMatches()
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudo sincronizar el estado del escaneo:', err)
+  }
+
+  if (matches.value.length === 0) {
+    await loadPersistedResults(currentExistingApps)
+  }
+}
 
 export const progressPercent = computed(() => {
   if (!progress.total) return 0
@@ -135,7 +207,34 @@ export function calculateMatchScore(posting, profile) {
 }
 
 export function handleEvent(evt, existingApps = []) {
-  if (evt.type === 'progress') {
+  if (evt.type === 'sync') {
+    if (evt.scanState) {
+      scanning.value = Boolean(evt.scanState.isScanning)
+      progress.checked = evt.scanState.checked || 0
+      progress.total = evt.scanState.total || 0
+      progress.platform = evt.scanState.platform || ''
+      progress.company = evt.scanState.company || ''
+      errorCount.value = evt.scanState.errorCount || 0
+    }
+    if (Array.isArray(evt.matches) && evt.matches.length > 0) {
+      for (const p of evt.matches) {
+        if (!matches.value.some((m) => m.url === p.url)) {
+          p.matchScore = calculateMatchScore(p)
+          const matchedApp = existingApps.find(
+            (a) => a.url === p.url || (a.company?.toLowerCase() === p.company?.toLowerCase() && a.role?.toLowerCase() === p.title?.toLowerCase())
+          )
+          if (matchedApp?.cv) p.cv = matchedApp.cv
+          matches.value.unshift(p)
+        }
+      }
+      saveMatches()
+    }
+  } else if (evt.type === 'start') {
+    scanning.value = true
+    errorCount.value = 0
+    Object.assign(progress, { checked: 0, total: 0, platform: '', company: '' })
+  } else if (evt.type === 'progress') {
+    scanning.value = true
     progress.checked = evt.checked
     progress.total = evt.total
     progress.platform = evt.platform
@@ -157,15 +256,20 @@ export function handleEvent(evt, existingApps = []) {
     errorCount.value++
     logs.value.unshift(`[${evt.platform}] ${evt.company}: ${evt.error}`)
     if (logs.value.length > 100) logs.value.pop()
-  } else if (evt.type === 'done') {
+  } else if (evt.type === 'log') {
+    logs.value.unshift(evt.message)
+    if (logs.value.length > 100) logs.value.pop()
+  } else if (evt.type === 'done' || evt.type === 'exit') {
     scanning.value = false
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     lastScanTime.value = timeStr
     try {
       localStorage.setItem('job_hunter_last_scan_time', timeStr)
     } catch {}
-  } else if (evt.type === 'exit') {
+    saveMatches()
+  } else if (evt.type === 'error') {
     scanning.value = false
+    logs.value.unshift(`[Error] ${evt.error}`)
   }
 }
 
@@ -177,14 +281,16 @@ export async function startScan(existingApps = []) {
     throw new Error('Selecciona al menos una plataforma ATS')
   }
 
+  if (Array.isArray(existingApps) && existingApps.length) {
+    currentExistingApps = existingApps
+  }
+
   scanning.value = true
   matches.value = []
   saveMatches()
   logs.value = []
   errorCount.value = 0
   Object.assign(progress, { checked: 0, total: 0, platform: '', company: '' })
-
-  abortController = new AbortController()
 
   const parsedMaxYears = (form.maxYears !== '' && form.maxYears !== null && !isNaN(Number(form.maxYears)))
     ? Number(form.maxYears)
@@ -199,63 +305,13 @@ export async function startScan(existingApps = []) {
     concurrency: Number(form.concurrency) || 50,
   }
 
-  try {
-    const res = await fetch('/api/scan/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: abortController.signal,
-    })
-
-    if (!res.ok) {
-      throw new Error(`Error en el servidor (${res.status})`)
-    }
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      let nl
-      while ((nl = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, nl).trim()
-        buffer = buffer.slice(nl + 1)
-        if (!line.startsWith('data:')) continue
-
-        const jsonStr = line.slice(5).trim()
-        if (!jsonStr) continue
-
-        try {
-          const evt = JSON.parse(jsonStr)
-          handleEvent(evt, existingApps)
-        } catch {
-          // ignora chunks incompletos
-        }
-      }
-    }
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      throw err
-    }
-  } finally {
-    scanning.value = false
-    lastScanTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  connectEventSource(currentExistingApps)
+  await api.startScan(payload)
 }
 
 export async function stopScan() {
-  if (abortController) {
-    abortController.abort()
-    abortController = null
-  }
   try {
     await api.stopScan()
-  } catch {
-    // ignorar
-  }
+  } catch {}
   scanning.value = false
 }

@@ -267,6 +267,42 @@ test('Web server host authorization and API endpoints', async (t) => {
     assert.strictEqual(res.status, 400)
     assert.ok(res.json?.error?.includes('Solo se permiten'))
   })
+
+  await t.test('GET /api/scan/status returns scan state and matches array', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/scan/status',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(res.status, 200)
+    assert.strictEqual(typeof res.json?.isScanning, 'boolean')
+    assert.ok(Array.isArray(res.json?.matches))
+  })
+
+  await t.test('GET /api/scan/results returns matches array', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/scan/results',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(res.status, 200)
+    assert.ok(Array.isArray(res.json?.matches))
+  })
+
+  await t.test('POST /api/scan/stop safely terminates any active scan', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/scan/stop',
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: {},
+    })
+    assert.strictEqual(res.status, 200)
+    assert.strictEqual(typeof res.json?.stopped, 'boolean')
+  })
 })
 
 test('Dynamic port fallback EADDRINUSE binds to next port and authorizes Host', async () => {

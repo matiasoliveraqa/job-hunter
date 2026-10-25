@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from './api.js'
 import { initTheme, isDark, toggleTheme } from './theme.js'
 import { appStats, refreshAppStats } from './stats.js'
-import { scanning, startScan, stopScan, lastScanTime } from './scanController.js'
+import { scanning, startScan, stopScan, lastScanTime, initScanSync } from './scanController.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -65,6 +65,7 @@ onMounted(() => {
   initTheme()
   refreshAppStats()
   loadProfileData()
+  initScanSync()
 
   window.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {

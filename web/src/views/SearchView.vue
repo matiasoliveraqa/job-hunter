@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { api } from '../api.js'
 import { refreshAppStats } from '../stats.js'
 import {
@@ -13,7 +13,7 @@ import {
   progressPercent,
   startScan,
   stopScan,
-  loadPersistedResults,
+  initScanSync,
 } from '../scanController.js'
 
 const profile = ref(null)
@@ -53,7 +53,7 @@ async function loadProfile() {
       form.maxYears = data.personal_info.years_of_experience
     }
     await loadExistingApps()
-    await loadPersistedResults(existingApps.value)
+    await initScanSync(existingApps.value)
   } catch (e) {
     notify('No se pudo cargar el perfil: ' + e.message, 'warning')
   } finally {
@@ -62,6 +62,12 @@ async function loadProfile() {
 }
 
 onMounted(loadProfile)
+
+watch(scanning, (newVal, oldVal) => {
+  if (oldVal === true && newVal === false) {
+    notify(`Búsqueda finalizada. ${matches.value.length} vacantes encontradas.`)
+  }
+})
 
 function applyPreset(preset) {
   activePreset.value = preset.name
@@ -112,7 +118,7 @@ function togglePlatform(plat) {
 async function triggerScan() {
   try {
     await startScan(existingApps.value)
-    notify(`Búsqueda finalizada. ${matches.value.length} vacantes encontradas.`)
+    notify('Búsqueda iniciada en segundo plano...')
   } catch (err) {
     notify('Error en el escaneo: ' + err.message, 'error')
   }
