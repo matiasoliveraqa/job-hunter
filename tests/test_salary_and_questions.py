@@ -114,3 +114,20 @@ def test_parse_phone_info(dummy_profile):
     assert info["iso2"] == "UY"
     assert info["national_number"] == "99123456"
 
+def test_universal_open_questions_and_custom_qa(dummy_profile):
+    dummy_profile.open_questions.key_project = "Automated core payment flows with Playwright and GitHub Actions."
+    dummy_profile.open_questions.additional_info = "Fluent in English, available for full Americas overlap."
+    dummy_profile.open_questions.custom_qa["fintech"] = "Strong background in banking compliance."
+
+    page = MagicMock()
+    app = DummyApplicator(page, dummy_profile, company="Acme", role="QA Engineer")
+
+    project_ans = app._generate_open_question_answer("Tell us about a technical challenge or project you are proud of")
+    assert project_ans == "Automated core payment flows with Playwright and GitHub Actions."
+
+    add_ans = app._generate_open_question_answer("Is there anything else you want to share with us?")
+    assert add_ans == "Fluent in English, available for full Americas overlap."
+
+    custom_ans = app._generate_open_question_answer("What is your experience in the fintech domain?")
+    assert custom_ans == "Strong background in banking compliance."
+

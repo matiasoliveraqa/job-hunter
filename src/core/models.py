@@ -107,25 +107,33 @@ class OpenQuestionTemplates(BaseModel):
         None,
         description="General motivation answer (Why do you want to work here / Why this role)"
     )
-    fintech_motivation: Optional[str] = Field(
-        None,
-        description="Motivation answer for fintech / banking / payments companies"
-    )
     experience_summary: Optional[str] = Field(
         None,
         description="Summary of background and daily technical stack"
     )
-    metrics_and_kpis: Optional[str] = Field(
+    key_project: Optional[str] = Field(
         None,
-        description="Targets, KPIs, and achievements in recent roles"
+        description="Proudest project or technical challenge solved"
+    )
+    timezone_overlap: Optional[str] = Field(
+        None,
+        description="Time zone and overlap statement"
     )
     education_level: Optional[str] = Field(
         None,
         description="Highest level of education completed or current degree"
     )
-    timezone_overlap: Optional[str] = Field(
+    additional_info: Optional[str] = Field(
         None,
-        description="Time zone and overlap statement"
+        description="Additional information or cover letter notes"
+    )
+    fintech_motivation: Optional[str] = Field(
+        None,
+        description="Legacy fallback motivation answer for fintech"
+    )
+    metrics_and_kpis: Optional[str] = Field(
+        None,
+        description="Legacy fallback targets and KPIs"
     )
     custom_qa: Dict[str, str] = Field(
         default_factory=dict,

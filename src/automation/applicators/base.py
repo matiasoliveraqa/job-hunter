@@ -664,15 +664,23 @@ class BaseApplicator(ABC):
                 "I want to work on a team with high quality standards where I can own automated testing and CI/CD workflows."
             )
 
-        if any(k in q for k in ["quota", "kpi", "metrics", "targets in your most recent role"]):
-            if oq and oq.metrics_and_kpis:
+        if any(k in q for k in ["project", "proud of", "technical challenge", "problem you solved", "achievement", "quota", "kpi", "metrics", "targets"]):
+            if oq and getattr(oq, "key_project", None):
+                return oq.key_project
+            if oq and getattr(oq, "metrics_and_kpis", None):
                 return oq.metrics_and_kpis
             return (
-                "My key metrics focus on test coverage, release stability, reducing defect rates, "
-                "and meeting sprint delivery goals."
+                "I focus on designing automated testing frameworks, maintaining release stability, "
+                "reducing defect rates, and meeting sprint delivery goals."
             )
 
-        if any(k in q for k in ["experience with automation", "describe your experience", "tell us about your experience", "relevant experience", "background", "cover letter", "anything else", "additional information"]):
+        if any(k in q for k in ["anything else", "additional information", "cover letter", "additional notes"]):
+            if oq and getattr(oq, "additional_info", None):
+                return oq.additional_info
+            if oq and oq.experience_summary:
+                return oq.experience_summary
+
+        if any(k in q for k in ["experience with automation", "describe your experience", "tell us about your experience", "relevant experience", "background"]):
             if oq and oq.experience_summary:
                 return oq.experience_summary
             years = self.p_info.years_of_experience or 7

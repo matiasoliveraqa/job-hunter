@@ -58,11 +58,15 @@ function adopt(data) {
 
   data.open_questions ??= {}
   data.open_questions.motivation ??= ''
-  data.open_questions.fintech_motivation ??= ''
   data.open_questions.experience_summary ??= ''
-  data.open_questions.metrics_and_kpis ??= ''
-  data.open_questions.education_level ??= ''
+  data.open_questions.key_project ??= data.open_questions.metrics_and_kpis || ''
   data.open_questions.timezone_overlap ??= ''
+  data.open_questions.education_level ??= ''
+  data.open_questions.additional_info ??= ''
+  data.open_questions.custom_qa ??= {}
+  if (data.open_questions.fintech_motivation && !data.open_questions.custom_qa.fintech) {
+    data.open_questions.custom_qa.fintech = data.open_questions.fintech_motivation
+  }
 
   profile.value = data
   original.value = JSON.stringify(data)
@@ -302,6 +306,25 @@ function togglePlatform(pl) {
     list.splice(idx, 1)
   } else {
     list.push(pl)
+  }
+}
+
+const newCustomKey = ref('')
+const newCustomVal = ref('')
+
+function addCustomQa() {
+  const k = newCustomKey.value.trim().toLowerCase()
+  const v = newCustomVal.value.trim()
+  if (!k || !v) return
+  profile.value.open_questions.custom_qa ??= {}
+  profile.value.open_questions.custom_qa[k] = v
+  newCustomKey.value = ''
+  newCustomVal.value = ''
+}
+
+function removeCustomQa(key) {
+  if (profile.value?.open_questions?.custom_qa) {
+    delete profile.value.open_questions.custom_qa[key]
   }
 }
 
@@ -1056,12 +1079,10 @@ onMounted(async () => {
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Motivation -->
+        <!-- 1. Motivación e interés por la empresa -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-on-surface">Motivación general (Why us? / Motivation)</label>
-            <span class="font-mono text-[10px] text-outline">motivation</span>
-          </div>
+          <label class="text-xs font-semibold text-on-surface">Motivación e interés por la empresa</label>
+          <span class="text-[11px] text-outline">Por qué te interesa sumarte a la empresa o qué te entusiasma del puesto.</span>
           <textarea
             v-model="profile.open_questions.motivation"
             rows="5"
@@ -1069,25 +1090,10 @@ onMounted(async () => {
           ></textarea>
         </div>
 
-        <!-- Fintech Motivation -->
+        <!-- 2. Resumen de trayectoria y experiencia relevante -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-on-surface">Motivación Fintech / Pagos</label>
-            <span class="font-mono text-[10px] text-outline">fintech_motivation</span>
-          </div>
-          <textarea
-            v-model="profile.open_questions.fintech_motivation"
-            rows="5"
-            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
-          ></textarea>
-        </div>
-
-        <!-- Experience Summary -->
-        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-on-surface">Resumen de experiencia profesional</label>
-            <span class="font-mono text-[10px] text-outline">experience_summary</span>
-          </div>
+          <label class="text-xs font-semibold text-on-surface">Resumen de trayectoria y experiencia relevante</label>
+          <span class="text-[11px] text-outline">Síntesis de tu perfil profesional, años de experiencia y herramientas principales.</span>
           <textarea
             v-model="profile.open_questions.experience_summary"
             rows="5"
@@ -1095,25 +1101,32 @@ onMounted(async () => {
           ></textarea>
         </div>
 
-        <!-- Metrics and KPIs -->
+        <!-- 3. Proyecto destacado o mayor desafío resuelto -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-on-surface">Métricas y KPIs de calidad</label>
-            <span class="font-mono text-[10px] text-outline">metrics_and_kpis</span>
-          </div>
+          <label class="text-xs font-semibold text-on-surface">Proyecto destacado o mayor desafío resuelto</label>
+          <span class="text-[11px] text-outline">Descripción de un proyecto del que estés orgulloso o un problema complejo que hayas resuelto.</span>
           <textarea
-            v-model="profile.open_questions.metrics_and_kpis"
+            v-model="profile.open_questions.key_project"
             rows="5"
             class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
           ></textarea>
         </div>
 
-        <!-- Education Level -->
+        <!-- 4. Información adicional o notas para la postulación -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-on-surface">Nivel de educación formal</label>
-            <span class="font-mono text-[10px] text-outline">education_level</span>
-          </div>
+          <label class="text-xs font-semibold text-on-surface">Información adicional o carta de presentación</label>
+          <span class="text-[11px] text-outline">Detalles adicionales, enlaces a portafolio o repositorios, o aclaraciones para el reclutador.</span>
+          <textarea
+            v-model="profile.open_questions.additional_info"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- 5. Nivel de formación académica o certificaciones -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <label class="text-xs font-semibold text-on-surface">Nivel de formación académica o certificaciones</label>
+          <span class="text-[11px] text-outline">Título universitario, carrera en curso o certificaciones principales.</span>
           <input
             v-model="profile.open_questions.education_level"
             type="text"
@@ -1121,17 +1134,89 @@ onMounted(async () => {
           />
         </div>
 
-        <!-- Timezone Overlap -->
+        <!-- 6. Disponibilidad horaria y huso horario -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-on-surface">Disponibilidad horaria y huso horario</label>
-            <span class="font-mono text-[10px] text-outline">timezone_overlap</span>
-          </div>
+          <label class="text-xs font-semibold text-on-surface">Disponibilidad horaria y huso horario</label>
+          <span class="text-[11px] text-outline">Zona horaria (UTC) y franja horaria de solapamiento con el equipo.</span>
           <input
             v-model="profile.open_questions.timezone_overlap"
             type="text"
             class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
           />
+        </div>
+      </div>
+
+      <!-- SECCIÓN: PREGUNTAS PERSONALIZADAS POR PALABRA CLAVE (CUSTOM Q&A) -->
+      <div class="p-5 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-4">
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-amber-400 text-[18px]">tune</span>
+            <h3 class="text-xs font-semibold text-on-surface">Preguntas personalizadas adicionales (palabra clave y respuesta)</h3>
+          </div>
+          <p class="text-[11px] text-on-surface-variant">
+            Si una postulación formula una pregunta específica (por ejemplo sobre un sector como fintech, cripto o liderazgo), el autocompletado buscará si la pregunta contiene la palabra clave y responderá con este texto.
+          </p>
+        </div>
+
+        <!-- Lista de preguntas existentes -->
+        <div v-if="profile.open_questions.custom_qa && Object.keys(profile.open_questions.custom_qa).length" class="flex flex-col gap-2.5">
+          <div
+            v-for="(val, key) in profile.open_questions.custom_qa"
+            :key="key"
+            class="p-3 rounded-lg bg-surface-container border border-border-subtle flex flex-col sm:flex-row sm:items-start justify-between gap-3"
+          >
+            <div class="flex flex-col gap-1 min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-container-highest text-accent border border-border-subtle font-semibold">
+                  {{ key }}
+                </span>
+                <span class="text-[11px] text-outline">Palabra clave detectada en el formulario</span>
+              </div>
+              <p class="text-xs text-on-surface font-sans leading-relaxed pt-0.5">
+                {{ val }}
+              </p>
+            </div>
+            <button
+              class="self-end sm:self-start p-1.5 rounded-lg text-outline hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+              title="Eliminar pregunta personalizada"
+              type="button"
+              @click="removeCustomQa(key)"
+            >
+              <span class="material-symbols-outlined text-[16px] block">delete</span>
+            </button>
+          </div>
+        </div>
+        <div v-else class="text-xs text-outline italic py-2">
+          No hay preguntas personalizadas adicionales configuradas.
+        </div>
+
+        <!-- Formulario para agregar nueva clave/valor -->
+        <div class="pt-3 border-t border-border-subtle flex flex-col gap-2.5">
+          <span class="text-xs font-medium text-on-surface">Agregar nueva respuesta personalizada:</span>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-start gap-2.5">
+            <input
+              v-model="newCustomKey"
+              class="h-9 px-3 w-full sm:w-48 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="Palabra clave (ej: fintech)"
+              type="text"
+            />
+            <input
+              v-model="newCustomVal"
+              class="h-9 px-3 flex-1 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="Respuesta a insertar cuando la pregunta contenga esa palabra"
+              type="text"
+              @keydown.enter.prevent="addCustomQa"
+            />
+            <button
+              class="px-3.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
+              :disabled="!newCustomKey.trim() || !newCustomVal.trim()"
+              type="button"
+              @click="addCustomQa"
+            >
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span>Agregar</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
