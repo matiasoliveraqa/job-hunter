@@ -50,6 +50,9 @@ resumes/
 !web/demo/demo_cv.pdf
 *.log
 *.png
+# UI assets are part of the build, unlike screenshots which may carry personal data
+!web/public/*.png
+!web/src/assets/*.png
 *.db
 *.sqlite*
 
