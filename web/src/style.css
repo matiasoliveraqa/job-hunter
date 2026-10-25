@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: #0e0e10;
+    color: #f4f4f5;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+/* Light mode overrides */
+html:not(.dark) {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+html:not(.dark) body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+html:not(.dark) .bg-surface-dim { background-color: #f1f5f9 !important; }
+html:not(.dark) .bg-surface { background-color: #ffffff !important; }
+html:not(.dark) .bg-surface-card { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
+html:not(.dark) .bg-surface-container { background-color: #f8fafc !important; border-color: #e2e8f0 !important; }
+html:not(.dark) .bg-surface-container-high { background-color: #e2e8f0 !important; }
+html:not(.dark) .bg-surface-container-highest { background-color: #cbd5e1 !important; }
+html:not(.dark) .border-border-subtle { border-color: #e2e8f0 !important; }
+html:not(.dark) .border-border-muted { border-color: #cbd5e1 !important; }
+html:not(.dark) .text-on-surface { color: #0f172a !important; }
+html:not(.dark) .text-on-surface-variant { color: #64748b !important; }
+html:not(.dark) .text-outline { color: #94a3b8 !important; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+.material-symbols-outlined {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
+  vertical-align: middle;
+}
