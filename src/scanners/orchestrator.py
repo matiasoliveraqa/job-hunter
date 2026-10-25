@@ -6,7 +6,7 @@ Coordinates multi-platform scanning across thousands of company boards.
 import asyncio
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Callable, Any
 import aiohttp
 
 from src.core.models import JobPosting, CandidateProfile
@@ -26,12 +26,28 @@ class ScannerOrchestrator:
         }
 
     def _load_company_slugs(self, platform: str) -> List[str]:
+        slugs: List[str] = []
         file_path = DATA_DIR / f"{platform}.json"
-        if not file_path.exists():
-            return []
-        with open(file_path, "r", encoding="utf-8") as f:
-            slugs = json.load(f)
-        return [s for s in slugs if not self.exclusion_checker(s)]
+        if file_path.exists():
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    slugs.extend(data)
+                elif isinstance(data, dict) and platform in data:
+                    slugs.extend(data[platform])
+
+        gaming_path = DATA_DIR / "gaming_studios.json"
+        if gaming_path.exists():
+            try:
+                with open(gaming_path, "r", encoding="utf-8") as f:
+                    gaming_data = json.load(f)
+                    if isinstance(gaming_data, dict) and platform in gaming_data:
+                        slugs.extend(gaming_data[platform])
+            except Exception:
+                pass
+
+        unique_slugs = list(dict.fromkeys(slugs))
+        return [s for s in unique_slugs if not self.exclusion_checker(s)]
 
     async def run(
         self,
@@ -40,6 +56,10 @@ class ScannerOrchestrator:
         custom_locations: Optional[List[str]] = None,
         concurrency_limit: int = 200,
         max_years_experience: Optional[int] = None,
+        allow_captcha: bool = False,
+        on_match: Optional[Callable[[JobPosting], Any]] = None,
+        on_progress: Optional[Callable[[int, int, str, str], Any]] = None,
+        on_error: Optional[Callable[[str, str, str], Any]] = None,
     ) -> List[JobPosting]:
         active_platforms = platforms or self.profile.ats_settings.enabled_platforms
         roles = custom_roles or self.profile.search_criteria.target_roles
@@ -50,33 +70,70 @@ class ScannerOrchestrator:
             else self.profile.effective_max_years
         )
 
-        # Use a semaphore so tasks do not start their HTTP timeout timer while waiting in the queue
-        sem = asyncio.Semaphore(concurrency_limit)
-        conn = aiohttp.TCPConnector(limit=concurrency_limit, ssl=False)
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        items = []
+        for plat in active_platforms:
+            plat_key = plat.lower()
+            if plat_key in self.scanners:
+                scanner = self.scanners[plat_key]
+                slugs = self._load_company_slugs(plat_key)
+                for slug in slugs:
+                    items.append((scanner, plat_key, slug))
 
+        total_tasks = len(items)
+        checked_count = 0
         all_postings: List[JobPosting] = []
 
-        async def _bounded_scan(scanner, session, slug):
-            async with sem:
-                return await scanner.scan_company(
-                    session,
-                    slug,
-                    roles,
-                    locations,
-                    max_years_experience=max_years,
-                )
+        # Use a semaphore so tasks do not start their HTTP timeout timer while waiting in the queue
+        sem = asyncio.Semaphore(concurrency_limit)
+        # Greenhouse WAF (Signal Sciences) enforces strict IP rate limits. Limit Greenhouse to 5 concurrent requests with slight pacing.
+        greenhouse_sem = asyncio.Semaphore(min(concurrency_limit, 5))
+        conn = aiohttp.TCPConnector(limit=concurrency_limit)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+        }
+
+        async def _bounded_scan(scanner, session, plat_key, slug):
+            nonlocal checked_count
+            plat_sem = greenhouse_sem if plat_key == "greenhouse" else sem
+            try:
+                async with plat_sem:
+                    if plat_key == "greenhouse":
+                        await asyncio.sleep(0.15)
+                    postings = await scanner.scan_company(
+                        session,
+                        slug,
+                        roles,
+                        locations,
+                        max_years_experience=max_years,
+                    )
+                    if not allow_captcha:
+                        postings = [p for p in postings if not p.has_captcha]
+
+                    checked_count += 1
+                    if on_progress:
+                        try:
+                            on_progress(checked_count, total_tasks, plat_key, slug)
+                        except Exception:
+                            pass
+                    if postings and on_match:
+                        for p in postings:
+                            try:
+                                on_match(p)
+                            except Exception:
+                                pass
+                    return postings
+            except Exception as e:
+                checked_count += 1
+                if on_error:
+                    try:
+                        on_error(plat_key, slug, str(e))
+                    except Exception:
+                        pass
+                return []
 
         async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
-            tasks = []
-            for plat in active_platforms:
-                plat_key = plat.lower()
-                if plat_key in self.scanners:
-                    scanner = self.scanners[plat_key]
-                    slugs = self._load_company_slugs(plat_key)
-                    for slug in slugs:
-                        tasks.append(_bounded_scan(scanner, session, slug))
-
+            tasks = [_bounded_scan(sc, session, pk, sl) for sc, pk, sl in items]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for res in results:
                 if isinstance(res, list):

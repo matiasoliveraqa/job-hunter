@@ -1,0 +1,26 @@
+[
+  {
+    "id": "demo-0001",
+    "company": "Example Corp",
+    "role": "Frontend Engineer",
+    "url": "https://example.com/careers/frontend",
+    "appliedAt": "2026-01-10",
+    "status": "rejected",
+    "reason": "Piden 8+ años de experiencia (dato de demostración)",
+    "notes": "",
+    "cv": "",
+    "updatedAt": "2026-01-20T10:00:00.000Z"
+  },
+  {
+    "id": "demo-0002",
+    "company": "Sample Inc",
+    "role": "Full Stack Engineer",
+    "url": "https://example.com/careers/fullstack",
+    "appliedAt": "2026-01-12",
+    "status": "applied",
+    "reason": "",
+    "notes": "",
+    "cv": "",
+    "updatedAt": "2026-01-12T10:00:00.000Z"
+  }
+]

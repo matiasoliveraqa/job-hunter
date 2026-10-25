@@ -2,7 +2,7 @@
 Data models for Job Hunter.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -24,6 +24,10 @@ class PersonalInfo(BaseModel):
     current_company: Optional[str] = Field(None, description="Current employer or 'Freelance'")
     years_of_experience: Optional[int] = Field(None, description="Total years of professional experience")
     requires_us_visa_sponsorship: str = Field("No", description="'Yes' or 'No'")
+    gender: Optional[str] = Field(None, description="Gender (e.g. 'Male', 'Female', 'Decline to self-identify')")
+    race: Optional[str] = Field(None, description="Race / Ethnicity (e.g. 'Decline to self-identify')")
+    veteran_status: Optional[str] = Field(None, description="Veteran status")
+    disability_status: Optional[str] = Field(None, description="Disability status")
 
     @property
     def first_name(self) -> str:
@@ -98,11 +102,42 @@ class CandidatePreferences(BaseModel):
     def formatted_salary(self) -> str:
         return self.get_formatted_salary(is_contractor=False)
 
+class OpenQuestionTemplates(BaseModel):
+    motivation: Optional[str] = Field(
+        None,
+        description="General motivation answer (Why do you want to work here / Why this role)"
+    )
+    fintech_motivation: Optional[str] = Field(
+        None,
+        description="Motivation answer for fintech / banking / payments companies"
+    )
+    experience_summary: Optional[str] = Field(
+        None,
+        description="Summary of background and daily technical stack"
+    )
+    metrics_and_kpis: Optional[str] = Field(
+        None,
+        description="Targets, KPIs, and achievements in recent roles"
+    )
+    education_level: Optional[str] = Field(
+        None,
+        description="Highest level of education completed or current degree"
+    )
+    timezone_overlap: Optional[str] = Field(
+        None,
+        description="Time zone and overlap statement"
+    )
+    custom_qa: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Key-value pairs of common question keywords and tailored answers"
+    )
+
 class CandidateProfile(BaseModel):
     personal_info: PersonalInfo
     search_criteria: SearchCriteria
     preferences: CandidatePreferences = Field(default_factory=CandidatePreferences)
     ats_settings: ATSSettings = Field(default_factory=ATSSettings)
+    open_questions: OpenQuestionTemplates = Field(default_factory=OpenQuestionTemplates)
 
     @property
     def effective_max_years(self) -> Optional[int]:
@@ -121,3 +156,4 @@ class JobPosting(BaseModel):
     compensation: Optional[str] = None
     required_years: Optional[int] = None
     created_at: Optional[str] = None
+    has_captcha: bool = False

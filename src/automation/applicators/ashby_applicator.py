@@ -34,7 +34,7 @@ class AshbyApplicator(BaseApplicator):
 
         # 3. Email & Phone
         await self.safe_fill("input[name='_systemfield_email'], input[type='email']", self.p_info.email, "Email")
-        await self.safe_fill("input[name='phone'], input[type='tel']", self.p_info.phone, "Phone")
+        await self.fill_phone_field()
 
         # 4. Location Dropdown
         loc_inp = self.page.locator("input[placeholder*='Start typing' i]")

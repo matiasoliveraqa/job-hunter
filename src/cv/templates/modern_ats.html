@@ -167,7 +167,7 @@
 <div class="job">
   <div class="job-header">
     <div><span class="job-title">{{ exp.role }}</span> &ndash; <span class="company">{{ exp.company }}</span></div>
-    <div class="job-dates">{{ exp.period }} | {{ exp.location }}</div>
+    <div class="job-dates">{{ exp.period }}{% if exp.location %} | {{ exp.location }}{% endif %}</div>
   </div>
   <ul class="bullets">
     {% for b in exp.highlights %}

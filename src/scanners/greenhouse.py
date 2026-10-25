@@ -24,6 +24,13 @@ class GreenhouseScanner(BaseScanner):
         timeout = aiohttp.ClientTimeout(total=12, sock_connect=5, sock_read=8)
         try:
             async with session.get(url, timeout=timeout) as resp:
+                if resp.status in (406, 429):
+                    raise aiohttp.ClientResponseError(
+                        resp.request_info,
+                        resp.history,
+                        status=resp.status,
+                        message=f"Rate limit / WAF block (HTTP {resp.status})",
+                    )
                 if resp.status != 200:
                     return []
                 data = await resp.json()
@@ -37,29 +44,31 @@ class GreenhouseScanner(BaseScanner):
                         job_id = j.get("id")
                         desc_text = f"{title} {j.get('content') or ''}"
 
-                        # If experience filter is set and content wasn't in list payload, fetch job detail
-                        if max_years_experience is not None and not j.get("content") and job_id:
-                            detail_url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs/{job_id}"
-                            try:
-                                async with session.get(detail_url, timeout=timeout) as d_resp:
-                                    if d_resp.status == 200:
-                                        d_data = await d_resp.json()
-                                        desc_text = f"{title} {d_data.get('content') or ''}"
-                            except Exception:
-                                pass
-
+                        if self.has_residency_restriction(desc_text):
+                            continue
                         if not self.matches_experience(desc_text, max_years_experience):
                             continue
 
                         req_years = self.extract_required_years(desc_text)
+                        abs_url = j.get("absolute_url") or ""
+                        if "greenhouse.io" in abs_url:
+                            job_url = abs_url
+                        elif job_id:
+                            job_url = f"https://job-boards.greenhouse.io/{company_slug}/jobs/{job_id}"
+                        else:
+                            job_url = abs_url
+
                         postings.append(JobPosting(
                             ats=self.platform,
                             company=company_slug,
                             title=title,
                             location=loc_name,
-                            url=j.get("absolute_url") or f"https://job-boards.greenhouse.io/{company_slug}/jobs/{job_id}",
+                            url=job_url,
                             required_years=req_years
                         ))
+        except aiohttp.ClientResponseError as e:
+            if e.status in (406, 429):
+                raise
         except Exception:
             pass
         return postings

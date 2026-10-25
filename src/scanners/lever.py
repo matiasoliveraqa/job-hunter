@@ -31,9 +31,14 @@ class LeverScanner(BaseScanner):
                     return []
                 for j in jobs:
                     title = j.get("text", "")
-                    cats = j.get("categories", {})
-                    loc = (cats.get("location") or "") + " " + (cats.get("workplaceType") or "")
+                    cats = j.get("categories", {}) or {}
+                    wpt = (cats.get("workplaceType") or j.get("workplaceType") or "").lower()
+                    if wpt in ("onsite", "in-office"):
+                        continue
+                    if wpt == "hybrid" and not any(u in (cats.get("location") or "").lower() for u in ("uruguay", "montevideo")):
+                        continue
 
+                    loc = ((cats.get("location") or "") + " " + wpt).strip()
                     if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords):
                         lists_text = " ".join(
                             f"{lst.get('text', '')} {lst.get('content', '')}"
@@ -46,6 +51,8 @@ class LeverScanner(BaseScanner):
                             f"{j.get('description') or ''} "
                             f"{lists_text}"
                         )
+                        if self.has_residency_restriction(desc):
+                            continue
                         if not self.matches_experience(desc, max_years_experience):
                             continue
 
@@ -56,7 +63,8 @@ class LeverScanner(BaseScanner):
                             title=title,
                             location=loc.strip(),
                             url=j.get("hostedUrl") or f"https://jobs.lever.co/{company_slug}/{j.get('id')}",
-                            required_years=req_years
+                            required_years=req_years,
+                            has_captcha=True,
                         ))
         except Exception:
             pass
