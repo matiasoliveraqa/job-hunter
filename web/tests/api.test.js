@@ -303,6 +303,55 @@ test('Web server host authorization and API endpoints', async (t) => {
     assert.strictEqual(res.status, 200)
     assert.strictEqual(typeof res.json?.stopped, 'boolean')
   })
+
+  await t.test('POST /api/open-folder safely opens folder cross-platform', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/open-folder',
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: { folder: 'applications' },
+    })
+    assert.strictEqual(res.status, 200)
+    assert.strictEqual(res.json?.ok, true)
+    assert.ok(typeof res.json?.path === 'string')
+    assert.ok(typeof res.json?.platform === 'string')
+  })
+
+  await t.test('GET /api/exclusions and POST /api/exclusions/import work properly', async () => {
+    const listRes = await makeRequest({
+      port,
+      path: '/api/exclusions',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(listRes.status, 200)
+    assert.ok(Array.isArray(listRes.json))
+
+    const importRes = await makeRequest({
+      port,
+      path: '/api/exclusions/import',
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: [{ company: 'test_company_dummy_xyz', reason: 'Unit test exclusion' }],
+    })
+    assert.strictEqual(importRes.status, 200)
+    assert.ok(typeof importRes.json?.added === 'number')
+
+    // Clean up the dummy exclusion
+    const delRes = await makeRequest({
+      port,
+      path: '/api/exclusions/test_company_dummy_xyz',
+      method: 'DELETE',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(delRes.status, 204)
+  })
 })
 
 test('Dynamic port fallback EADDRINUSE binds to next port and authorizes Host', async () => {

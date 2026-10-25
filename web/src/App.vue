@@ -61,10 +61,29 @@ async function loadProfileData() {
   } catch {}
 }
 
+const agentStatus = ref({
+  connected: false,
+  activeProviderName: 'Comprobando...',
+  activeProvider: 'none',
+})
+
+async function checkAgent() {
+  try {
+    agentStatus.value = await api.getAgentStatus()
+  } catch {
+    agentStatus.value = {
+      connected: false,
+      activeProviderName: 'Sin motor de IA',
+      activeProvider: 'none',
+    }
+  }
+}
+
 onMounted(() => {
   initTheme()
   refreshAppStats()
   loadProfileData()
+  checkAgent()
   initScanSync()
 
   window.addEventListener('keydown', (e) => {
@@ -87,22 +106,54 @@ onMounted(() => {
     >
       <div class="flex flex-col min-h-0 overflow-y-auto">
         <!-- Workspace Brand -->
-        <div class="h-14 px-4 border-b border-border-subtle flex items-center justify-between shrink-0">
-          <div class="flex items-center gap-2.5 overflow-hidden">
-            <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-sm font-semibold text-xs tracking-tight shrink-0">
-              JH
+        <div
+          :class="[
+            'h-14 border-b border-border-subtle flex items-center shrink-0 transition-all',
+            collapsed ? 'justify-center px-2' : 'justify-between px-4'
+          ]"
+        >
+          <!-- Expanded: Logo Lockup (Isotype + Text) -->
+          <router-link
+            v-if="!collapsed"
+            to="/search"
+            class="flex items-center gap-2.5 overflow-hidden group cursor-pointer no-underline min-w-0"
+            title="Job Hunter"
+          >
+            <img
+              src="/isotype.png"
+              alt="Job Hunter"
+              class="w-7 h-7 object-contain shrink-0 select-none drop-shadow-sm transition-transform duration-200 group-hover:scale-105"
+            />
+            <div class="flex flex-col leading-tight truncate">
+              <span class="font-semibold text-on-surface text-[14px] tracking-tight group-hover:text-accent transition-colors">
+                Job Hunter
+              </span>
             </div>
-            <div v-if="!collapsed" class="flex flex-col leading-tight truncate">
-              <span class="font-medium text-on-surface text-[13px]">Job Hunter</span>
-            </div>
-          </div>
+          </router-link>
+
+          <!-- Collapsed: Centered Isotype Icon with toggle -->
           <button
-            class="text-outline hover:text-on-surface transition-colors p-1 rounded hover:bg-surface-container"
-            :title="collapsed ? 'Expandir menú' : 'Colapsar menú'"
-            @click="collapsed = !collapsed"
+            v-else
+            class="p-1 rounded-lg hover:bg-surface-container transition-all group flex items-center justify-center"
+            title="Expandir menú (Job Hunter)"
+            @click="collapsed = false"
+          >
+            <img
+              src="/isotype.png"
+              alt="Job Hunter"
+              class="w-8 h-8 object-contain select-none drop-shadow-sm transition-transform duration-200 group-hover:scale-110"
+            />
+          </button>
+
+          <!-- Collapse button (expanded only) -->
+          <button
+            v-if="!collapsed"
+            class="text-outline hover:text-on-surface transition-colors p-1 rounded hover:bg-surface-container shrink-0"
+            title="Colapsar menú"
+            @click="collapsed = true"
           >
             <span class="material-symbols-outlined text-[18px]">
-              {{ collapsed ? 'right_panel_open' : 'left_panel_close' }}
+              left_panel_close
             </span>
           </button>
         </div>
@@ -164,12 +215,27 @@ onMounted(() => {
 
       <!-- Sidebar Footer / Candidate info -->
       <div class="p-3 border-t border-border-subtle bg-surface flex flex-col gap-2 shrink-0">
-        <div v-if="!collapsed" class="flex items-center justify-between px-1">
-          <div class="flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span class="text-[11px] font-mono text-outline">Agente local activo</span>
+        <div
+          v-if="!collapsed"
+          class="flex items-center justify-between px-1 cursor-pointer hover:opacity-85 transition-opacity py-0.5"
+          :title="agentStatus.connected ? `Motor activo: ${agentStatus.activeProviderName}. Clic para ajustar.` : 'Sin motor de IA detectado. Las postulaciones usarán tu CV base estándar. Clic para configurar.'"
+          @click="router.push('/profile?tab=ai')"
+        >
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span
+              class="w-2 h-2 rounded-full shrink-0"
+              :class="agentStatus.connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'"
+            ></span>
+            <span class="text-[11px] font-mono text-outline truncate">
+              {{ agentStatus.connected ? agentStatus.activeProviderName : 'Sin IA (Modo CV base)' }}
+            </span>
           </div>
-          <span class="text-[10px] font-mono px-1 py-0.5 rounded bg-surface-container text-outline">ready</span>
+          <span
+            class="text-[10px] font-mono px-1 py-0.5 rounded shrink-0 ml-1"
+            :class="agentStatus.connected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
+          >
+            {{ agentStatus.connected ? 'ready' : 'base cv' }}
+          </span>
         </div>
         <div
           class="flex items-center gap-2.5 p-1.5 rounded-lg bg-surface-container border border-border-subtle hover:border-border-muted transition-colors cursor-pointer"

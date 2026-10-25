@@ -8,6 +8,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..', '..')
 
 const SYSTEM_RULES = `You are a professional ATS resume specialist.
+CRITICAL EXECUTION RULE:
+- DO NOT CALL ANY TOOLS OR RUN COMMANDS. DO NOT EXPLORE THE FILESYSTEM.
+- All candidate information, inventory, and templates are provided in this prompt.
+- You are operating strictly as a text generator. Output the final response directly.
+
 CRITICAL RULES FOR CV GENERATION:
 1. STRICT TRUTH & FIDELITY: Never invent companies, dates, certifications, degrees, or tools outside the candidate's actual profile and inventory.
 2. HUMAN WRITING RULES (Wikipedia:Signs_of_AI_writing):
@@ -81,12 +86,260 @@ async function runTextCommand(bin, args, input = '', timeoutMs = 180000) {
   })
 }
 
+const AI_SETTINGS_FILE = path.join(ROOT, 'config', 'ai_settings.json')
+
+export async function readAiSettings() {
+  try {
+    if (existsSync(AI_SETTINGS_FILE)) {
+      return JSON.parse(await fs.readFile(AI_SETTINGS_FILE, 'utf-8'))
+    }
+  } catch (e) {
+    console.warn('[AI Settings] No se pudo leer ai_settings.json:', e.message)
+  }
+  return {
+    provider: 'auto',
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    openaiApiKey: process.env.OPENAI_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
+    kimiApiKey: process.env.KIMI_API_KEY || '',
+    customOpenAiApiKey: process.env.CUSTOM_OPENAI_API_KEY || '',
+    customOpenAiBaseUrl: process.env.CUSTOM_OPENAI_BASE_URL || '',
+    customOpenAiModel: process.env.CUSTOM_OPENAI_MODEL || '',
+  }
+}
+
+export async function writeAiSettings(settings) {
+  const current = await readAiSettings()
+  const updated = {
+    ...current,
+    provider: settings.provider || current.provider || 'auto',
+    anthropicApiKey: settings.anthropicApiKey !== undefined ? settings.anthropicApiKey.trim() : (current.anthropicApiKey || ''),
+    openaiApiKey: settings.openaiApiKey !== undefined ? settings.openaiApiKey.trim() : (current.openaiApiKey || ''),
+    geminiApiKey: settings.geminiApiKey !== undefined ? settings.geminiApiKey.trim() : (current.geminiApiKey || ''),
+    deepseekApiKey: settings.deepseekApiKey !== undefined ? settings.deepseekApiKey.trim() : (current.deepseekApiKey || ''),
+    kimiApiKey: settings.kimiApiKey !== undefined ? settings.kimiApiKey.trim() : (current.kimiApiKey || ''),
+    customOpenAiApiKey: settings.customOpenAiApiKey !== undefined ? settings.customOpenAiApiKey.trim() : (current.customOpenAiApiKey || ''),
+    customOpenAiBaseUrl: settings.customOpenAiBaseUrl !== undefined ? settings.customOpenAiBaseUrl.trim() : (current.customOpenAiBaseUrl || ''),
+    customOpenAiModel: settings.customOpenAiModel !== undefined ? settings.customOpenAiModel.trim() : (current.customOpenAiModel || ''),
+  }
+  const configDir = path.dirname(AI_SETTINGS_FILE)
+  if (!existsSync(configDir)) {
+    await fs.mkdir(configDir, { recursive: true })
+  }
+  await fs.writeFile(AI_SETTINGS_FILE, JSON.stringify(updated, null, 2) + '\n', 'utf-8')
+  return updated
+}
+
+async function checkCommandAvailable(bin, args = ['--version'], timeoutMs = 2500) {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(bin, args, {
+        cwd: ROOT,
+        env: buildCleanEnv(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      let finished = false
+      const timer = setTimeout(() => {
+        if (!finished) {
+          finished = true
+          try { child.kill('SIGTERM') } catch {}
+          resolve(false)
+        }
+      }, timeoutMs)
+
+      child.on('error', () => {
+        if (!finished) {
+          finished = true
+          clearTimeout(timer)
+          resolve(false)
+        }
+      })
+      child.on('close', (code) => {
+        if (!finished) {
+          finished = true
+          clearTimeout(timer)
+          resolve(code === 0)
+        }
+      })
+    } catch {
+      resolve(false)
+    }
+  })
+}
+
+export async function checkBaseCv() {
+  const myCvDir = path.join(ROOT, 'my_cv')
+  if (!existsSync(myCvDir)) {
+    return { exists: false, filename: null, relPath: null }
+  }
+  try {
+    const files = await fs.readdir(myCvDir)
+    const pdfs = files.filter((f) => f.toLowerCase().endsWith('.pdf') && !f.startsWith('skills_inventory'))
+    if (!pdfs.length) {
+      return { exists: false, filename: null, relPath: null }
+    }
+    return {
+      exists: true,
+      filename: pdfs[0],
+      relPath: `my_cv/${pdfs[0]}`,
+    }
+  } catch {
+    return { exists: false, filename: null, relPath: null }
+  }
+}
+
+async function queryAnthropicApi(prompt, apiKey) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Error Anthropic API (${res.status}): ${errText}`)
+  }
+  const data = await res.json()
+  return data.content?.[0]?.text || ''
+}
+
+async function queryOpenAiCompatibleApi({ prompt, apiKey, baseUrl, model }) {
+  const cleanBase = (baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '')
+  const url = cleanBase.endsWith('/chat/completions')
+    ? cleanBase
+    : `${cleanBase}/chat/completions`
+
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: model || 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Error en API compatible (${res.status}): ${errText}`)
+  }
+
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content || ''
+}
+
+async function queryGeminiApi(prompt, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+    }),
+  })
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Error Google Gemini API (${res.status}): ${errText}`)
+  }
+  const data = await res.json()
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+}
+
+export async function checkAgentStatus() {
+  const settings = await readAiSettings()
+  const baseCv = await checkBaseCv()
+
+  const [hasClaude, hasAgy, hasCodex] = await Promise.all([
+    checkCommandAvailable(process.env.CLAUDE_BIN || 'claude', ['--version']),
+    checkCommandAvailable(process.env.AGY_BIN || 'agy', ['--version']),
+    checkCommandAvailable(process.env.CODEX_BIN || 'codex', ['--version']),
+  ])
+
+  const hasAnthropicApi = Boolean(settings.anthropicApiKey && settings.anthropicApiKey.startsWith('sk-ant-'))
+  const hasOpenAiApi = Boolean(settings.openaiApiKey && settings.openaiApiKey.startsWith('sk-'))
+  const hasGeminiApi = Boolean(settings.geminiApiKey && settings.geminiApiKey.length > 15)
+  const hasDeepSeekApi = Boolean(settings.deepseekApiKey && settings.deepseekApiKey.startsWith('sk-'))
+  const hasKimiApi = Boolean(settings.kimiApiKey && settings.kimiApiKey.startsWith('sk-'))
+  const hasCustomOpenAi = Boolean(
+    settings.customOpenAiBaseUrl &&
+    (settings.customOpenAiApiKey || settings.customOpenAiBaseUrl.includes('localhost') || settings.customOpenAiBaseUrl.includes('127.0.0.1'))
+  )
+
+  const providers = [
+    { id: 'claude', name: 'Claude Code CLI', available: hasClaude, type: 'cli' },
+    { id: 'agy', name: 'Antigravity / Gemini CLI', available: hasAgy, type: 'cli' },
+    { id: 'codex', name: 'Codex CLI', available: hasCodex, type: 'cli' },
+    { id: 'deepseek_api', name: 'DeepSeek API', available: hasDeepSeekApi, type: 'api', configured: Boolean(settings.deepseekApiKey) },
+    { id: 'kimi_api', name: 'Kimi (Moonshot) API', available: hasKimiApi, type: 'api', configured: Boolean(settings.kimiApiKey) },
+    { id: 'anthropic_api', name: 'Anthropic Claude (API Key)', available: hasAnthropicApi, type: 'api', configured: Boolean(settings.anthropicApiKey) },
+    { id: 'openai_api', name: 'OpenAI (API Key)', available: hasOpenAiApi, type: 'api', configured: Boolean(settings.openaiApiKey) },
+    { id: 'gemini_api', name: 'Google Gemini (API Key)', available: hasGeminiApi, type: 'api', configured: Boolean(settings.geminiApiKey) },
+    { id: 'custom_openai_api', name: 'Personalizado (OpenAI compatible / Ollama / Groq)', available: hasCustomOpenAi, type: 'api', configured: Boolean(settings.customOpenAiBaseUrl) },
+  ]
+
+  let activeId = 'none'
+  let activeName = 'Sin motor de IA'
+  const pref = settings.provider || 'auto'
+
+  if (pref !== 'auto') {
+    const match = providers.find((p) => p.id === pref)
+    if (match && match.available) {
+      activeId = match.id
+      activeName = match.name
+    }
+  }
+
+  const isAntigravity = Boolean(
+    process.env.ANTIGRAVITY_AGENT ||
+    process.env.ANTIGRAVITY_LS_VERSION ||
+    process.env.ANTIGRAVITY_LS_ADDRESS
+  )
+
+  if (activeId === 'none') {
+    if (isAntigravity && hasAgy) { activeId = 'agy'; activeName = 'Gemini (Antigravity)' }
+    else if (hasDeepSeekApi) { activeId = 'deepseek_api'; activeName = 'DeepSeek API' }
+    else if (hasKimiApi) { activeId = 'kimi_api'; activeName = 'Kimi (Moonshot) API' }
+    else if (hasGeminiApi) { activeId = 'gemini_api'; activeName = 'Google Gemini API' }
+    else if (hasAnthropicApi) { activeId = 'anthropic_api'; activeName = 'Anthropic Claude API' }
+    else if (hasOpenAiApi) { activeId = 'openai_api'; activeName = 'OpenAI API' }
+    else if (hasCustomOpenAi) { activeId = 'custom_openai_api'; activeName = 'API Compatible Personalizada' }
+    else if (hasAgy) { activeId = 'agy'; activeName = 'Gemini (Agy CLI)' }
+    else if (hasClaude) { activeId = 'claude'; activeName = 'Claude Code CLI' }
+    else if (hasCodex) { activeId = 'codex'; activeName = 'Codex CLI' }
+  }
+
+  const connected = activeId !== 'none'
+
+  return {
+    connected,
+    activeProvider: activeId,
+    activeProviderName: activeName,
+    preferredProvider: pref,
+    providers,
+    baseCv,
+  }
+}
+
 async function queryClaude(prompt) {
   const bin = process.env.CLAUDE_BIN || 'claude'
   const args = [
     '-p',
     '--output-format', 'text',
-    '--tools', '', // Disables all execution tools completely
+    '--tools', '',
     '--no-session-persistence',
   ]
   return runTextCommand(bin, args, prompt)
@@ -97,6 +350,7 @@ async function queryAgy(prompt) {
   const args = [
     '--output-format', 'text',
     '--disable-slash-commands',
+    '--dangerously-skip-permissions',
     '-p',
     prompt,
   ]
@@ -110,14 +364,63 @@ async function queryCodex(prompt) {
 }
 
 export async function queryIsolatedModel(prompt, preferredProvider = 'auto') {
+  const settings = await readAiSettings()
   const provider = preferredProvider === 'auto'
-    ? (process.env.AGENT_PROVIDER || 'claude')
+    ? (settings.provider || process.env.AGENT_PROVIDER || 'auto')
     : preferredProvider
+
+  if (provider === 'deepseek_api') {
+    if (!settings.deepseekApiKey) throw new Error('No hay clave de DeepSeek API configurada')
+    return queryOpenAiCompatibleApi({
+      prompt,
+      apiKey: settings.deepseekApiKey,
+      baseUrl: 'https://api.deepseek.com/v1',
+      model: 'deepseek-chat',
+    })
+  }
+
+  if (provider === 'kimi_api') {
+    if (!settings.kimiApiKey) throw new Error('No hay clave de Kimi (Moonshot) API configurada')
+    return queryOpenAiCompatibleApi({
+      prompt,
+      apiKey: settings.kimiApiKey,
+      baseUrl: 'https://api.moonshot.cn/v1',
+      model: 'moonshot-v1-8k',
+    })
+  }
+
+  if (provider === 'custom_openai_api') {
+    if (!settings.customOpenAiBaseUrl) throw new Error('No se definió la URL base del proveedor compatible')
+    return queryOpenAiCompatibleApi({
+      prompt,
+      apiKey: settings.customOpenAiApiKey,
+      baseUrl: settings.customOpenAiBaseUrl,
+      model: settings.customOpenAiModel || 'gpt-4o',
+    })
+  }
+
+  if (provider === 'anthropic_api') {
+    if (!settings.anthropicApiKey) throw new Error('No hay clave de Anthropic API configurada')
+    return queryAnthropicApi(prompt, settings.anthropicApiKey)
+  }
+  if (provider === 'openai_api') {
+    if (!settings.openaiApiKey) throw new Error('No hay clave de OpenAI API configurada')
+    return queryOpenAiCompatibleApi({
+      prompt,
+      apiKey: settings.openaiApiKey,
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+    })
+  }
+  if (provider === 'gemini_api') {
+    if (!settings.geminiApiKey) throw new Error('No hay clave de Google Gemini API configurada')
+    return queryGeminiApi(prompt, settings.geminiApiKey)
+  }
 
   if (provider === 'agy') {
     try {
       return await queryAgy(prompt)
-    } catch (e) {
+    } catch {
       return queryClaude(prompt)
     }
   }
@@ -126,7 +429,6 @@ export async function queryIsolatedModel(prompt, preferredProvider = 'auto') {
     try {
       return await queryCodex(prompt)
     } catch {
-      // Fallback to claude or agy
       try {
         return await queryClaude(prompt)
       } catch {
@@ -135,15 +437,84 @@ export async function queryIsolatedModel(prompt, preferredProvider = 'auto') {
     }
   }
 
-  // Default: claude with fallback to agy
-  try {
-    return await queryClaude(prompt)
-  } catch (err) {
-    if (provider === 'auto' || /not logged in|not found|enoent/i.test(err.message)) {
+  if (provider === 'claude') {
+    try {
+      return await queryClaude(prompt)
+    } catch {
       return queryAgy(prompt)
     }
-    throw err
   }
+
+  // Provider is 'auto': check configured APIs first, then local CLIs
+  if (settings.deepseekApiKey && settings.deepseekApiKey.startsWith('sk-')) {
+    try {
+      return await queryOpenAiCompatibleApi({
+        prompt,
+        apiKey: settings.deepseekApiKey,
+        baseUrl: 'https://api.deepseek.com/v1',
+        model: 'deepseek-chat',
+      })
+    } catch (e) { console.warn('[Auto] DeepSeek API falló:', e.message) }
+  }
+
+  if (settings.kimiApiKey && settings.kimiApiKey.startsWith('sk-')) {
+    try {
+      return await queryOpenAiCompatibleApi({
+        prompt,
+        apiKey: settings.kimiApiKey,
+        baseUrl: 'https://api.moonshot.cn/v1',
+        model: 'moonshot-v1-8k',
+      })
+    } catch (e) { console.warn('[Auto] Kimi API falló:', e.message) }
+  }
+
+  if (settings.customOpenAiBaseUrl) {
+    try {
+      return await queryOpenAiCompatibleApi({
+        prompt,
+        apiKey: settings.customOpenAiApiKey,
+        baseUrl: settings.customOpenAiBaseUrl,
+        model: settings.customOpenAiModel || 'gpt-4o',
+      })
+    } catch (e) { console.warn('[Auto] Custom OpenAI API falló:', e.message) }
+  }
+
+  if (settings.anthropicApiKey && settings.anthropicApiKey.startsWith('sk-ant-')) {
+    try { return await queryAnthropicApi(prompt, settings.anthropicApiKey) } catch (e) { console.warn('[Auto] Anthropic API falló:', e.message) }
+  }
+  if (settings.openaiApiKey && settings.openaiApiKey.startsWith('sk-')) {
+    try {
+      return await queryOpenAiCompatibleApi({
+        prompt,
+        apiKey: settings.openaiApiKey,
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o',
+      })
+    } catch (e) { console.warn('[Auto] OpenAI API falló:', e.message) }
+  }
+  if (settings.geminiApiKey && settings.geminiApiKey.length > 15) {
+    try { return await queryGeminiApi(prompt, settings.geminiApiKey) } catch (e) { console.warn('[Auto] Gemini API falló:', e.message) }
+  }
+
+  const isAntigravity = Boolean(
+    process.env.ANTIGRAVITY_AGENT ||
+    process.env.ANTIGRAVITY_LS_VERSION ||
+    process.env.ANTIGRAVITY_LS_ADDRESS
+  )
+
+  const cliFns = isAntigravity
+    ? [queryAgy, queryClaude, queryCodex]
+    : [queryAgy, queryClaude, queryCodex]
+
+  for (const fn of cliFns) {
+    try {
+      return await fn(prompt)
+    } catch {}
+  }
+
+  throw new Error(
+    'No se detectó ningún motor de IA activo (Gemini, Claude, DeepSeek, Kimi o Codex). Puedes configurar una API Key en Mi perfil o usar tu CV base estándar directamente.'
+  )
 }
 
 export function extractHtml(text) {
@@ -194,6 +565,7 @@ INSTRUCTIONS:
   const response = await queryIsolatedModel(prompt, provider)
   const extracted = extractHtml(response)
   if (!extracted || extracted.length < 100 || !extracted.includes('<html')) {
+    console.error('[tailorCvHtml] Respuesta del modelo no válida como HTML. Longitud:', response?.length || 0, 'Snippet:', (response || '').slice(0, 300))
     throw new Error('El modelo generó una respuesta vacía o incompleta para el CV')
   }
   return extracted

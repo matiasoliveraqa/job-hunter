@@ -1,6 +1,9 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+
+const route = useRoute()
 
 const profile = ref(null)
 const original = ref('')
@@ -8,36 +11,67 @@ const loading = ref(true)
 const saving = ref(false)
 const snack = reactive({ show: false, text: '', color: 'success' })
 
+const activeTab = ref('profile') // 'profile' | 'questions' | 'ai'
+
 const yesNo = ['Yes', 'No']
-const periods = [
-  { value: 'monthly', title: 'Mensual' },
-  { value: 'annual', title: 'Anual' },
-]
 const platforms = ['ashby', 'greenhouse', 'lever']
 
-const dirty = computed(() => profile.value && JSON.stringify(profile.value) !== original.value)
+const newRoleInput = ref('')
+const newKeywordInput = ref('')
+const newLocationInput = ref('')
 
 function notify(text, color = 'success') {
   Object.assign(snack, { show: true, text, color })
 }
 
 function adopt(data) {
-  // text fields that may be null in the file are edited as empty strings
+  data.personal_info ??= {}
   data.personal_info.github_url ??= ''
   data.personal_info.portfolio_url ??= ''
   data.personal_info.current_company ??= ''
-  data.personal_info.years_of_experience ??= null
-  data.personal_info.gender ??= ''
-  data.personal_info.race ??= ''
-  data.personal_info.veteran_status ??= ''
-  data.personal_info.disability_status ??= ''
-  data.search_criteria.max_years_of_experience ??= null
-  data.preferences.dependent_salary_usd ??= data.preferences.desired_salary_usd ?? null
-  data.preferences.contractor_salary_usd ??= null
-  data.preferences.english_level ??= ''
+  data.personal_info.years_of_experience ??= 7
+  data.personal_info.requires_us_visa_sponsorship ??= 'No'
+  data.personal_info.gender ??= 'Male'
+  data.personal_info.race ??= 'Hispanic or Latino'
+  data.personal_info.veteran_status ??= 'I am not a veteran'
+  data.personal_info.disability_status ??= 'No, I do not have a disability'
+
+  data.search_criteria ??= {}
+  data.search_criteria.target_roles ??= []
+  data.search_criteria.keywords ??= []
+  data.search_criteria.location_keywords ??= []
+  data.search_criteria.max_years_of_experience ??= 7
+  data.search_criteria.min_salary_usd ??= 3000
+
+  data.preferences ??= {}
+  data.preferences.dependent_salary_usd ??= data.preferences.desired_salary_usd ?? 3500
+  data.preferences.contractor_salary_usd ??= 4500
+  data.preferences.salary_period ??= 'monthly'
+  data.preferences.notice_period ??= '2 weeks'
+  data.preferences.english_level ??= 'B2 Upper Intermediate (EF SET Certified)'
+  data.preferences.legally_authorized_to_work ??= 'Yes'
+
+  data.ats_settings ??= {}
+  data.ats_settings.enabled_platforms ??= ['ashby', 'greenhouse', 'lever']
+  data.ats_settings.auto_upload_resume ??= true
+  data.ats_settings.stealth_mode ??= true
+
+  data.open_questions ??= {}
+  data.open_questions.motivation ??= ''
+  data.open_questions.fintech_motivation ??= ''
+  data.open_questions.experience_summary ??= ''
+  data.open_questions.metrics_and_kpis ??= ''
+  data.open_questions.education_level ??= ''
+  data.open_questions.timezone_overlap ??= ''
+
   profile.value = data
   original.value = JSON.stringify(data)
 }
+
+const dirty = computed(() => {
+  if (!profile.value || !original.value) return false
+  return JSON.stringify(profile.value) !== original.value
+})
 
 const baseCv = ref(null)
 const uploadingCv = ref(false)
@@ -47,7 +81,7 @@ async function loadBaseCv() {
   try {
     baseCv.value = await api.getBaseCv()
   } catch {
-    // ignorar
+    // ignora
   }
 }
 
@@ -62,10 +96,79 @@ async function load() {
   }
 }
 
-onMounted(() => {
-  load()
-  loadBaseCv()
+const agentStatus = ref(null)
+const agentConfig = reactive({
+  provider: 'auto',
+  anthropicApiKey: '',
+  openaiApiKey: '',
+  geminiApiKey: '',
+  deepseekApiKey: '',
+  kimiApiKey: '',
+  customOpenAiApiKey: '',
+  customOpenAiBaseUrl: '',
+  customOpenAiModel: '',
+  hasAnthropicKey: false,
+  hasOpenAiKey: false,
+  hasGeminiKey: false,
+  hasDeepSeekKey: false,
+  hasKimiKey: false,
+  hasCustomKey: false,
 })
+const savingAgentConfig = ref(false)
+
+const providerOptions = [
+  { value: 'auto', title: 'Detección automática (CLI o API disponible)' },
+  { value: 'deepseek_api', title: 'DeepSeek (API directa)' },
+  { value: 'kimi_api', title: 'Kimi / Moonshot AI (API directa)' },
+  { value: 'custom_openai_api', title: 'Personalizado (OpenAI compatible / Ollama / Groq)' },
+  { value: 'anthropic_api', title: 'Anthropic Claude (API Key directa)' },
+  { value: 'openai_api', title: 'OpenAI GPT-4o (API Key directa)' },
+  { value: 'gemini_api', title: 'Google Gemini (API Key directa)' },
+  { value: 'claude', title: 'Anthropic Claude Code (CLI local)' },
+  { value: 'agy', title: 'Google Antigravity / Gemini (CLI local)' },
+  { value: 'codex', title: 'OpenAI Codex (CLI local)' },
+]
+
+async function loadAgentConfig() {
+  try {
+    const [status, cfg] = await Promise.all([api.getAgentStatus(), api.getAgentConfig()])
+    agentStatus.value = status
+    Object.assign(agentConfig, cfg)
+  } catch (e) {
+    console.warn('[ProfileView] No se pudo cargar config de IA:', e.message)
+  }
+}
+
+async function saveAgentConfigAction() {
+  savingAgentConfig.value = true
+  try {
+    const res = await api.saveAgentConfig({
+      provider: agentConfig.provider,
+      anthropicApiKey: agentConfig.anthropicApiKey,
+      openaiApiKey: agentConfig.openaiApiKey,
+      geminiApiKey: agentConfig.geminiApiKey,
+      deepseekApiKey: agentConfig.deepseekApiKey,
+      kimiApiKey: agentConfig.kimiApiKey,
+      customOpenAiApiKey: agentConfig.customOpenAiApiKey,
+      customOpenAiBaseUrl: agentConfig.customOpenAiBaseUrl,
+      customOpenAiModel: agentConfig.customOpenAiModel,
+    })
+    if (res?.status) {
+      agentStatus.value = res.status
+    }
+    notify(
+      agentStatus.value?.connected
+        ? `Configuración guardada. Motor activo: ${agentStatus.value.activeProviderName}`
+        : 'Configuración guardada. Sin motor de IA detectado (Modo CV base activo)',
+      agentStatus.value?.connected ? 'success' : 'warning',
+    )
+    await loadAgentConfig()
+  } catch (err) {
+    notify('Error al guardar configuración de IA: ' + err.message, 'error')
+  } finally {
+    savingAgentConfig.value = false
+  }
+}
 
 async function onFileSelected(event) {
   const file = event.target?.files?.[0]
@@ -121,7 +224,7 @@ async function handleCvUpload(file) {
         profile.value.search_criteria.target_roles = Array.from(curRoles)
       }
 
-      notify('CV cargado con éxito. Se autocompletaron tus datos a partir del documento. Revisa los campos y pulsa Guardar.')
+      notify('CV cargado con éxito. Se actualizaron tus datos a partir del documento. Revisa los campos y pulsa Guardar perfil.')
     } else {
       notify('CV guardado en my_cv/ como documento base.')
     }
@@ -146,263 +249,1104 @@ async function save() {
 
 const reset = () => adopt(JSON.parse(original.value))
 const toNumber = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
+const formatSalaryNumber = (v) => {
+  const n = Number(v)
+  if (isNaN(n) || n <= 0) return '0'
+  return n.toLocaleString('en-US')
+}
+
+function addTargetRole() {
+  const val = newRoleInput.value.trim()
+  if (!val || !profile.value?.search_criteria?.target_roles) return
+  if (!profile.value.search_criteria.target_roles.includes(val)) {
+    profile.value.search_criteria.target_roles.push(val)
+  }
+  newRoleInput.value = ''
+}
+
+function removeTargetRole(idx) {
+  profile.value?.search_criteria?.target_roles?.splice(idx, 1)
+}
+
+function addKeyword() {
+  const val = newKeywordInput.value.trim()
+  if (!val || !profile.value?.search_criteria?.keywords) return
+  if (!profile.value.search_criteria.keywords.includes(val)) {
+    profile.value.search_criteria.keywords.push(val)
+  }
+  newKeywordInput.value = ''
+}
+
+function removeKeyword(idx) {
+  profile.value?.search_criteria?.keywords?.splice(idx, 1)
+}
+
+function addLocation() {
+  const val = newLocationInput.value.trim()
+  if (!val || !profile.value?.search_criteria?.location_keywords) return
+  if (!profile.value.search_criteria.location_keywords.includes(val)) {
+    profile.value.search_criteria.location_keywords.push(val)
+  }
+  newLocationInput.value = ''
+}
+
+function removeLocation(idx) {
+  profile.value?.search_criteria?.location_keywords?.splice(idx, 1)
+}
+
+function togglePlatform(pl) {
+  const list = profile.value?.ats_settings?.enabled_platforms
+  if (!list) return
+  const idx = list.indexOf(pl)
+  if (idx > -1) {
+    list.splice(idx, 1)
+  } else {
+    list.push(pl)
+  }
+}
+
+onMounted(async () => {
+  load()
+  loadBaseCv()
+  await loadAgentConfig()
+  if (route.query.tab === 'ai') {
+    activeTab.value = 'ai'
+  } else if (route.query.tab === 'questions') {
+    activeTab.value = 'questions'
+  }
+})
 </script>
 
 <template>
-  <v-container fluid class="pa-6">
-    <div class="d-flex align-center mb-4">
-      <h1 class="text-h5">Mi perfil</h1>
-      <v-spacer />
-      <v-btn variant="text" :disabled="!dirty || saving" @click="reset">Descartar cambios</v-btn>
-      <v-btn color="primary" prepend-icon="mdi-content-save" :disabled="!dirty" :loading="saving" class="ml-2" @click="save">
-        Guardar
-      </v-btn>
+  <div class="p-6 flex flex-col gap-6 max-w-[1680px] w-full mx-auto font-sans">
+    <!-- TOP ACTION & TITLE HEADER -->
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-border-subtle">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-semibold text-on-surface tracking-tight">Mi perfil profesional</h1>
+      </div>
+
+      <!-- Action Cluster -->
+      <div class="flex items-center gap-3 self-start md:self-auto flex-wrap">
+        <button
+          class="px-3.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface text-xs font-medium border border-border-subtle transition-colors flex items-center gap-1.5 disabled:opacity-50"
+          :disabled="!dirty || saving"
+          type="button"
+          @click="reset"
+        >
+          <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+          <span>Descartar cambios</span>
+        </button>
+
+        <button
+          class="px-4 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium shadow-sm transition-all active:scale-[0.98] flex items-center gap-1.5 disabled:opacity-50"
+          :disabled="!dirty || saving"
+          type="button"
+          @click="save"
+        >
+          <span :class="['material-symbols-outlined text-[16px]', saving ? 'animate-spin' : '']">
+            {{ saving ? 'sync' : 'save' }}
+          </span>
+          <span>{{ saving ? 'Guardando...' : 'Guardar perfil' }}</span>
+        </button>
+      </div>
     </div>
 
-    <v-progress-linear v-if="loading" indeterminate />
+    <!-- TABS DE NAVEGACIÓN EN CABECERA -->
+    <div class="flex items-center gap-2 border-b border-border-subtle pb-px flex-wrap">
+      <button
+        class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 transition-colors rounded-t-lg"
+        :class="[
+          activeTab === 'profile'
+            ? 'border-accent text-on-surface font-semibold bg-surface-container/50'
+            : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container/20'
+        ]"
+        type="button"
+        @click="activeTab = 'profile'"
+      >
+        <span class="material-symbols-outlined text-[17px] text-accent">badge</span>
+        <span>Perfil y Criterios</span>
+      </button>
 
-    <v-form v-if="profile" @submit.prevent="save">
-      <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-        Estos datos son los que el aplicador usa para rellenar formularios y los que el agente usa para filtrar ofertas.
-        Se guardan en <code>config/profile.json</code> (fuera de git), con copia de seguridad en <code>output/backups/</code>.
-      </v-alert>
+      <button
+        class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 transition-colors rounded-t-lg"
+        :class="[
+          activeTab === 'questions'
+            ? 'border-accent text-on-surface font-semibold bg-surface-container/50'
+            : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container/20'
+        ]"
+        type="button"
+        @click="activeTab = 'questions'"
+      >
+        <span class="material-symbols-outlined text-[17px] text-sky-400">forum</span>
+        <span>Preguntas abiertas ATS</span>
+        <span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-surface-container-high text-outline">6</span>
+      </button>
 
-      <v-card class="mb-4" variant="outlined">
-        <v-card-item>
-          <template #prepend>
-            <v-avatar color="primary" variant="tonal" rounded>
-              <v-icon icon="mdi-file-pdf-box" size="26" />
-            </v-avatar>
-          </template>
-          <v-card-title class="text-subtitle-1 font-weight-bold">
-            CV Base del Candidato
-          </v-card-title>
-          <v-card-subtitle>
-            Documento maestro guardado en <code>my_cv/</code>. Se utiliza como base para adaptar cada postulación y para autocompletar tu perfil.
-          </v-card-subtitle>
-        </v-card-item>
+      <button
+        class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 transition-colors rounded-t-lg"
+        :class="[
+          activeTab === 'ai'
+            ? 'border-accent text-on-surface font-semibold bg-surface-container/50'
+            : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container/20'
+        ]"
+        type="button"
+        @click="activeTab = 'ai'"
+      >
+        <span class="material-symbols-outlined text-[17px] text-tertiary">smart_toy</span>
+        <span>Motor de IA & LLM</span>
+        <span
+          class="w-2 h-2 rounded-full"
+          :class="agentStatus?.connected ? 'bg-emerald-400' : 'bg-amber-400'"
+          :title="agentStatus?.connected ? `Conectado: ${agentStatus.activeProviderName}` : 'Modo CV base estándar'"
+        ></span>
+      </button>
+    </div>
 
-        <v-card-text class="pt-0">
-          <div v-if="baseCv?.exists" class="d-flex flex-wrap align-center ga-3 mb-3 pa-3 rounded bg-surface-variant">
-            <v-icon icon="mdi-file-check" color="success" />
-            <div>
-              <span class="font-weight-medium">{{ baseCv.filename }}</span>
-              <span class="text-caption text-medium-emphasis ml-2">({{ Math.round(baseCv.sizeBytes / 1024) }} KB)</span>
-            </div>
-            <v-spacer />
-            <v-btn
-              variant="text"
-              size="small"
-              prepend-icon="mdi-eye"
-              :href="baseCv.url"
-              target="_blank"
-            >
-              Ver CV actual
-            </v-btn>
-          </div>
-          <div v-else class="text-caption text-medium-emphasis mb-3">
-            No hay ningún CV base cargado aún en <code>my_cv/</code>.
-          </div>
+    <!-- Security & Purpose Info Banner -->
+    <div class="flex items-start gap-3 p-3.5 rounded-lg bg-surface-card border border-border-subtle border-l-4 border-l-accent text-on-surface-variant">
+      <span class="material-symbols-outlined text-accent text-[20px] shrink-0 mt-0.5">verified_user</span>
+      <div class="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <p class="text-xs text-on-surface-variant">
+          Estos datos son los que el agente local usa para autorellenar formularios ATS y filtrar ofertas automáticamente. Se guardan localmente en
+          <code class="font-mono text-outline px-1.5 py-0.5 bg-surface-container rounded text-[11px]">config/profile.json</code> (ignorado por git), con copia de respaldo incremental en
+          <code class="font-mono text-outline px-1.5 py-0.5 bg-surface-container rounded text-[11px]">output/backups/</code>.
+        </p>
+        <span class="shrink-0 font-mono text-outline text-[11px] self-end sm:self-auto">Almacenamiento local privado</span>
+      </div>
+    </div>
 
-          <div class="d-flex align-center ga-3">
-            <input
-              ref="fileInputRef"
-              type="file"
-              accept=".pdf,.html,.md,.txt"
-              style="display: none"
-              @change="onFileSelected"
-            />
-            <v-btn
-              color="primary"
-              variant="flat"
-              prepend-icon="mdi-upload"
-              :loading="uploadingCv"
-              @click="fileInputRef?.click()"
-            >
-              {{ baseCv?.exists ? 'Cargar nuevo CV y actualizar datos' : 'Cargar CV base' }}
-            </v-btn>
-            <span class="text-caption text-medium-emphasis">
-              Formatos aceptados: PDF, HTML o Markdown. El agente extraerá tu información automáticamente.
-            </span>
-          </div>
-        </v-card-text>
-      </v-card>
+    <!-- LOADING STATE -->
+    <div v-if="loading" class="p-12 text-center text-xs font-mono text-outline">
+      Cargando configuración del perfil...
+    </div>
 
-      <v-row>
-        <v-col cols="12" lg="6">
-          <v-card title="Datos personales" class="mb-4">
-            <v-card-text>
-              <v-text-field v-model="profile.personal_info.full_name" label="Nombre completo *" />
-              <v-text-field v-model="profile.personal_info.email" label="Email *" type="email" />
-              <v-text-field v-model="profile.personal_info.phone" label="Teléfono (con código de país) *" />
-              <v-text-field v-model="profile.personal_info.location" label="Ubicación *" />
-              <v-text-field v-model="profile.personal_info.linkedin_url" label="LinkedIn *" />
-              <v-text-field v-model="profile.personal_info.github_url" label="GitHub" />
-              <v-text-field v-model="profile.personal_info.portfolio_url" label="Portfolio / sitio web" />
-              <v-text-field v-model="profile.personal_info.current_company" label="Empresa actual" />
-              <v-text-field
-                :model-value="profile.personal_info.years_of_experience"
-                label="Años de experiencia profesional (opcional)"
-                type="number"
-                min="0"
-                @update:model-value="profile.personal_info.years_of_experience = toNumber($event)"
-              />
-              <v-select
-                v-model="profile.personal_info.requires_us_visa_sponsorship"
-                :items="yesNo"
-                label="¿Requiere sponsorship de visa de EE. UU.?"
-              />
-              <v-divider class="my-3" />
-              <div class="text-caption text-medium-emphasis mb-2 font-weight-bold">
-                DATOS DEMOGRÁFICOS / EEO (OPCIONAL PARA FORMULARIOS ATS)
+    <!-- TAB 1: PERFIL Y CRITERIOS -->
+    <div v-else-if="activeTab === 'profile' && profile" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <!-- LEFT COLUMN: CV BASE, PERSONAL DATA & DEMOGRAPHICS (7 cols) -->
+      <div class="lg:col-span-7 flex flex-col gap-6">
+        <!-- 1. Card: CV Base del Candidato (Punto 1 implementado) -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between pb-1">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">picture_as_pdf</span>
+              <div>
+                <h2 class="text-sm font-semibold text-on-surface">CV Base del Candidato</h2>
+                <p class="font-mono text-[11px] text-outline">Documento maestro guardado en my_cv/. Se usa como base para autocompletar tu perfil y adaptar ofertas.</p>
               </div>
-              <v-row density="compact">
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.gender" label="Género (Gender)" />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.race" label="Etnia / Raza (Race)" />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.veteran_status" label="Estatus de veterano (Veteran status)" />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.disability_status" label="Discapacidad (Disability status)" />
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-mono text-[11px]">Documento Maestro</span>
+          </div>
 
-          <v-card title="Preferencias" subtitle="Se usan en las preguntas de salario y disponibilidad de los formularios">
-            <v-card-text>
-              <v-row>
-                <v-col cols="12" sm="4">
-                  <v-text-field
-                    :model-value="profile.preferences.dependent_salary_usd"
-                    label="Salario Dependiente (USD)"
-                    type="number"
-                    min="0"
-                    hint="Por defecto si no aclara modalidad"
-                    persistent-hint
-                    @update:model-value="profile.preferences.dependent_salary_usd = toNumber($event)"
-                  />
-                </v-col>
-                <v-col cols="12" sm="4">
-                  <v-text-field
-                    :model-value="profile.preferences.contractor_salary_usd"
-                    label="Salario Contractor (USD)"
-                    type="number"
-                    min="0"
-                    hint="Si la oferta dice Contractor / B2B"
-                    persistent-hint
-                    @update:model-value="profile.preferences.contractor_salary_usd = toNumber($event)"
-                  />
-                </v-col>
-                <v-col cols="12" sm="4">
-                  <v-select v-model="profile.preferences.salary_period" :items="periods" label="Período" />
-                </v-col>
-              </v-row>
-              <v-text-field
-                v-model="profile.preferences.notice_period"
-                label="Disponibilidad / preaviso *"
-                hint="Ej.: Immediately, 2 weeks, 1 month"
-                persistent-hint
-              />
-              <v-text-field v-model="profile.preferences.english_level" label="Nivel de inglés" class="mt-3" />
-              <v-select
-                v-model="profile.preferences.legally_authorized_to_work"
-                :items="yesNo"
-                label="¿Autorizado a trabajar legalmente?"
-              />
-            </v-card-text>
-          </v-card>
-        </v-col>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-surface-container/60 border border-border-subtle">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="material-symbols-outlined text-emerald-400 text-[18px]">verified</span>
+              <div class="flex flex-col min-w-0">
+                <span class="text-xs font-medium text-on-surface truncate">
+                  {{ baseCv?.filename || 'Matias_Olivera_QA_CV.pdf' }}
+                </span>
+                <span class="font-mono text-[10px] text-outline">
+                  {{ baseCv?.exists ? `${Math.round((baseCv.sizeBytes || 0) / 1024)} KB` : 'No cargado aún' }} • my_cv/
+                </span>
+              </div>
+            </div>
 
-        <v-col cols="12" lg="6">
-          <v-card title="Criterios de búsqueda" class="mb-4">
-            <v-card-text>
-              <v-combobox
-                v-model="profile.search_criteria.target_roles"
-                label="Roles objetivo"
-                multiple
-                chips
-                closable-chips
-                hint="Escribe un rol y pulsa Enter"
-                persistent-hint
-              />
-              <v-combobox
-                v-model="profile.search_criteria.keywords"
-                label="Keywords técnicas"
-                multiple
-                chips
-                closable-chips
-                class="mt-3"
-                hint="Solo tecnologías que figuran en tu CV"
-                persistent-hint
-              />
-              <v-combobox
-                v-model="profile.search_criteria.location_keywords"
-                label="Ubicaciones aceptadas"
-                multiple
-                chips
-                closable-chips
-                class="mt-3"
-              />
-              <v-row class="mt-1">
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    :model-value="profile.search_criteria.max_years_of_experience"
-                    label="Tope máx. años exp. (opcional)"
-                    type="number"
-                    min="0"
-                    hint="Vacío = sin límite de años"
-                    persistent-hint
-                    @update:model-value="profile.search_criteria.max_years_of_experience = toNumber($event)"
-                  />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    :model-value="profile.search_criteria.min_salary_usd"
-                    label="Salario mínimo (USD)"
-                    type="number"
-                    min="0"
-                    @update:model-value="profile.search_criteria.min_salary_usd = toNumber($event)"
-                  />
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
+            <div class="flex items-center gap-2 shrink-0">
+              <a
+                v-if="baseCv?.exists"
+                :href="baseCv.url"
+                target="_blank"
+                class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+              >
+                <span class="material-symbols-outlined text-[15px]">visibility</span>
+                <span>Ver CV actual</span>
+              </a>
 
-          <v-card title="Plataformas y navegador">
-            <v-card-text>
-              <div class="text-subtitle-2 mb-1">Plataformas ATS a escanear</div>
-              <div class="d-flex flex-wrap">
-                <v-checkbox
-                  v-for="pl in platforms"
-                  :key="pl"
-                  v-model="profile.ats_settings.enabled_platforms"
-                  :label="pl"
-                  :value="pl"
-                  density="compact"
-                  hide-details
-                  class="mr-4"
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept=".pdf,.html,.md,.txt"
+                class="hidden"
+                @change="onFileSelected"
+              />
+
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium shadow-sm transition-all active:scale-[0.98]"
+                :disabled="uploadingCv"
+                @click="fileInputRef?.click()"
+              >
+                <span :class="['material-symbols-outlined text-[15px]', uploadingCv ? 'animate-spin' : '']">
+                  {{ uploadingCv ? 'sync' : 'upload' }}
+                </span>
+                <span>{{ uploadingCv ? 'Analizando CV...' : 'Cargar nuevo CV' }}</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Card: Datos Personales -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between pb-1">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">badge</span>
+              <div>
+                <h2 class="text-sm font-semibold text-on-surface">Datos personales</h2>
+                <p class="font-mono text-[11px] text-outline">Información primaria inyectada en campos ATS de primer contacto</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4">
+            <!-- Nombre & Email -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Nombre completo <span class="text-accent">*</span>
+                </label>
+                <input
+                  v-model="profile.personal_info.full_name"
+                  class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="text"
                 />
               </div>
-              <v-switch
-                v-model="profile.ats_settings.auto_upload_resume"
-                label="Adjuntar el CV automáticamente"
-                color="primary"
-                hide-details
-                density="compact"
-                class="mt-2"
-              />
-              <v-switch v-model="profile.ats_settings.stealth_mode" label="Modo sigiloso del navegador" color="primary" hide-details density="compact" />
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
-    </v-form>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Email de contacto <span class="text-accent">*</span>
+                </label>
+                <input
+                  v-model="profile.personal_info.email"
+                  class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="email"
+                />
+              </div>
+            </div>
 
-    <v-snackbar v-model="snack.show" :color="snack.color" timeout="4000">{{ snack.text }}</v-snackbar>
-  </v-container>
+            <!-- Teléfono & Ubicación -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Teléfono / WhatsApp <span class="text-accent">*</span>
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">call</span>
+                  <input
+                    v-model="profile.personal_info.phone"
+                    class="h-9 pl-8 pr-3 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                </div>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Ubicación actual <span class="text-accent">*</span>
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">pin_drop</span>
+                  <input
+                    v-model="profile.personal_info.location"
+                    class="h-9 pl-8 pr-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- LinkedIn -->
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                Perfil de LinkedIn <span class="text-accent">*</span>
+              </label>
+              <div class="relative flex items-center">
+                <input
+                  v-model="profile.personal_info.linkedin_url"
+                  class="h-9 px-3 pr-9 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="text"
+                />
+                <a
+                  v-if="profile.personal_info.linkedin_url"
+                  :href="profile.personal_info.linkedin_url"
+                  target="_blank"
+                  class="absolute right-2 text-outline hover:text-on-surface p-1"
+                >
+                  <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- GitHub & Portfolio -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Perfil de GitHub
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">code</span>
+                  <input
+                    v-model="profile.personal_info.github_url"
+                    class="h-9 pl-8 pr-8 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                  <a
+                    v-if="profile.personal_info.github_url"
+                    :href="profile.personal_info.github_url"
+                    target="_blank"
+                    class="absolute right-2 text-outline hover:text-on-surface p-1"
+                  >
+                    <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </a>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Portfolio / Sitio web
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">language</span>
+                  <input
+                    v-model="profile.personal_info.portfolio_url"
+                    class="h-9 pl-8 pr-8 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                  <a
+                    v-if="profile.personal_info.portfolio_url"
+                    :href="profile.personal_info.portfolio_url"
+                    target="_blank"
+                    class="absolute right-2 text-outline hover:text-on-surface p-1"
+                  >
+                    <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empresa actual, Años Exp & Sponsorship -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+              <div class="md:col-span-6 flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Empresa actual
+                </label>
+                <input
+                  v-model="profile.personal_info.current_company"
+                  class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="text"
+                />
+              </div>
+
+              <div class="md:col-span-3 flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  Años exp.
+                </label>
+                <div class="flex items-center gap-2">
+                  <input
+                    :value="profile.personal_info.years_of_experience"
+                    class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="number"
+                    min="0"
+                    @input="profile.personal_info.years_of_experience = toNumber($event.target.value)"
+                  />
+                  <span class="px-2 py-1 rounded bg-surface-container-highest text-accent font-mono text-[10px] uppercase font-semibold">
+                    {{ (profile.personal_info.years_of_experience || 0) >= 5 ? 'Senior' : 'Mid' }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="md:col-span-3 flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium truncate">
+                  Sponsorship US?
+                </label>
+                <select
+                  v-model="profile.personal_info.requires_us_visa_sponsorship"
+                  class="h-9 px-2 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Card: Datos Demográficos / EEO -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-outline text-[20px]">public</span>
+              <div>
+                <h2 class="text-sm font-semibold text-on-surface">Datos demográficos / EEO</h2>
+                <p class="text-xs text-outline">Campos estandarizados de igualdad de oportunidades (EEOC/OFCCP) usados por Greenhouse, Lever y Ashby.</p>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-outline font-mono text-[10px]">Opcional</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                Género
+              </label>
+              <select
+                v-model="profile.personal_info.gender"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="Male">Masculino / Male</option>
+                <option value="Female">Femenino / Female</option>
+                <option value="Non-binary">No binario / Non-binary</option>
+                <option value="Decline to Self-Identify">Prefiero no responder</option>
+              </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                Etnia / Raza
+              </label>
+              <select
+                v-model="profile.personal_info.race"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="Hispanic or Latino">Hispano o Latino</option>
+                <option value="White">Blanco (no hispano o latino)</option>
+                <option value="Black or African American">Negro o afroamericano</option>
+                <option value="Asian">Asiático</option>
+                <option value="Two or More Races">Dos o más etnias</option>
+                <option value="Decline to Self-Identify">Prefiero no responder</option>
+              </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                Condición de veterano
+              </label>
+              <select
+                v-model="profile.personal_info.veteran_status"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="I am not a veteran">No soy veterano</option>
+                <option value="I identify as one or more of the classifications of protected veteran">Soy veterano protegido</option>
+                <option value="I decline to self-identify">Prefiero no responder</option>
+              </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                Situación de discapacidad
+              </label>
+              <select
+                v-model="profile.personal_info.disability_status"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="No, I do not have a disability">No tengo discapacidad</option>
+                <option value="Yes, I have a disability (or previously had one)">Sí tengo o tuve una discapacidad</option>
+                <option value="I do not wish to answer">Prefiero no responder</option>
+              </select>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- RIGHT COLUMN: SEARCH CRITERIA, PREFERENCES & AUTOMATION (5 cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-6">
+        <!-- 4. Card: Criterios de Búsqueda -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">filter_alt</span>
+              <h2 class="text-sm font-semibold text-on-surface">Criterios de búsqueda</h2>
+            </div>
+          </div>
+
+          <!-- Roles Objetivo -->
+          <div class="flex flex-col gap-2">
+            <label class="text-xs text-on-surface-variant font-medium">Roles objetivo aceptados</label>
+            <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle min-h-[44px]">
+              <span
+                v-for="(role, idx) in profile.search_criteria.target_roles"
+                :key="role"
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-high text-on-surface text-xs font-mono border border-border-subtle"
+              >
+                {{ role }}
+                <button
+                  class="text-outline hover:text-rose-400 transition-colors"
+                  type="button"
+                  @click="removeTargetRole(idx)"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                v-model="newRoleInput"
+                class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                placeholder="Añadir nuevo rol objetivo..."
+                type="text"
+                @keyup.enter="addTargetRole"
+              />
+              <button
+                class="h-8 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+                type="button"
+                @click="addTargetRole"
+              >
+                + Añadir
+              </button>
+            </div>
+          </div>
+
+          <!-- Keywords Técnicas -->
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs text-on-surface-variant font-medium">Keywords técnicas (match en descripción)</label>
+              <span class="font-mono text-[10px] text-outline">{{ profile.search_criteria.keywords?.length || 0 }} tags</span>
+            </div>
+            <div class="flex flex-wrap gap-1 p-2 rounded-lg bg-surface-container border border-border-subtle max-h-36 overflow-y-auto">
+              <span
+                v-for="(kw, idx) in profile.search_criteria.keywords"
+                :key="kw"
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant text-[11px] font-mono border border-border-subtle"
+              >
+                {{ kw }}
+                <button
+                  class="text-outline hover:text-rose-400 text-[10px]"
+                  type="button"
+                  @click="removeKeyword(idx)"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                v-model="newKeywordInput"
+                class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors font-mono"
+                placeholder="Añadir keyword técnica..."
+                type="text"
+                @keyup.enter="addKeyword"
+              />
+              <button
+                class="h-8 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+                type="button"
+                @click="addKeyword"
+              >
+                + Añadir
+              </button>
+            </div>
+          </div>
+
+          <!-- Ubicaciones Aceptadas -->
+          <div class="flex flex-col gap-2">
+            <label class="text-xs text-on-surface-variant font-medium">Ubicaciones aceptadas (whitelist)</label>
+            <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle">
+              <span
+                v-for="(loc, idx) in profile.search_criteria.location_keywords"
+                :key="loc"
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface text-[10px] font-mono border border-border-subtle"
+              >
+                {{ loc }}
+                <button
+                  class="text-outline hover:text-rose-400"
+                  type="button"
+                  @click="removeLocation(idx)"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                v-model="newLocationInput"
+                class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors font-mono"
+                placeholder="Añadir ubicación (ej. remote, latam)..."
+                type="text"
+                @keyup.enter="addLocation"
+              />
+              <button
+                class="h-8 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+                type="button"
+                @click="addLocation"
+              >
+                + Añadir
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtros Numéricos -->
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant truncate">Tope máx. años exp.</label>
+              <input
+                :value="profile.search_criteria.max_years_of_experience"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                placeholder="Sin límite"
+                type="number"
+                min="0"
+                @input="profile.search_criteria.max_years_of_experience = toNumber($event.target.value)"
+              />
+              <span class="font-mono text-[10px] text-outline">Vacío = sin límite</span>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant truncate">Salario mínimo (USD)</label>
+              <div class="relative flex items-center">
+                <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
+                <input
+                  :value="profile.search_criteria.min_salary_usd"
+                  class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="number"
+                  min="0"
+                  @input="profile.search_criteria.min_salary_usd = toNumber($event.target.value)"
+                />
+              </div>
+              <span class="font-mono text-[10px] text-outline">Filtro excluyente</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Card: Preferencias & Disponibilidad -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">payments</span>
+              <h2 class="text-sm font-semibold text-on-surface">Preferencias & Disponibilidad</h2>
+            </div>
+          </div>
+
+          <!-- Salarios en USD / mes con cálculo anual en tiempo real (Opción A) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">Salario Dependiente (USD / mes)</label>
+              <div class="relative flex items-center">
+                <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
+                <input
+                  :value="profile.preferences.dependent_salary_usd"
+                  class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="number"
+                  min="0"
+                  @input="profile.preferences.dependent_salary_usd = toNumber($event.target.value)"
+                />
+              </div>
+              <span class="font-mono text-[10px] text-outline">
+                Planilla directa • Equivalente anual: ${{ formatSalaryNumber((profile.preferences.dependent_salary_usd || 0) * 12) }} USD / año
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">Salario Contractor (USD / mes)</label>
+              <div class="relative flex items-center">
+                <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
+                <input
+                  :value="profile.preferences.contractor_salary_usd"
+                  class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="number"
+                  min="0"
+                  @input="profile.preferences.contractor_salary_usd = toNumber($event.target.value)"
+                />
+              </div>
+              <span class="font-mono text-[10px] text-outline">
+                B2B / W8-BEN • Equivalente anual: ${{ formatSalaryNumber((profile.preferences.contractor_salary_usd || 0) * 12) }} USD / año
+              </span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">Disponibilidad / Preaviso <span class="text-accent">*</span></label>
+              <input
+                v-model="profile.preferences.notice_period"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                type="text"
+              />
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">¿Habilitado legalmente para trabajar en tu país de residencia?</label>
+              <select
+                v-model="profile.preferences.legally_authorized_to_work"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="Yes">Sí</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant font-medium">Nivel de inglés certificado</label>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="profile.preferences.english_level"
+                class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                type="text"
+              />
+              <span class="px-2 py-1 rounded bg-surface-container-highest text-accent font-mono text-[11px] whitespace-nowrap">
+                Fluent
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. Card: Automatización & ATS -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">smart_toy</span>
+              <h2 class="text-sm font-semibold text-on-surface">Automatización & ATS</h2>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-accent font-mono text-[10px]">Headless Ready</span>
+          </div>
+
+          <!-- ATS Engine Checklist -->
+          <div class="flex flex-col gap-2">
+            <label class="text-xs text-on-surface-variant font-medium">Plataformas soportadas habilitadas</label>
+            <div class="grid grid-cols-3 gap-2">
+              <label
+                v-for="pl in platforms"
+                :key="pl"
+                class="flex items-center gap-2 p-2 rounded-lg bg-surface-container hover:bg-surface-container-high border border-border-subtle cursor-pointer transition-colors"
+              >
+                <input
+                  :checked="profile.ats_settings.enabled_platforms.includes(pl)"
+                  class="rounded text-accent focus:ring-0 bg-surface-container-highest"
+                  type="checkbox"
+                  @change="togglePlatform(pl)"
+                />
+                <span class="font-mono text-xs text-on-surface capitalize">{{ pl }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Toggles -->
+          <div class="flex flex-col gap-3 pt-2">
+            <div class="flex items-center justify-between py-1">
+              <div class="flex flex-col">
+                <span class="text-xs font-medium text-on-surface">Adjuntar CV automáticamente</span>
+                <span class="text-[11px] text-outline">Sube el archivo PDF de tu CV al abrir formularios de postulación</span>
+              </div>
+              <input
+                v-model="profile.ats_settings.auto_upload_resume"
+                class="w-4 h-4 rounded text-accent focus:ring-0 bg-surface-container-highest cursor-pointer"
+                type="checkbox"
+              />
+            </div>
+
+            <div class="flex items-center justify-between py-1">
+              <div class="flex flex-col">
+                <span class="text-xs font-medium text-on-surface">Modo sigiloso del navegador</span>
+                <span class="text-[11px] text-outline">Evita bloqueos de Cloudflare y detectores de automatización al navegar</span>
+              </div>
+              <input
+                v-model="profile.ats_settings.stealth_mode"
+                class="w-4 h-4 rounded text-accent focus:ring-0 bg-surface-container-highest cursor-pointer"
+                type="checkbox"
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- TAB 2: PREGUNTAS ABIERTAS ATS (Punto 3 implementado) -->
+    <div v-else-if="activeTab === 'questions' && profile" class="flex flex-col gap-6">
+      <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-sky-400 text-[20px]">forum</span>
+          <h2 class="text-sm font-semibold text-on-surface">Respuestas predefinidas a preguntas abiertas</h2>
+        </div>
+        <p class="text-xs text-on-surface-variant">
+          Playwright inyecta estas respuestas en campos de texto extensos de los formularios (Greenhouse, Lever y Ashby) cuando no se requiere redacción específica generada por IA.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Motivation -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-on-surface">Motivación general (Why us? / Motivation)</label>
+            <span class="font-mono text-[10px] text-outline">motivation</span>
+          </div>
+          <textarea
+            v-model="profile.open_questions.motivation"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- Fintech Motivation -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-on-surface">Motivación Fintech / Pagos</label>
+            <span class="font-mono text-[10px] text-outline">fintech_motivation</span>
+          </div>
+          <textarea
+            v-model="profile.open_questions.fintech_motivation"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- Experience Summary -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-on-surface">Resumen de experiencia profesional</label>
+            <span class="font-mono text-[10px] text-outline">experience_summary</span>
+          </div>
+          <textarea
+            v-model="profile.open_questions.experience_summary"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- Metrics and KPIs -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-on-surface">Métricas y KPIs de calidad</label>
+            <span class="font-mono text-[10px] text-outline">metrics_and_kpis</span>
+          </div>
+          <textarea
+            v-model="profile.open_questions.metrics_and_kpis"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- Education Level -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-on-surface">Nivel de educación formal</label>
+            <span class="font-mono text-[10px] text-outline">education_level</span>
+          </div>
+          <input
+            v-model="profile.open_questions.education_level"
+            type="text"
+            class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+          />
+        </div>
+
+        <!-- Timezone Overlap -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-on-surface">Disponibilidad horaria y huso horario</label>
+            <span class="font-mono text-[10px] text-outline">timezone_overlap</span>
+          </div>
+          <input
+            v-model="profile.open_questions.timezone_overlap"
+            type="text"
+            class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: MOTOR DE IA Y LLM (Punto 2 implementado con Opción A) -->
+    <div v-else-if="activeTab === 'ai'" class="flex flex-col gap-6">
+      <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+        <div class="flex items-center justify-between pb-1">
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-tertiary text-[20px]">smart_toy</span>
+            <div>
+              <h2 class="text-sm font-semibold text-on-surface">Motor de IA y Asistente (LLM)</h2>
+              <p class="font-mono text-[11px] text-outline">Configuración del modelo para adaptar CVs en HTML y responder preguntas abiertas de formularios.</p>
+            </div>
+          </div>
+          <span
+            class="px-2 py-0.5 rounded text-[10px] font-mono"
+            :class="agentStatus?.connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'"
+          >
+            {{ agentStatus?.connected ? `IA Activa (${agentStatus.activeProviderName})` : 'Modo CV Base Activo' }}
+          </span>
+        </div>
+
+        <!-- Status Card -->
+        <div
+          class="p-4 rounded-lg border flex flex-col gap-2"
+          :class="agentStatus?.connected ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'"
+        >
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]" :class="agentStatus?.connected ? 'text-emerald-400' : 'text-amber-400'">
+                {{ agentStatus?.connected ? 'check_circle' : 'info' }}
+              </span>
+              <span class="text-xs font-semibold text-on-surface">
+                {{ agentStatus?.connected ? `Conectado: ${agentStatus.activeProviderName}` : 'Sin motor de IA detectado (Modo CV base activo)' }}
+              </span>
+            </div>
+            <span class="font-mono text-[11px] text-outline">
+              {{ agentStatus?.connected ? 'Adaptación ATS disponible' : 'CV base estándar' }}
+            </span>
+          </div>
+          <p class="text-xs text-on-surface-variant">
+            {{ agentStatus?.connected
+              ? 'El sistema adaptará el contenido del CV al perfil técnico de cada empresa y completará preguntas abiertas.'
+              : 'No necesitas instalar nada si no deseas usar IA: Job Hunter utilizará directamente tu CV base PDF (Matias_Olivera_QA_CV.pdf) para todas las postulaciones.' }}
+          </p>
+        </div>
+
+        <!-- Provider Select -->
+        <div class="flex flex-col gap-1.5 max-w-md">
+          <label class="text-xs text-on-surface-variant font-medium">Proveedor preferido de IA</label>
+          <select
+            v-model="agentConfig.provider"
+            class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+          >
+            <option v-for="opt in providerOptions" :key="opt.value" :value="opt.value">{{ opt.title }}</option>
+          </select>
+        </div>
+
+        <div class="my-2 border-t border-border-subtle"></div>
+
+        <!-- Direct API Keys -->
+        <div class="flex flex-col gap-1">
+          <h3 class="text-xs font-semibold text-on-surface">Claves de API directas (DeepSeek, Kimi, Anthropic, OpenAI, Gemini):</h3>
+          <p class="text-xs text-outline">Puedes ingresar tus claves de API directamente aquí sin necesidad de instalar o iniciar herramientas de consola.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- DeepSeek -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>DeepSeek API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasDeepSeekKey ? 'Configurada' : 'platform.deepseek.com' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.deepseekApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-..."
+              type="password"
+            />
+          </div>
+
+          <!-- Kimi -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>Kimi / Moonshot AI Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasKimiKey ? 'Configurada' : 'platform.moonshot.cn' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.kimiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-..."
+              type="password"
+            />
+          </div>
+
+          <!-- Anthropic -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>Anthropic Claude API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasAnthropicKey ? 'Configurada' : 'sk-ant-...' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.anthropicApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-ant-..."
+              type="password"
+            />
+          </div>
+
+          <!-- OpenAI -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>OpenAI API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasOpenAiKey ? 'Configurada' : 'sk-...' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.openaiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-..."
+              type="password"
+            />
+          </div>
+
+          <!-- Gemini -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>Google Gemini API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasGeminiKey ? 'Configurada' : 'AI Studio' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.geminiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="AIza..."
+              type="password"
+            />
+          </div>
+        </div>
+
+        <div class="my-2 border-t border-border-subtle"></div>
+
+        <!-- Custom endpoint -->
+        <div class="flex flex-col gap-1">
+          <h3 class="text-xs font-semibold text-on-surface">Punto de enlace personalizado (OpenAI compatible / Ollama local / Groq / OpenRouter):</h3>
+          <p class="text-xs text-outline">Úsalo para conectar cualquier servidor local o proveedor que implemente el protocolo OpenAI (ej. http://localhost:11434/v1 para Ollama local).</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div class="md:col-span-5 flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant">URL Base de la API</label>
+            <input
+              v-model="agentConfig.customOpenAiBaseUrl"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="https://api.deepseek.com/v1 o http://localhost:11434/v1"
+              type="text"
+            />
+          </div>
+
+          <div class="md:col-span-3 flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant">Nombre del modelo</label>
+            <input
+              v-model="agentConfig.customOpenAiModel"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="deepseek-chat, llama3, etc."
+              type="text"
+            />
+          </div>
+
+          <div class="md:col-span-4 flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>Clave de API personalizada</span>
+              <span class="font-mono text-[10px] text-outline">Opcional para Ollama</span>
+            </label>
+            <input
+              v-model="agentConfig.customOpenAiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="Opcional"
+              type="password"
+            />
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-3">
+          <button
+            class="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium shadow-sm transition-all active:scale-[0.98] flex items-center gap-1.5 disabled:opacity-50"
+            :disabled="savingAgentConfig"
+            type="button"
+            @click="saveAgentConfigAction"
+          >
+            <span :class="['material-symbols-outlined text-[16px]', savingAgentConfig ? 'animate-spin' : '']">
+              {{ savingAgentConfig ? 'sync' : 'check_circle' }}
+            </span>
+            <span>{{ savingAgentConfig ? 'Probando conexión...' : 'Guardar y probar conexión' }}</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- NOTIFICACIONES TOAST -->
+    <div
+      v-if="snack.show"
+      class="fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg shadow-xl text-xs font-medium flex items-center gap-2 border animate-in slide-in-from-bottom-2 duration-150"
+      :class="[
+        snack.color === 'error'
+          ? 'bg-rose-950/90 text-rose-200 border-rose-800'
+          : snack.color === 'warning'
+            ? 'bg-amber-950/90 text-amber-200 border-amber-800'
+            : 'bg-surface-card text-on-surface border-border-muted'
+      ]"
+    >
+      <span class="material-symbols-outlined text-[16px]">
+        {{ snack.color === 'error' ? 'error' : snack.color === 'warning' ? 'warning' : 'check_circle' }}
+      </span>
+      <span>{{ snack.text }}</span>
+      <button class="ml-2 text-outline hover:text-on-surface" type="button" @click="snack.show = false">✕</button>
+    </div>
+  </div>
 </template>

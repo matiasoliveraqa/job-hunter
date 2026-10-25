@@ -278,6 +278,14 @@ def apply_command(args):
         existing_pdfs = [f for f in app_dir.glob("*.pdf") if f.is_file() and f.stat().st_size > 1000]
         if existing_pdfs:
             cv_path = existing_pdfs[0]
+        else:
+            # Fallback to master base CV from my_cv/ if no tailored CV was compiled
+            my_cv_dir = PROJECT_ROOT / "my_cv"
+            base_pdfs = [f for f in my_cv_dir.glob("*.pdf") if f.is_file() and f.stat().st_size > 1000 and not f.name.startswith("skills_inventory")]
+            if base_pdfs:
+                dest_cv = app_dir / build_cv_filename(profile.personal_info.full_name, role, company)
+                shutil.copy2(base_pdfs[0], dest_cv)
+                cv_path = dest_cv
 
     console.print(Panel.fit(
         f"[bold]Company:[/bold] {company}\n"
@@ -309,6 +317,13 @@ def apply_command(args):
                 applicator = GreenhouseApplicator(page, profile, company=company, role=role)
 
             await applicator.fill_form(cv_path)
+
+            # Audit and highlight any required fields (* or required attribute)
+            missing_required = await applicator.audit_and_highlight_required_fields()
+            if missing_required:
+                console.print(f"[yellow][REQUIRED][/yellow] Se detectaron {len(missing_required)} campos obligatorios pendientes resaltados en amarillo en el navegador.")
+            else:
+                console.print("[green][OK][/green] Todos los campos obligatorios (*) fueron completados.")
 
             detected_captcha = await applicator.detect_captcha()
             if detected_captcha:

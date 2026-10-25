@@ -485,15 +485,38 @@ async function tailorAppCv(item) {
       await load()
     }
   } catch (err) {
+    // If no AI engine is available, seamlessly fall back to master base CV
+    try {
+      const fallback = await api.useBaseCv(item.id)
+      if (fallback?.cv) {
+        item.cv = fallback.cv
+        notify(`Sin motor de IA activo. Se asignó automáticamente tu CV base (${fallback.cv})`, 'warning')
+        await load()
+        return
+      }
+    } catch {}
     notify('Error al adaptar CV: ' + err.message, 'error')
   } finally {
     tailoringMap[item.id] = false
   }
 }
 
+async function assignBaseCv(item) {
+  try {
+    const res = await api.useBaseCv(item.id)
+    if (res?.cv) {
+      item.cv = res.cv
+      notify(`CV base asignado a ${item.company}`)
+      await load()
+    }
+  } catch (err) {
+    notify('Error al asignar CV base: ' + err.message, 'error')
+  }
+}
+
 async function confirmSent(item) {
   if (!item.cv) {
-    const ok = window.confirm(`Atención: "${item.company}" no tiene un CV adaptado generado.\n¿Deseas registrarla como enviada de todas formas?`)
+    const ok = window.confirm(`"${item.company}" no tiene un CV adaptado. Se registrará utilizando tu CV base estándar.\n¿Deseas confirmar el envío?`)
     if (!ok) return
   }
   const today = new Date().toISOString().slice(0, 10)
@@ -814,7 +837,7 @@ async function clearDemos() {
     <!-- APPLICATIONS TABLE -->
     <div class="w-full bg-surface-card rounded-xl border border-border-subtle overflow-hidden shadow-sm">
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
+        <table class="w-full text-left border-collapse table-auto">
           <thead>
             <tr class="border-b border-border-subtle bg-surface-container/60 text-outline text-[11px] uppercase tracking-wider font-mono">
               <th class="w-10 px-3.5 py-3 text-center">
@@ -825,12 +848,11 @@ async function clearDemos() {
                   @change="toggleSelectAll"
                 />
               </th>
-              <th class="px-4 py-3 min-w-[200px]">Empresa</th>
-              <th class="px-4 py-3 min-w-[220px]">Puesto</th>
-              <th class="px-4 py-3 min-w-[120px]">Fecha Envío</th>
-              <th class="px-4 py-3 min-w-[150px]">Estado</th>
-              <th class="px-4 py-3 min-w-[260px]">Carpeta / CV</th>
-              <th class="px-4 py-3 text-right min-w-[220px]">Acciones</th>
+              <th class="px-4 py-3 w-[22%]">Empresa</th>
+              <th class="px-4 py-3 w-[36%]">Puesto & CV</th>
+              <th class="px-3 py-3 w-[11%] whitespace-nowrap">Fecha Envío</th>
+              <th class="px-3 py-3 w-[13%] whitespace-nowrap">Estado</th>
+              <th class="px-4 py-3 text-right w-[18%] whitespace-nowrap">Acciones</th>
             </tr>
           </thead>
 
@@ -852,7 +874,7 @@ async function clearDemos() {
 
                 <!-- Empresa -->
                 <td class="px-4 py-3">
-                  <div class="flex items-center gap-2.5">
+                  <div class="flex items-center gap-2.5 min-w-0">
                     <div
                       :class="[
                         'w-7 h-7 rounded-md border flex items-center justify-center font-bold text-[11px] shrink-0',
@@ -868,23 +890,38 @@ async function clearDemos() {
                   </div>
                 </td>
 
-                <!-- Puesto -->
+                <!-- Puesto & CV Adaptado -->
                 <td class="px-4 py-3">
                   <div class="flex flex-col min-w-0">
                     <span class="font-medium text-on-surface truncate" :title="item.role">{{ item.role }}</span>
-                    <span v-if="item.notes" class="text-[11px] text-on-surface-variant truncate max-w-[240px]" :title="item.notes">
+                    <div v-if="item.cv" class="flex items-center gap-1.5 font-mono text-[11px] text-emerald-400 mt-0.5 min-w-0">
+                      <span class="material-symbols-outlined text-[14px] shrink-0">picture_as_pdf</span>
+                      <a
+                        class="hover:underline truncate"
+                        :href="'/files/' + item.cv"
+                        rel="noopener noreferrer"
+                        target="_blank"
+                        :title="'Abrir ' + item.cv"
+                      >
+                        {{ item.cv.split('/').pop() }}
+                      </a>
+                    </div>
+                    <span v-else-if="item.notes" class="text-[11px] text-on-surface-variant truncate mt-0.5" :title="item.notes">
                       {{ item.notes }}
+                    </span>
+                    <span v-else class="text-[11px] text-outline font-mono mt-0.5">
+                      Sin CV adaptado
                     </span>
                   </div>
                 </td>
 
                 <!-- Fecha Envío -->
-                <td class="px-4 py-3 font-mono text-on-surface-variant text-[11px] whitespace-nowrap">
+                <td class="px-3 py-3 font-mono text-on-surface-variant text-[11px] whitespace-nowrap">
                   {{ item.appliedAt || '—' }}
                 </td>
 
                 <!-- Estado -->
-                <td class="px-4 py-3 whitespace-nowrap">
+                <td class="px-3 py-3 whitespace-nowrap">
                   <span
                     :class="[
                       'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border',
@@ -896,41 +933,20 @@ async function clearDemos() {
                   </span>
                 </td>
 
-                <!-- Carpeta / CV PDF -->
-                <td class="px-4 py-3">
-                  <div v-if="item.cv" class="flex items-center gap-1.5 font-mono text-[11px] text-emerald-400">
-                    <span class="material-symbols-outlined text-[15px] shrink-0">picture_as_pdf</span>
-                    <a
-                      class="hover:underline truncate max-w-[240px]"
-                      :href="'/files/' + item.cv"
-                      rel="noopener noreferrer"
-                      target="_blank"
-                      :title="item.cv"
-                    >
-                      {{ item.cv.split('/').pop() }}
-                    </a>
-                  </div>
-                  <div v-else class="text-[11px] text-outline font-mono">
-                    Sin CV adaptado
-                  </div>
-                </td>
-
                 <!-- Acciones -->
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <div class="inline-flex items-center justify-end gap-1.5">
-                    <!-- Adaptar CV con IA (solo si está pendiente) -->
+                    <!-- Adaptar CV con IA (solo cuando está pendiente y aún no tiene CV) -->
                     <button
-                      v-if="item.status === 'pending'"
+                      v-if="item.status === 'pending' && !item.cv"
                       :class="[
-                        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-all duration-200',
+                        'inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all duration-200 border',
                         tailoringMap[item.id]
-                          ? 'bg-accent/20 text-accent border border-accent/40 cursor-wait'
-                          : item.cv
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-accent-subtle hover:bg-accent/20 text-accent border border-transparent'
+                          ? 'bg-accent/20 text-accent border-accent/40 cursor-wait'
+                          : 'bg-accent-subtle hover:bg-accent/20 text-accent border-transparent'
                       ]"
                       :disabled="tailoringMap[item.id]"
-                      :title="tailoringMap[item.id] ? 'El agente está adaptando el CV...' : (item.cv ? `CV generado: ${item.cv}` : 'Generar CV adaptado para esta postulación')"
+                      title="Generar CV adaptado para esta postulación"
                       type="button"
                       @click="tailorAppCv(item)"
                     >
@@ -944,9 +960,20 @@ async function clearDemos() {
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
                       </svg>
-                      <span v-else-if="item.cv" class="material-symbols-outlined text-[13px] leading-none text-emerald-400">check_circle</span>
                       <span v-else class="material-symbols-outlined text-[13px] leading-none text-accent">auto_fix_high</span>
-                      <span>{{ tailoringMap[item.id] ? 'Adaptando CV...' : (item.cv ? 'CV Adaptado' : 'Adaptar CV') }}</span>
+                      <span>{{ tailoringMap[item.id] ? 'Adaptando...' : 'Adaptar CV' }}</span>
+                    </button>
+
+                    <!-- Usar CV base directamente sin IA (solo cuando está pendiente y aún no tiene CV) -->
+                    <button
+                      v-if="item.status === 'pending' && !item.cv"
+                      class="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-surface-container hover:bg-surface-container-high text-on-surface border border-border-subtle transition-colors"
+                      title="Asignar tu CV base estándar sin modificar con IA"
+                      type="button"
+                      @click="assignBaseCv(item)"
+                    >
+                      <span class="material-symbols-outlined text-[13px] leading-none text-outline">description</span>
+                      <span>CV base</span>
                     </button>
 
                     <!-- Abrir Formulario Playwright -->
@@ -1018,7 +1045,7 @@ async function clearDemos() {
 
               <!-- EXPANDED ROW (Historial de eventos y notas) -->
               <tr v-if="expandedRows.has(item.id)" class="bg-surface-container/20 border-b border-border-subtle">
-                <td class="px-6 py-4" colspan="7">
+                <td class="px-6 py-4" colspan="6">
                   <div class="flex flex-col gap-3">
                     <div class="flex items-center justify-between border-b border-border-subtle pb-2">
                       <span class="font-mono text-[11px] uppercase tracking-wider text-outline flex items-center gap-1.5">
@@ -1073,7 +1100,7 @@ async function clearDemos() {
 
             <!-- Estado vacío -->
             <tr v-if="paginatedItems.length === 0">
-              <td class="py-12 text-center text-outline" colspan="7">
+              <td class="py-12 text-center text-outline" colspan="6">
                 <div class="flex flex-col items-center justify-center gap-2">
                   <span class="material-symbols-outlined text-[36px] text-outline/50">inbox</span>
                   <span class="text-xs">No se encontraron postulaciones con los filtros activos</span>

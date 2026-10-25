@@ -9,7 +9,15 @@ import { fileURLToPath } from 'node:url'
 import { createStore, STATUSES } from './store.js'
 import { createDemo } from './demo.js'
 import { createConfigFiles, ValidationError } from './config-files.js'
-import { tailorCvHtml, answerQuestion, extractProfileFromCv } from './agent-adapter.js'
+import {
+  tailorCvHtml,
+  answerQuestion,
+  extractProfileFromCv,
+  checkAgentStatus,
+  readAiSettings,
+  writeAiSettings,
+  checkBaseCv,
+} from './agent-adapter.js'
 import createDOMPurify from 'dompurify'
 import { JSDOM } from 'jsdom'
 
@@ -233,6 +241,13 @@ app.post('/api/profile/upload-cv', async (req, res) => {
 // ---- Exclusions (config/exclusions.py) ----
 app.get('/api/exclusions', async (_req, res) => res.json(await configFiles.readExclusions()))
 app.post('/api/exclusions', async (req, res) => res.status(201).json(await configFiles.addExclusion(req.body ?? {})))
+app.post('/api/exclusions/import', async (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : req.body?.items ?? []
+  res.json(await configFiles.importExclusions(items))
+})
+app.post('/api/exclusions/clear', async (_req, res) => {
+  res.json(await configFiles.clearExclusions())
+})
 app.put('/api/exclusions/:company', async (req, res) => {
   const entry = await configFiles.updateExclusion(req.params.company, req.body ?? {})
   entry ? res.json(entry) : res.status(404).json({ error: 'No encontrada' })
@@ -279,6 +294,45 @@ function sendPdfFile(req, res, dir, relName) {
 app.get('/files/:dir/:name', (req, res) => sendPdfFile(req, res, req.params.dir, req.params.name))
 app.get('/files/:dir/:sub/:name', (req, res) => sendPdfFile(req, res, req.params.dir, `${req.params.sub}/${req.params.name}`))
 
+// ---- Cross-platform folder opener (Linux, macOS, Windows) ----
+app.post('/api/open-folder', async (req, res) => {
+  const target = req.body?.folder || 'applications'
+  const allowed = {
+    applications: FILE_DIRS.applications,
+    cvs: FILE_DIRS.cvs,
+    output: FILE_DIRS.output,
+  }
+  const folderPath = allowed[target] || allowed.applications
+  if (!existsSync(folderPath)) {
+    await fs.mkdir(folderPath, { recursive: true })
+  }
+
+  const platform = process.platform
+  let cmd = ''
+  let args = []
+  if (platform === 'win32') {
+    cmd = 'explorer'
+    args = [folderPath]
+  } else if (platform === 'darwin') {
+    cmd = 'open'
+    args = [folderPath]
+  } else {
+    cmd = 'xdg-open'
+    args = [folderPath]
+  }
+
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
+    child.unref()
+    child.on('error', (err) => {
+      console.warn(`[open-folder] Error invoking ${cmd}:`, err.message)
+    })
+    res.json({ ok: true, path: folderPath, platform })
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo abrir la carpeta en el sistema', path: folderPath })
+  }
+})
+
 // ---- Application form launcher (headed browser, user submits manually) ----
 const launches = new Map()
 const ALLOWED_ATS_DOMAINS = [
@@ -321,7 +375,7 @@ app.post('/api/apply', async (req, res) => {
     return res.status(429).json({ error: 'Ya hay un navegador de postulación activo. Ciérralo antes de abrir uno nuevo.' })
   }
 
-  const cvPath = isDemoUrl ? demo.cvPath : resolveCv(cv)
+  let cvPath = isDemoUrl ? demo.cvPath : resolveCv(cv)
   if (cv && !cvPath) return res.status(400).json({ error: 'CV inválido' })
 
   let company = typeof bodyCompany === 'string' ? bodyCompany.trim() : ''
@@ -332,6 +386,14 @@ app.post('/api/apply', async (req, res) => {
     if (match) {
       company = company || match.company || ''
       role = role || match.role || ''
+    }
+  }
+
+  // Fallback to base CV in my_cv/ if no specific CV was provided or associated
+  if (!cvPath) {
+    const baseCv = await checkBaseCv()
+    if (baseCv.exists) {
+      cvPath = baseCv.relPath
     }
   }
 
@@ -720,6 +782,86 @@ app.post('/api/tailor-cv', async (req, res) => {
     res.status(500).json({ error: err.message })
   } finally {
     activeTailorCount--
+  }
+})
+
+// ---- Agent Status, Settings & Base CV Fallback Endpoints ----
+app.get('/api/agent/status', async (_req, res) => {
+  try {
+    const status = await checkAgentStatus()
+    res.json(status)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/agent/config', async (_req, res) => {
+  try {
+    const settings = await readAiSettings()
+    res.json({
+      provider: settings.provider || 'auto',
+      hasAnthropicKey: Boolean(settings.anthropicApiKey),
+      hasOpenAiKey: Boolean(settings.openaiApiKey),
+      hasGeminiKey: Boolean(settings.geminiApiKey),
+      hasDeepSeekKey: Boolean(settings.deepseekApiKey),
+      hasKimiKey: Boolean(settings.kimiApiKey),
+      hasCustomKey: Boolean(settings.customOpenAiApiKey),
+      anthropicApiKey: settings.anthropicApiKey ? `${settings.anthropicApiKey.slice(0, 7)}...${settings.anthropicApiKey.slice(-4)}` : '',
+      openaiApiKey: settings.openaiApiKey ? `${settings.openaiApiKey.slice(0, 5)}...${settings.openaiApiKey.slice(-4)}` : '',
+      geminiApiKey: settings.geminiApiKey ? `${settings.geminiApiKey.slice(0, 6)}...${settings.geminiApiKey.slice(-4)}` : '',
+      deepseekApiKey: settings.deepseekApiKey ? `${settings.deepseekApiKey.slice(0, 5)}...${settings.deepseekApiKey.slice(-4)}` : '',
+      kimiApiKey: settings.kimiApiKey ? `${settings.kimiApiKey.slice(0, 5)}...${settings.kimiApiKey.slice(-4)}` : '',
+      customOpenAiApiKey: settings.customOpenAiApiKey ? `${settings.customOpenAiApiKey.slice(0, 5)}...${settings.customOpenAiApiKey.slice(-4)}` : '',
+      customOpenAiBaseUrl: settings.customOpenAiBaseUrl || '',
+      customOpenAiModel: settings.customOpenAiModel || '',
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/agent/config', async (req, res) => {
+  try {
+    const body = req.body || {}
+    const current = await readAiSettings()
+    const payload = {
+      provider: body.provider || current.provider,
+      anthropicApiKey: body.anthropicApiKey && !body.anthropicApiKey.includes('...') ? body.anthropicApiKey : current.anthropicApiKey,
+      openaiApiKey: body.openaiApiKey && !body.openaiApiKey.includes('...') ? body.openaiApiKey : current.openaiApiKey,
+      geminiApiKey: body.geminiApiKey && !body.geminiApiKey.includes('...') ? body.geminiApiKey : current.geminiApiKey,
+      deepseekApiKey: body.deepseekApiKey && !body.deepseekApiKey.includes('...') ? body.deepseekApiKey : current.deepseekApiKey,
+      kimiApiKey: body.kimiApiKey && !body.kimiApiKey.includes('...') ? body.kimiApiKey : current.kimiApiKey,
+      customOpenAiApiKey: body.customOpenAiApiKey && !body.customOpenAiApiKey.includes('...') ? body.customOpenAiApiKey : current.customOpenAiApiKey,
+      customOpenAiBaseUrl: body.customOpenAiBaseUrl !== undefined ? body.customOpenAiBaseUrl : current.customOpenAiBaseUrl,
+      customOpenAiModel: body.customOpenAiModel !== undefined ? body.customOpenAiModel : current.customOpenAiModel,
+    }
+    await writeAiSettings(payload)
+    const status = await checkAgentStatus()
+    res.json({ ok: true, status })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/applications/:id/use-base-cv', async (req, res) => {
+  try {
+    const { id } = req.params
+    const targetApp = await store.get(id)
+    if (!targetApp) return res.status(404).json({ error: 'Postulación no encontrada' })
+
+    const status = await checkAgentStatus()
+    if (!status.baseCv?.exists) {
+      return res.status(400).json({ error: 'No se encontró un CV base en my_cv/' })
+    }
+
+    const relCvPath = status.baseCv.relPath
+    const updated = await store.update(id, {
+      cv: relCvPath,
+      event: `Asignado CV base estándar (${status.baseCv.filename})`,
+    })
+    res.json({ ok: true, cv: relCvPath, application: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 

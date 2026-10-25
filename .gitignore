@@ -38,6 +38,7 @@ venv.bak/
 config/profile.json
 config/exclusions.py
 config/exclusions.json
+config/ai_settings.json
 GEMINI.md
 HANDOFF.md
 my_cv/
@@ -48,6 +49,8 @@ resumes/
 !web/demo/demo_cv.pdf
 *.log
 *.png
+*.db
+*.sqlite*
 
 # Playwright & Browser Artefacts
 .playwright/
