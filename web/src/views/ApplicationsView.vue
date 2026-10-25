@@ -318,13 +318,17 @@ async function remove(item) {
                 :color="item.cv ? 'success' : 'info'"
                 variant="tonal"
                 size="small"
-                :prepend-icon="item.cv ? 'mdi-check-circle' : 'mdi-file-document-edit'"
+                :prepend-icon="tailoringMap[item.id] ? undefined : (item.cv ? 'mdi-check-circle' : 'mdi-file-document-edit')"
                 :loading="tailoringMap[item.id]"
                 class="mr-1"
-                :title="item.cv ? `CV generado: ${item.cv}` : 'Generar CV adaptado a medida para esta vacante'"
+                :title="tailoringMap[item.id] ? 'El agente está adaptando el CV para esta vacante...' : (item.cv ? `CV generado: ${item.cv}` : 'Generar CV adaptado a medida para esta vacante')"
                 @click="tailorAppCv(item)"
               >
-                {{ item.cv ? 'CV Adaptado' : 'Adaptar CV' }}
+                <template v-if="tailoringMap[item.id]" #loader>
+                  <v-progress-circular indeterminate size="14" width="2" class="mr-1.5" />
+                  <span>Adaptando CV...</span>
+                </template>
+                {{ tailoringMap[item.id] ? 'Adaptando CV...' : (item.cv ? 'CV Adaptado' : 'Adaptar CV') }}
               </v-btn>
               <v-btn
                 v-if="item.url"

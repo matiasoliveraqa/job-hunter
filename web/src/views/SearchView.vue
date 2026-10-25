@@ -776,47 +776,110 @@ function getPlatformBadgeClass(ats) {
               <!-- Acciones -->
               <td class="py-3 px-3 text-right pr-4">
                 <div class="flex items-center justify-end gap-1.5">
+                  <!-- Preparar postulación -->
                   <button
                     :class="[
-                      'px-2.5 py-1 rounded text-[11px] font-medium transition-colors',
+                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-colors',
                       isJobPrepared(job)
                         ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : 'bg-surface-container hover:bg-surface-container-high border border-border-subtle text-on-surface'
+                        : preparingMap[job.url]
+                          ? 'bg-surface-container border border-border-subtle text-on-surface cursor-wait'
+                          : 'bg-surface-container hover:bg-surface-container-high border border-border-subtle text-on-surface'
                     ]"
                     :disabled="preparingMap[job.url]"
                     type="button"
                     @click="prepareApplication(job)"
                   >
-                    {{ isJobPrepared(job) ? 'Preparado' : 'Preparar' }}
+                    <svg
+                      v-if="preparingMap[job.url]"
+                      class="animate-spin h-3 w-3 text-outline shrink-0"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>{{ preparingMap[job.url] ? 'Preparando...' : (isJobPrepared(job) ? 'Preparado' : 'Preparar') }}</span>
                   </button>
 
+                  <!-- Adaptar CV con agente IA -->
                   <button
                     :class="[
-                      'px-2.5 py-1 rounded text-[11px] font-medium transition-colors',
-                      isJobTailored(job)
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : 'bg-accent-subtle hover:bg-accent/20 text-accent'
+                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-all duration-200',
+                      tailoringMap[job.url]
+                        ? 'bg-accent/20 text-accent border border-accent/40 cursor-wait'
+                        : isJobTailored(job)
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-accent-subtle hover:bg-accent/20 text-accent border border-transparent'
                     ]"
                     :disabled="tailoringMap[job.url]"
+                    :title="tailoringMap[job.url] ? 'El agente está adaptando el CV para esta vacante...' : (job.cv ? `CV generado: ${job.cv}` : 'Generar CV adaptado a medida para esta vacante')"
                     type="button"
                     @click="tailorApplication(job)"
                   >
-                    {{ isJobTailored(job) ? 'CV Adaptado' : 'Adaptar CV' }}
+                    <!-- Animación de carga durante la adaptación -->
+                    <svg
+                      v-if="tailoringMap[job.url]"
+                      class="animate-spin h-3 w-3 text-accent shrink-0"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <!-- Icono cuando ya está generado -->
+                    <span
+                      v-else-if="isJobTailored(job)"
+                      class="material-symbols-outlined text-[13px] leading-none text-emerald-400"
+                    >check_circle</span>
+                    <!-- Icono cuando está pendiente -->
+                    <span
+                      v-else
+                      class="material-symbols-outlined text-[13px] leading-none text-accent"
+                    >auto_fix_high</span>
+
+                    <span>{{ tailoringMap[job.url] ? 'Adaptando CV...' : (isJobTailored(job) ? 'CV Adaptado' : 'Adaptar CV') }}</span>
                   </button>
 
+                  <!-- Abrir formulario Playwright -->
                   <button
                     :class="[
-                      'px-2 py-1 rounded text-[11px] font-medium transition-colors border',
-                      isJobOpened(job)
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'bg-surface-container hover:bg-surface-container-high border-border-subtle text-outline hover:text-on-surface'
+                      'p-1.5 rounded text-[11px] font-medium transition-colors border',
+                      launchingMap[job.url]
+                        ? 'bg-surface-container border-accent/40 text-accent cursor-wait'
+                        : isJobOpened(job)
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : 'bg-surface-container hover:bg-surface-container-high border-border-subtle text-outline hover:text-on-surface'
                     ]"
                     :disabled="launchingMap[job.url]"
                     title="Abrir formulario en navegador Playwright"
                     type="button"
                     @click="openInBrowser(job)"
                   >
-                    <span class="material-symbols-outlined text-[14px] block">web</span>
+                    <svg
+                      v-if="launchingMap[job.url]"
+                      class="animate-spin h-3.5 w-3.5 text-accent block"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span v-else class="material-symbols-outlined text-[14px] block">web</span>
                   </button>
 
                   <a
