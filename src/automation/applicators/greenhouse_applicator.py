@@ -22,7 +22,7 @@ class GreenhouseApplicator(BaseApplicator):
 
         # 3. Email & Phone
         await self.safe_fill("input#email, input[name='email' i], input[type='email']", self.p_info.email, "Email")
-        await self.safe_fill("input#phone, input[name='phone' i], input[type='tel']", self.p_info.phone, "Phone")
+        await self.fill_phone_field()
 
         # 4. Location
         await self.safe_fill("input#job_application_location, input#candidate-location, input[name*='location' i]", self.p_info.location, "Location")

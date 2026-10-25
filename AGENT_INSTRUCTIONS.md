@@ -53,24 +53,29 @@ flowchart TD
 
 ---
 
-### Step 3: Create Per-Company Folder & Tailor 1-Page ATS CV
+### Step 3: Create Per-Company Folder & Tailor 1-Page ATS CV (In Batch for All Matches)
 > **CRITICAL RULE:** **NEVER** modify `src/cv/templates/modern_ats.html` in-place, and **NEVER** overwrite a single shared `output/tailored_cv.pdf` file.
+> **BATCH RULE:** Prepare the folders and tailored CVs for **ALL** matching opportunities from the scan in batch without waiting for the user to fill them 1 by 1.
 
 For **each** matching opportunity:
 1. Create a dedicated folder inside `output/applications/`:
    ```
    output/applications/<YYYY-MM>_<Company>_<Role>/
    ```
-2. Using `src/cv/templates/modern_ats.html` as a visual reference, generate a tailored HTML resume saved at:
+2. **Role Title Normalization (English, No "Lead"):**
+   - If the posting is for test automation / SDET / Playwright, use **`QA Automation Engineer`**.
+   - If the posting is for general / functional / manual QA, use **`QA Engineer`**.
+   - **NEVER** include `Lead`, `Principal`, `Staff`, `Manager`, `Head`, or `Director` in the CV role header or filename, even if the job posting title contains "Lead".
+3. Using `src/cv/templates/modern_ats.html` as a visual reference and strictly obeying `my_cv/skills_inventory.md`, generate a tailored HTML resume saved at:
    ```
    output/applications/<YYYY-MM>_<Company>_<Role>/cv_tailored.html
    ```
-3. Optimize the **Professional Summary**, **Technical Expertise**, and **Experience Highlights** to mirror the job posting's stack while remaining 100% truthful to the candidate's CV.
-4. Compile the PDF inside that same folder:
+4. Optimize the **Professional Summary**, **Technical Expertise**, and **Experience Highlights** to mirror the job posting's stack while remaining 100% truthful to the candidate's master CV in `my_cv/`.
+5. Compile the PDF inside that same folder using the standard naming `<Full_Name>_<Role>_<Company>.pdf` (e.g., `Alex_Mercer_QA_Automation_Engineer_Acme.pdf` or `Alex_Mercer_QA_Engineer_Acme.pdf`):
    ```bash
-   python -m src.cli build-cv --company "<Company>" --role "<Role>" --html "output/applications/<YYYY-MM>_<Company>_<Role>/cv_tailored.html" --out "output/applications/<YYYY-MM>_<Company>_<Role>/CV_<Candidate>_<Company>.pdf"
+   python -m src.cli build-cv --company "<Company>" --role "<QA Automation Engineer | QA Engineer>" --html "output/applications/<YYYY-MM>_<Company>_<Role>/cv_tailored.html"
    ```
-5. **Strict 1-Page Rule:** Ensure the compiled PDF is strictly **1 page**.
+6. **Strict 1-Page Rule:** Ensure the compiled PDF is strictly **1 page**.
 
 ---
 

@@ -26,6 +26,19 @@ const counts = computed(() =>
   })),
 )
 
+const filterStatus = ref(null)
+
+function toggleStatusFilter(key) {
+  filterStatus.value = filterStatus.value === key ? null : key
+}
+
+const totalCount = computed(() => items.value.filter((a) => !a.demo).length)
+
+const filteredItems = computed(() => {
+  if (!filterStatus.value) return items.value
+  return items.value.filter((a) => a.status === filterStatus.value)
+})
+
 const demoCount = computed(() => items.value.filter((a) => a.demo).length)
 const statusItems = Object.entries(STATUS_META).map(([value, m]) => ({ value, title: m.title }))
 const cvItems = computed(() => files.value.map((f) => ({ value: `${f.dir}/${f.name}`, title: `${f.dir}/${f.name}` })))
@@ -72,11 +85,70 @@ async function saveStatus() {
 // ---- new application ----
 const emptyForm = () => ({ company: '', role: '', url: '', cv: '' })
 const newDialog = reactive({ show: false, form: emptyForm() })
+const newFormOpened = ref(false)
 
 async function launchForm() {
   try {
-    await api.launchApply({ url: newDialog.form.url, cv: newDialog.form.cv || undefined })
+    await api.launchApply({
+      url: newDialog.form.url,
+      company: newDialog.form.company || undefined,
+      role: newDialog.form.role || undefined,
+      cv: newDialog.form.cv || undefined,
+    })
+    newFormOpened.value = true
     notify('Se abrió el navegador con el formulario. Envíalo y cierra la ventana.')
+  } catch (e) {
+    notify(e.message, 'error')
+  }
+}
+
+const openedAppsMap = reactive({})
+
+function isAppOpened(item) {
+  if (openedAppsMap[item.id]) return true
+  return Boolean(
+    item.history?.some((h) =>
+      h.note?.toLowerCase().includes('formulario abierto') ||
+      h.note?.toLowerCase().includes('playwright')
+    )
+  )
+}
+
+async function launchItemForm(item) {
+  try {
+    await api.launchApply({
+      url: item.url,
+      company: item.company || undefined,
+      role: item.role || undefined,
+      cv: item.cv || undefined,
+      applicationId: item.id,
+      demo: item.demo || undefined,
+    })
+    openedAppsMap[item.id] = true
+    await load()
+    notify(`Formulario de ${item.company} abierto y completado en Playwright`)
+  } catch (e) {
+    notify(e.message, 'error')
+  }
+}
+
+async function confirmSent(item) {
+  if (!item.cv) {
+    const ok = window.confirm(`Atención: "${item.company}" no tiene un CV adaptado generado.\n¿Deseas registrarla como enviada de todas formas?`)
+    if (!ok) return
+  }
+  const today = new Date().toISOString().slice(0, 10)
+  try {
+    await api.updateApplication(item.id, {
+      status: 'applied',
+      appliedAt: today,
+      event: 'Postulación confirmada y enviada manualmente por el candidato',
+    })
+    if (item.company && !item.demo) {
+      await api.addExclusion({ company: item.company, reason: `Ya postulado (${today})` }).catch(() => {})
+    }
+    notify(`Postulación a ${item.company} confirmada como enviada y agregada a exclusiones`)
+    await load()
   } catch (e) {
     notify(e.message, 'error')
   }
@@ -115,13 +187,45 @@ async function remove(item) {
       <v-btn v-if="demoCount" variant="text" color="warning" prepend-icon="mdi-flask-off-outline" class="mr-2" @click="clearDemos">
         Limpiar demos ({{ demoCount }})
       </v-btn>
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="newDialog.show = true">Nueva postulación</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="newDialog.show = true; newFormOpened = false">Nueva postulación</v-btn>
     </div>
 
-    <div class="d-flex flex-wrap ga-2 mb-4">
-      <v-chip v-for="c in counts" :key="c.key" :color="c.color" :prepend-icon="c.icon" variant="tonal">
-        {{ c.title }}: {{ c.count }}
+    <div class="d-flex flex-wrap ga-2 mb-4 align-center">
+      <v-chip
+        :variant="filterStatus === null ? 'flat' : 'tonal'"
+        color="primary"
+        prepend-icon="mdi-format-list-bulleted"
+        class="font-weight-bold"
+        style="cursor: pointer"
+        @click="filterStatus = null"
+      >
+        Todas: {{ totalCount }}
       </v-chip>
+      <v-chip
+        v-for="c in counts"
+        :key="c.key"
+        :color="c.color"
+        :prepend-icon="c.icon"
+        :variant="filterStatus === c.key ? 'flat' : 'tonal'"
+        :elevation="filterStatus === c.key ? 2 : 0"
+        class="font-weight-medium"
+        style="cursor: pointer"
+        @click="toggleStatusFilter(c.key)"
+      >
+        {{ c.title }}: {{ c.count }}
+        <v-icon v-if="filterStatus === c.key" icon="mdi-check" size="x-small" class="ml-1" />
+      </v-chip>
+      <v-btn
+        v-if="filterStatus !== null"
+        size="x-small"
+        variant="text"
+        color="error"
+        prepend-icon="mdi-close"
+        class="ml-1"
+        @click="filterStatus = null"
+      >
+        Limpiar filtro
+      </v-btn>
     </div>
 
     <v-card>
@@ -137,7 +241,7 @@ async function remove(item) {
         />
         <v-data-table
           :headers="headers"
-          :items="items"
+          :items="filteredItems"
           :search="search"
           :loading="loading"
           v-model:expanded="expanded"
@@ -179,9 +283,32 @@ async function remove(item) {
           </template>
           <template #item.actions="{ item }">
             <div class="actions">
-            <v-btn icon="mdi-open-in-new" variant="text" size="small" :href="item.url" target="_blank" rel="noopener" :disabled="!item.url" title="Abrir publicación" />
-            <v-btn icon="mdi-flag-checkered" variant="text" size="small" title="Cambiar estado" @click="openStatus(item)" />
-            <v-btn icon="mdi-delete-outline" variant="text" size="small" title="Eliminar" @click="remove(item)" />
+              <v-btn
+                v-if="item.url"
+                :color="isAppOpened(item) ? 'success' : 'primary'"
+                variant="tonal"
+                size="small"
+                :prepend-icon="isAppOpened(item) ? 'mdi-check-all' : 'mdi-open-in-app'"
+                class="mr-1"
+                title="Abrir formulario y completar campos automáticamente con Playwright"
+                @click="launchItemForm(item)"
+              >
+                {{ isAppOpened(item) ? 'Formulario abierto' : 'Abrir form' }}
+              </v-btn>
+              <v-btn
+                v-if="item.status === 'pending'"
+                color="success"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-send"
+                class="mr-1"
+                title="Confirmar postulación enviada y registrar exclusión"
+                @click="confirmSent(item)"
+              >
+                Marcar enviada
+              </v-btn>
+              <v-btn icon="mdi-flag-checkered" variant="text" size="small" title="Cambiar estado" @click="openStatus(item)" />
+              <v-btn icon="mdi-delete-outline" variant="text" size="small" title="Eliminar" @click="remove(item)" />
             </div>
           </template>
         </v-data-table>
@@ -220,7 +347,15 @@ async function remove(item) {
           </v-alert>
         </v-card-text>
         <v-card-actions>
-          <v-btn prepend-icon="mdi-open-in-browser" :disabled="!newDialog.form.url" @click="launchForm">Abrir formulario</v-btn>
+          <v-btn
+            :color="newFormOpened ? 'success' : undefined"
+            :variant="newFormOpened ? 'tonal' : 'text'"
+            :prepend-icon="newFormOpened ? 'mdi-check-all' : 'mdi-open-in-browser'"
+            :disabled="!newDialog.form.url"
+            @click="launchForm"
+          >
+            {{ newFormOpened ? 'Formulario abierto' : 'Abrir formulario' }}
+          </v-btn>
           <v-spacer />
           <v-btn @click="newDialog.show = false">Cancelar</v-btn>
           <v-btn color="primary" :disabled="!newDialog.form.company || !newDialog.form.role" @click="register">Registrar como enviada</v-btn>

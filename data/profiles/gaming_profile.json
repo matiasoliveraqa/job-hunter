@@ -1,0 +1,28 @@
+{
+  "profile_name": "gaming_backend_sdet",
+  "candidate_name": "Alex Mercer",
+  "target_roles": [
+    "Senior SDET",
+    "QA Automation Engineer - Gaming",
+    "Backend QA Engineer",
+    "LiveOps Quality Engineer",
+    "Tools & Test Automation Engineer"
+  ],
+  "domain_specialization": "Gaming Infrastructure, Backend Services, Multiplayer Concurrency, LiveOps & Economy QA",
+  "technical_core": [
+    "Playwright (TypeScript / JavaScript)",
+    "API Automation (REST, WebSocket, Postman, Newman)",
+    "Performance & Concurrency (k6, JMeter)",
+    "Relational Databases & SQL (PostgreSQL, MySQL)",
+    "CI/CD Automation (GitHub Actions, Docker)",
+    "AI-Augmented QA (MCP, Claude, Cursor)"
+  ],
+  "compensation": {
+    "min_salary_usd": 3500,
+    "desired_hourly_usd": 60,
+    "salary_period": "monthly"
+  },
+  "modality": "100% Remote / International Contractor",
+  "verified_gaming_studios_file": "data/companies/gaming_studios.json",
+  "vacancies_scanned_file": "data/gaming_qa_vacancies.json"
+}

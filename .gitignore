@@ -27,6 +27,7 @@ share/python-wheels/
 MANIFEST
 
 # Virtual environments
+venv
 venv/
 env/
 ENV/
@@ -36,10 +37,15 @@ venv.bak/
 # User-specific & Candidate Data (STRICT PRIVACY)
 config/profile.json
 config/exclusions.py
+config/exclusions.json
+GEMINI.md
+HANDOFF.md
 my_cv/
 output/
 resumes/
 *.pdf
+!docs/*.pdf
+!web/demo/demo_cv.pdf
 *.log
 *.png
 

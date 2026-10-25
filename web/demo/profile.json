@@ -8,6 +8,7 @@
     "github_url": "https://github.com/alexmercer-dev",
     "portfolio_url": "https://alexmercer.dev",
     "current_company": "Acme Cloud Corp",
+    "years_of_experience": 6,
     "requires_us_visa_sponsorship": "No"
   },
   "search_criteria": {
@@ -37,9 +38,12 @@
       "anywhere",
       "americas"
     ],
+    "max_years_of_experience": 6,
     "min_salary_usd": 3500
   },
   "preferences": {
+    "dependent_salary_usd": 3500,
+    "contractor_salary_usd": 4500,
     "desired_salary_usd": 3500,
     "salary_period": "monthly",
     "notice_period": "Immediately",

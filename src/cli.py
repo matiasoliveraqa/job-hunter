@@ -23,7 +23,14 @@ from src.automation.browser import launch_stealth_browser
 from src.automation.applicators.ashby_applicator import AshbyApplicator
 from src.automation.applicators.greenhouse_applicator import GreenhouseApplicator
 from src.automation.applicators.lever_applicator import LeverApplicator
-from src.cv.builder import CVBuilder, get_or_create_application_dir, sanitize_slug, APPLICATIONS_DIR
+from src.cv.builder import (
+    CVBuilder,
+    get_or_create_application_dir,
+    sanitize_slug,
+    build_cv_filename,
+    normalize_cv_role_title,
+    APPLICATIONS_DIR,
+)
 
 # Ensure UTF-8 output across Windows (cp1252), Linux, and macOS terminals
 if hasattr(sys.stdout, "reconfigure"):
@@ -155,6 +162,48 @@ def scan_command(args):
     platforms = [p.strip().lower() for p in args.platforms.split(",")] if args.platforms else profile.ats_settings.enabled_platforms
     max_years = args.max_years if args.max_years is not None else profile.effective_max_years
 
+    if getattr(args, "stream_json", False):
+        def on_match(posting):
+            sys.stdout.write(json.dumps({"type": "match", "posting": posting.model_dump()}, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
+
+        def on_progress(checked, total, platform, company):
+            if checked % 25 == 0 or checked == total:
+                sys.stdout.write(
+                    json.dumps(
+                        {"type": "progress", "checked": checked, "total": total, "platform": platform, "company": company},
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+                sys.stdout.flush()
+
+        def on_error(platform, company, error):
+            sys.stdout.write(
+                json.dumps({"type": "board_error", "platform": platform, "company": company, "error": str(error)}, ensure_ascii=False)
+                + "\n"
+            )
+            sys.stdout.flush()
+
+        allow_captcha = getattr(args, "allow_captcha", False)
+        orchestrator = ScannerOrchestrator(profile)
+        postings = asyncio.run(
+            orchestrator.run(
+                platforms=platforms,
+                custom_roles=roles,
+                custom_locations=locations,
+                concurrency_limit=args.concurrency,
+                max_years_experience=max_years,
+                allow_captcha=allow_captcha,
+                on_match=on_match,
+                on_progress=on_progress,
+                on_error=on_error,
+            )
+        )
+        sys.stdout.write(json.dumps({"type": "done", "total_matches": len(postings)}, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+        return
+
     exp_str = f"<= {max_years} years" if max_years is not None else "Any"
     console.print(Panel.fit(
         f"[bold]Target Roles:[/bold] {', '.join(roles)}\n"
@@ -165,6 +214,7 @@ def scan_command(args):
         border_style="blue"
     ))
 
+    allow_captcha = getattr(args, "allow_captcha", False)
     orchestrator = ScannerOrchestrator(profile)
     postings = asyncio.run(orchestrator.run(
         platforms=platforms,
@@ -172,6 +222,7 @@ def scan_command(args):
         custom_locations=locations,
         concurrency_limit=args.concurrency,
         max_years_experience=max_years,
+        allow_captcha=allow_captcha,
     ))
 
     table = Table(title=f"Discovered Job Openings ({len(postings)} found)")
@@ -214,9 +265,7 @@ def apply_command(args):
             app_dir = cv_path.resolve().parent
         else:
             app_dir = get_or_create_application_dir(company, role)
-            cand_slug = sanitize_slug(profile.personal_info.full_name)
-            comp_slug = sanitize_slug(company)
-            dest_cv = app_dir / f"CV_{cand_slug}_{comp_slug}.pdf"
+            dest_cv = app_dir / build_cv_filename(profile.personal_info.full_name, role, company)
             if cv_path.resolve() != dest_cv.resolve():
                 shutil.copy2(cv_path, dest_cv)
                 # Also copy HTML if it exists alongside the source PDF
@@ -226,6 +275,9 @@ def apply_command(args):
                 cv_path = dest_cv
     else:
         app_dir = get_or_create_application_dir(company, role)
+        existing_pdfs = [f for f in app_dir.glob("*.pdf") if f.is_file() and f.stat().st_size > 1000]
+        if existing_pdfs:
+            cv_path = existing_pdfs[0]
 
     console.print(Panel.fit(
         f"[bold]Company:[/bold] {company}\n"
@@ -240,42 +292,52 @@ def apply_command(args):
     async def _run():
         browser, context, page = await launch_stealth_browser(headless=False)
 
-        console.print(f"[cyan]Navigating to {url}...[/cyan]")
-        await page.goto(url, wait_until="domcontentloaded")
-        await asyncio.sleep(2)
+        try:
+            console.print(f"[cyan]Navigating to {url}...[/cyan]")
+            await page.goto(url, wait_until="domcontentloaded")
+            await asyncio.sleep(2)
 
-        # Select appropriate applicator
-        url_lower = url.lower()
-        if "ashby" in url_lower:
-            applicator = AshbyApplicator(page, profile)
-        elif "greenhouse" in url_lower:
-            applicator = GreenhouseApplicator(page, profile)
-        elif "lever" in url_lower:
-            applicator = LeverApplicator(page, profile)
-        else:
-            applicator = AshbyApplicator(page, profile)
+            # Select appropriate applicator
+            url_lower = url.lower()
+            if "ashby" in url_lower:
+                applicator = AshbyApplicator(page, profile, company=company, role=role)
+            elif "greenhouse" in url_lower or "gh_jid" in url_lower:
+                applicator = GreenhouseApplicator(page, profile, company=company, role=role)
+            elif "lever" in url_lower:
+                applicator = LeverApplicator(page, profile, company=company, role=role)
+            else:
+                applicator = GreenhouseApplicator(page, profile, company=company, role=role)
 
-        await applicator.fill_form(cv_path)
+            await applicator.fill_form(cv_path)
 
-        # Save execution script and metadata with URL + completed fields inside the company folder
-        script_path = _save_application_artifacts(
-            app_dir=app_dir,
-            url=page.url,
-            company=company,
-            role=role,
-            cv_path=cv_path,
-            filled_fields=applicator.filled_fields,
-        )
+            detected_captcha = await applicator.detect_captcha()
+            if detected_captcha:
+                console.print(f"[yellow][CAPTCHA][/yellow] Formulario protegido con [bold]{detected_captcha}[/bold]. Modo de evasión stealth activo.")
 
-        console.print("\n[bold green][SUCCESS] All fields pre-filled.[/bold green]")
-        console.print(f"[green][SAVED][/green] Application script & field log saved to: [cyan]{script_path}[/cyan]")
-        console.print("Please review the details in the opened browser, complete any employer-specific questions, and click Submit.")
+            # Save execution script and metadata with URL + completed fields inside the company folder
+            script_path = _save_application_artifacts(
+                app_dir=app_dir,
+                url=page.url,
+                company=company,
+                role=role,
+                cv_path=cv_path,
+                filled_fields=applicator.filled_fields,
+            )
+
+            console.print("\n[bold green][SUCCESS] All fields pre-filled.[/bold green]")
+            console.print(f"[green][SAVED][/green] Application script & field log saved to: [cyan]{script_path}[/cyan]")
+            console.print("Please review the details in the opened browser, complete any employer-specific questions, and click Submit.")
+        except Exception as e:
+            console.print(f"[yellow][WARNING][/yellow] Error durante el autocompletado: {e}")
+            console.print("El navegador permanecerá abierto para que puedas completar o revisar los campos manualmente.")
+
         console.print("[dim]The session will close when you close the browser window.[/dim]\n")
 
-        # Keep browser open until user closes window
+        # Keep browser open until user closes all browser pages/windows
         while True:
             try:
-                if len(context.pages) == 0 or page.is_closed():
+                active_pages = [p for p in context.pages if not p.is_closed()]
+                if not active_pages:
                     console.print("[yellow]Browser window closed by user.[/yellow]")
                     break
             except Exception:
@@ -288,10 +350,12 @@ def build_cv_command(args):
     """Compile HTML CV into 1-page PDF inside a dedicated company folder if specified."""
     builder = CVBuilder()
     html_path = Path(args.html)
+    profile = load_candidate_profile()
 
     if args.company:
         app_dir = get_or_create_application_dir(args.company, args.role or "")
-        out_pdf = Path(args.out) if args.out else app_dir / f"CV_{sanitize_slug(args.company)}.pdf"
+        default_name = build_cv_filename(profile.personal_info.full_name, args.role or "", args.company)
+        out_pdf = Path(args.out) if args.out else app_dir / default_name
         # Copy HTML into the application folder if it isn't already there
         target_html = app_dir / "cv_tailored.html"
         if html_path.exists() and html_path.resolve() != target_html.resolve():
@@ -303,6 +367,7 @@ def build_cv_command(args):
     console.print(f"[cyan]Compiling PDF from {html_path}...[/cyan]")
     asyncio.run(builder.compile_to_pdf(html_path, out_pdf))
     console.print(f"[bold green][SUCCESS][/bold green] PDF compiled successfully: {out_pdf}")
+    print(f"[CV_PATH] {out_pdf.resolve()}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -322,6 +387,8 @@ def main():
     scan_parser.add_argument("--limit", type=int, default=30, help="Display limit")
     scan_parser.add_argument("--concurrency", type=int, default=200, help="Concurrent HTTP connections")
     scan_parser.add_argument("--max-years", type=int, default=None, help="Maximum required years of experience")
+    scan_parser.add_argument("--allow-captcha", action="store_true", default=False, help="Include vacancies that require captcha solving")
+    scan_parser.add_argument("--stream-json", action="store_true", help="Stream progress and matches as JSON lines")
 
     # apply
     apply_parser = subparsers.add_parser("apply", help="Launch headed browser and pre-fill job application")

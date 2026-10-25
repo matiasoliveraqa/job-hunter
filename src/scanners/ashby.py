@@ -31,7 +31,13 @@ class AshbyScanner(BaseScanner):
                 for j in jobs:
                     title = j.get("title", "")
                     loc = j.get("location") or ""
-                    if j.get("isRemote"):
+                    addr_country = ((j.get("address") or {}).get("postalAddress") or {}).get("addressCountry") or ""
+                    if addr_country and addr_country.lower() not in loc.lower():
+                        loc = f"{loc}, {addr_country}".strip(", ")
+                    if j.get("isRemote") is False and not any(r in loc.lower() for r in ("remote", "worldwide", "global", "uruguay", "montevideo")):
+                        continue
+
+                    if j.get("isRemote") and "remote" not in loc.lower():
                         loc = f"{loc} (Remote)".strip()
 
                     if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords):
@@ -40,6 +46,8 @@ class AshbyScanner(BaseScanner):
                             f"{j.get('descriptionPlain') or ''} "
                             f"{j.get('descriptionHtml') or ''}"
                         )
+                        if self.has_residency_restriction(desc):
+                            continue
                         if not self.matches_experience(desc, max_years_experience):
                             continue
 

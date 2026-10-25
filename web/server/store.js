@@ -4,30 +4,6 @@ import { randomUUID } from 'node:crypto'
 
 export const STATUSES = ['pending', 'applied', 'interview', 'offer', 'rejected', 'withdrawn', 'not_sent']
 
-const SEED_DATE = '2026-10-22'
-const seed = [
-  ['Asteria AI', 'Senior Frontend Engineer', 'https://jobs.ashbyhq.com/asteriai/9a6bdb80-2d2e-47b1-97b2-bca567dd3d7b'],
-  ['Double', 'Senior Fullstack Engineer (ARG/UY based only)', 'https://jobs.ashbyhq.com/double/e0dafdfc-19f9-4613-9fdf-e6610a32278c'],
-  ['Airtm', 'Senior Software Engineer (Full-stack Node + React)', 'https://jobs.lever.co/airtm/d8b10545-45f5-42f3-a483-c03a36d6f288'],
-  ['Admios', 'Fullstack JavaScript Engineer', 'https://job-boards.greenhouse.io/admios/jobs/5322920002'],
-  ['Arionkoder', 'Senior React Engineer', 'https://job-boards.greenhouse.io/arionkoder/jobs/4122089008'],
-  ['Amplemarket', 'Frontend Software Engineer', 'https://job-boards.eu.greenhouse.io/amplemarket/jobs/4488062101'],
-  ['Canary Technologies', 'Senior Software Engineer', 'https://jobs.lever.co/canarytechnologies/0e1532cc-85e4-4f9d-a78c-defc089b14c8'],
-  ['GridVerify', 'Senior Frontend Engineer', 'https://jobs.ashbyhq.com/gridverify/36c3d721-9a2c-4960-99c0-6fce975766cb'],
-  ['Coperniq', 'Senior Full-Stack Engineer', 'https://jobs.ashbyhq.com/coperniq/2791caa3-e47a-44a6-a01a-c8d069c28c64'],
-].map(([company, role, url]) => ({
-  id: randomUUID(),
-  company,
-  role,
-  url,
-  appliedAt: SEED_DATE,
-  status: 'applied',
-  reason: '',
-  notes: '',
-  cv: '',
-  updatedAt: new Date().toISOString(),
-}))
-
 export function createStore(file) {
   let queue = Promise.resolve()
 
@@ -36,8 +12,9 @@ export function createStore(file) {
       return JSON.parse(await fs.readFile(file, 'utf-8'))
     } catch (err) {
       if (err.code !== 'ENOENT') throw err
-      await write(seed)
-      return seed
+      const initial = []
+      await write(initial)
+      return initial
     }
   }
 

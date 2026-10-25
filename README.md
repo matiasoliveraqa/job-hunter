@@ -49,100 +49,98 @@ sequenceDiagram
 
 ---
 
-## Quick Start
+## Quick Start (Web App & One-Click Launch)
 
 ### 1. Prerequisites
 - **Python 3.10+**
-- Recommended: A terminal-capable AI Assistant (**Cursor**, **Claude Code**, **Windsurf**, **Cline**, **Roo Code**, or local LLM agent).
+- **Node.js 18+**
 
-### 2. Installation
-Clone this repository and set up a virtual environment:
-
-**Windows (PowerShell / CMD / Git Bash):**
-```powershell
-git clone https://github.com/matiasoliveraqa/job-hunter.git
-cd job-hunter
-
-python -m venv venv
-venv\Scripts\activate
-
-pip install -r requirements.txt
-playwright install chromium
-```
+### 2. One-Click Launch (Recommended)
 
 **Linux & macOS:**
 ```bash
 git clone https://github.com/matiasoliveraqa/job-hunter.git
 cd job-hunter
-
-python3 -m venv venv
-source venv/bin/activate
-
-pip install -r requirements.txt
-playwright install chromium
+./start.sh
 ```
 
-### 3. Initialize Configuration
-Run the setup command to generate your local configuration:
-
-```bash
-python -m src.cli init
+**Windows:**
+```bat
+git clone https://github.com/matiasoliveraqa/job-hunter.git
+cd job-hunter
+start.bat
 ```
 
-This creates:
-- `config/profile.json`: Fill this with your personal details, `years_of_experience`, target roles, and dual salary expectations (`dependent_salary_usd` and `contractor_salary_usd`).
-- `config/exclusions.py`: Companies or recruitment agencies you wish to skip, as `"slug": "reason"` entries in `EXCLUSION_REASONS`.
+The script sets up the Python virtual environment (`venv`), installs dependencies, runs `playwright install chromium`, compiles the frontend, and launches the web interface at `http://127.0.0.1:3100` (with automatic fallback to `3101`, `3102`, etc. if port 3100 is busy).
+
+### 3. Setup Your Profile
+
+1. Open `http://127.0.0.1:3100` in your browser.
+2. Go to the **Mi perfil** tab.
+3. Fill in your contact info, target compensation, years of experience, and target roles.
+4. Go to **Buscar vacantes**: choose a preset (e.g. `QA / SDET`, `Backend`, `Frontend`) or enter your target roles as tags.
+5. Click **Buscar vacantes** to watch opportunities stream in real time.
 
 ---
 
-## Using with AI Coding Assistants
+## Architecture & Security Model
 
-Job Hunter is engineered to be **LLM-agnostic**. It includes:
-- `AGENT_INSTRUCTIONS.md`: Standardized instructions for autonomous execution.
-- `.claude/settings.json`: Pre-configured CLI permissions so **Claude Code** can run `scan`, `build-cv`, and `apply` out-of-the-box without permission blocks.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You as Candidate
+    participant UI as Web Dashboard (Vue 3)
+    participant Server as Local Server (Node.js / Python)
+    participant ATS as Ashby / Greenhouse / Lever
+    participant Agent as Sandboxed LLM (Claude / AGY / Codex)
+    participant Browser as Headed Playwright Browser
 
-### Example Workflow with Cursor / Claude Code / Windsurf:
-1. Place your current master resume (PDF or Markdown) in `my_cv/`.
-2. Open the project folder in your AI editor.
-3. In the agent chat, prompt:
-   > *"Read `AGENT_INSTRUCTIONS.md`, configure my profile from `my_cv/`, and start applying to matching remote opportunities."*
-4. Your agent will automatically:
-   - Extract your skills and years of experience into `config/profile.json`.
-   - Scan the ATS registries for matching positions that do not exceed your years of experience.
-   - Create a dedicated folder per company under `output/applications/<YYYY-MM>_<Company>_<Role>/` with a tailored 1-page ATS PDF.
-   - Immediately launch the headed browser on your screen with all fields filled and save `open_application.py` with the job URL and field log.
-5. Review the application on your screen, click **Submit**, and close the window!
+    UI->>Server: Start live SSE search (Roles, LATAM/Global, Max Years)
+    Server->>ATS: Scan 15,000+ public boards (Concurrent, TLS verified)
+    ATS-->>Server: Filtered postings (Location & Experience verified)
+    Server-->>UI: Real-time SSE stream of qualified jobs
+
+    You->>UI: Click "Adaptar CV"
+    UI->>Agent: Prompt with JD + Master Skills (Zero tool access, pure text)
+    Agent-->>Server: Tailored HTML (Validated against AI-isms & role limits)
+    Server->>Server: Compile 1-page ATS PDF (<Name>_<Role>_<Company>.pdf)
+
+    You->>UI: Click "Abrir form"
+    UI->>Browser: Pre-fill application form on verified ATS domain
+    Browser-->>You: Headed browser opens on screen
+    You->>Browser: Review, verify & click Submit
+    You->>UI: Click "Enviada" to record exclusion and date
+```
+
+### Security & Privacy Guarantees
+- **Prompt Injection Defense:** LLM providers (`claude`, `agy`, `codex`) execute in pure text-to-text mode with zero tools (`--tools ""` and no shell access). Untrusted job descriptions cannot execute shell commands or exfiltrate local files.
+- **Strict ATS Domain Allowlist:** Autofill only launches against verified platform domains (`greenhouse.io`, `ashbyhq.com`, `lever.co`). Arbitrary external URLs are rejected to protect personal information.
+- **Dynamic Port Allocation:** The local web server automatically detects port conflicts on 3100 and switches to the next available port.
+- **Human-in-the-Loop:** Applications remain `pending` until you verify and confirm them.
+- **Strict Privacy:** Candidate profiles (`config/profile.json`), exclusions (`config/exclusions.json`), and generated PDFs are kept in `.gitignore` and never committed.
 
 ---
 
 ## CLI Reference
 
-You can also run all components manually via the CLI:
+You can also run all components manually via the terminal:
 
 ### Discover Positions
 ```bash
 # Scan across Ashby, Greenhouse, and Lever for remote roles matching your experience
-python -m src.cli scan --roles "Software Engineer,Full Stack" --locations "remote,latam" --max-years 6 --limit 30
+python -m src.cli scan --roles "QA Automation Engineer,SDET" --locations "remote,latam" --max-years 7 --limit 30
 ```
 
-### Compile a 1-Page ATS CV (Per-Company Folder)
+### Compile a 1-Page ATS CV
 ```bash
-python -m src.cli build-cv --company "AcmeCorp" --role "Senior_Engineer" --html output/applications/2026-10_AcmeCorp_Senior_Engineer/cv_tailored.html
+python -m src.cli build-cv --company "AcmeCorp" --role "QA_Automation_Engineer" --html output/applications/2026-10_AcmeCorp_QA_Automation_Engineer/cv_tailored.html
 ```
 
 ### Pre-fill an Application
 ```bash
 # Opens headed browser, navigates to Application tab, fills form, and saves open_application.py
-python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id" --company "AcmeCorp" --role "Senior_Engineer" --cv output/applications/2026-10_AcmeCorp_Senior_Engineer/CV_AcmeCorp.pdf
+python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id" --company "AcmeCorp" --role "QA_Automation_Engineer" --cv output/applications/2026-10_AcmeCorp_QA_Automation_Engineer/CV.pdf
 ```
-
----
-
-## Security & Privacy Guarantee
-
-- **100% Local Execution:** No third-party servers, tracking pixels, or remote database logging.
-- **Strict Git Protection:** `.gitignore` comes pre-configured to strictly ignore `config/profile.json`, `config/exclusions.py`, `my_cv/`, `output/`, generated PDFs, and browser profiles. Your personal details will never be accidentally pushed to GitHub.
-- **Native OS Anti-Bot Evasion:** Launches persistent Chrome/Chromium sessions preserving your native OS User-Agent and platform while masking `navigator.webdriver`, preventing false-positive hCaptcha/Cloudflare verification errors on Lever, Greenhouse, and Ashby.
 
 ---
 

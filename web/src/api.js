@@ -19,6 +19,8 @@ export const api = {
   clearDemos: () => request('/api/applications/clear-demos', { method: 'POST', body: {} }),
   getProfile: () => request('/api/profile'),
   saveProfile: (body) => request('/api/profile', { method: 'PUT', body }),
+  getBaseCv: () => request('/api/profile/cv'),
+  uploadBaseCv: (body) => request('/api/profile/upload-cv', { method: 'POST', body }),
   listExclusions: () => request('/api/exclusions'),
   addExclusion: (body) => request('/api/exclusions', { method: 'POST', body }),
   updateExclusion: (company, body) => request(`/api/exclusions/${encodeURIComponent(company)}`, { method: 'PUT', body }),
@@ -26,6 +28,8 @@ export const api = {
   listFiles: () => request('/api/files'),
   launchApply: (body) => request('/api/apply', { method: 'POST', body }),
   listLaunches: () => request('/api/apply'),
+  stopScan: () => request('/api/scan/stop', { method: 'POST', body: {} }),
+  tailorCv: (body) => request('/api/tailor-cv', { method: 'POST', body }),
 }
 
 export const STATUS_META = {

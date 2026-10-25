@@ -1,8 +1,8 @@
 <script setup>
 const links = [
+  { to: '/search', icon: 'mdi-magnify', title: 'Buscar vacantes' },
   { to: '/applications', icon: 'mdi-briefcase-check', title: 'Postulaciones' },
   { to: '/cvs', icon: 'mdi-file-pdf-box', title: 'CVs' },
-  { to: '/chat', icon: 'mdi-robot-happy', title: 'Chat con el agente' },
   { to: '/profile', icon: 'mdi-account-circle', title: 'Mi perfil' },
   { to: '/exclusions', icon: 'mdi-cancel', title: 'Exclusiones' },
 ]
@@ -18,7 +18,11 @@ const links = [
       </v-list>
     </v-navigation-drawer>
     <v-main>
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <keep-alive>
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
     </v-main>
   </v-app>
 </template>

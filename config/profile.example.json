@@ -9,7 +9,11 @@
     "portfolio_url": "https://alexmercer.dev",
     "current_company": "Acme Cloud Corp",
     "years_of_experience": 6,
-    "requires_us_visa_sponsorship": "No"
+    "requires_us_visa_sponsorship": "No",
+    "gender": "Decline to self-identify",
+    "race": "Decline to self-identify",
+    "veteran_status": "I am not a veteran",
+    "disability_status": "No, I do not have a disability"
   },
   "search_criteria": {
     "target_roles": [
@@ -58,5 +62,13 @@
     ],
     "auto_upload_resume": true,
     "stealth_mode": true
+  },
+  "open_questions": {
+    "motivation": "I have extensive experience building scalable software and test suites, and I want to contribute to high-impact products with strong engineering standards.",
+    "fintech_motivation": "I have experience working on financial and transactional systems where correctness, data integrity, and compliance are paramount.",
+    "experience_summary": "I work across backend systems, test automation, and CI/CD pipelines to ensure software reliability and test coverage.",
+    "metrics_and_kpis": "My goals focus on test coverage, release stability, and automated regression pass rates.",
+    "education_level": "Bachelor's Degree in Computer Science (or equivalent practical experience)",
+    "timezone_overlap": "UTC-3 with full overlap during US and Americas business hours."
   }
 }

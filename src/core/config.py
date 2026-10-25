@@ -41,14 +41,39 @@ def load_candidate_profile() -> CandidateProfile:
     return CandidateProfile.model_validate(data)
 
 def get_exclusion_checker() -> Callable[[str], bool]:
-    """Dynamically load exclusion checking function."""
-    sys.path.insert(0, str(CONFIG_DIR))
-    try:
-        from exclusions import is_excluded_company  # type: ignore
-        return is_excluded_company
-    except ImportError:
+    """Dynamically load exclusion checking function (prefers exclusions.json, falls back to .py)."""
+    json_path = CONFIG_DIR / "exclusions.json"
+    if json_path.exists():
         try:
-            from exclusions_example import is_excluded_company  # type: ignore
-            return is_excluded_company
-        except ImportError:
-            return lambda name: False
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                excluded_keys = []
+                if isinstance(data, dict):
+                    excluded_keys = [k.lower().strip() for k in data.keys()]
+                elif isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and "company" in item:
+                            excluded_keys.append(str(item["company"]).lower().strip())
+                        elif isinstance(item, str):
+                            excluded_keys.append(item.lower().strip())
+                if excluded_keys:
+                    return lambda name: bool(name and any(ex in name.lower() for ex in excluded_keys))
+        except Exception:
+            pass
+
+    import importlib.util
+
+    for filename in ["exclusions.py", "exclusions.example.py"]:
+        file_path = CONFIG_DIR / filename
+        if file_path.exists():
+            try:
+                spec = importlib.util.spec_from_file_location("exclusions_module", str(file_path))
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    if hasattr(mod, "is_excluded_company"):
+                        return mod.is_excluded_company
+            except Exception:
+                pass
+
+    return lambda name: False

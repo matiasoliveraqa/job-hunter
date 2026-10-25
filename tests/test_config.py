@@ -7,7 +7,8 @@ from src.core.config import load_candidate_profile, CONFIG_DIR
 from src.core.models import CandidateProfile, PersonalInfo, CandidatePreferences
 from src.cli import _save_application_artifacts
 
-def test_load_candidate_profile():
+def test_load_candidate_profile(monkeypatch):
+    monkeypatch.setenv("JOBHUNTER_PROFILE", str(CONFIG_DIR / "profile.example.json"))
     profile = load_candidate_profile()
     assert isinstance(profile, CandidateProfile)
     assert profile.personal_info.full_name != ""
@@ -25,15 +26,15 @@ def test_default_exclusions_are_empty():
 
 def test_personal_info_properties():
     p = PersonalInfo(
-        full_name="Matías Mieres",
-        email="matias@example.com",
+        full_name="Alex Mercer",
+        email="alex.mercer@example.com",
         phone="+598 99 123 456",
         location="Montevideo, Uruguay",
-        linkedin_url="https://linkedin.com/in/matias",
+        linkedin_url="https://linkedin.com/in/alexmercer-dev",
         years_of_experience=6
     )
-    assert p.first_name == "Matías"
-    assert p.last_name == "Mieres"
+    assert p.first_name == "Alex"
+    assert p.last_name == "Mercer"
     assert p.years_of_experience == 6
 
 def test_dual_salary_preferences():
@@ -59,9 +60,9 @@ def test_save_application_artifacts(tmp_path: Path):
     dummy_cv.write_bytes(b"%PDF-1.4 dummy")
 
     filled = {
-        "First Name": "Matías",
-        "Last Name": "Mieres",
-        "Email": "matias@example.com",
+        "First Name": "Alex",
+        "Last Name": "Mercer",
+        "Email": "alex.mercer@example.com",
         "Salary (Dependent Employee (Default))": "$3,000 USD / month",
     }
     url = "https://job-boards.greenhouse.io/able/jobs/8390834002"
@@ -76,6 +77,31 @@ def test_save_application_artifacts(tmp_path: Path):
     assert script_path.exists()
     content = script_path.read_text(encoding="utf-8")
     assert url in content
-    assert '"First Name": "Matías"' in content
-    assert '"Last Name": "Mieres"' in content
+    assert '"First Name": "Alex"' in content
+    assert '"Last Name": "Mercer"' in content
     assert (app_dir / "application_info.json").exists()
+
+def test_cv_role_and_filename_normalization():
+    from src.cv.builder import normalize_cv_role_title, build_cv_filename
+
+    assert normalize_cv_role_title("Lead QA Automation Engineer") == "QA Automation Engineer"
+    assert normalize_cv_role_title("Senior SDET") == "QA Automation Engineer"
+    assert normalize_cv_role_title("Lead QA Engineer") == "QA Engineer"
+    assert normalize_cv_role_title("Senior QA Engineer") == "QA Engineer"
+    assert normalize_cv_role_title("Lead Backend Engineer") == "Backend Engineer"
+    assert normalize_cv_role_title("Principal Full Stack Engineer") == "Full Stack Engineer"
+    assert normalize_cv_role_title("Lead DevOps Engineer", preferred_role="DevOps Engineer") == "DevOps Engineer"
+
+    assert (
+        build_cv_filename("Alex Mercer", "Lead QA Automation Engineer", "Stack AI")
+        == "Alex_Mercer_QA_Automation_Engineer_Stack_AI.pdf"
+    )
+    assert (
+        build_cv_filename("Jane Doe", "Lead QA Engineer", "Acme Corp")
+        == "Jane_Doe_QA_Engineer_Acme_Corp.pdf"
+    )
+    assert (
+        build_cv_filename("Alex Mercer", "Backend Engineer", "Stripe")
+        == "Alex_Mercer_Backend_Engineer_Stripe.pdf"
+    )
+

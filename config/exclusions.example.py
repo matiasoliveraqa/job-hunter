@@ -8,11 +8,12 @@ page) and by the agent; one entry per line keeps both in sync.
 
 from typing import Dict, List
 
-# Lowercased company slugs or substrings -> why they are excluded
+# Lowercased company slugs or substrings -> why they are excluded.
+# Starts empty by default so each user can manage their own exclusions.
 EXCLUSION_REASONS: Dict[str, str] = {
-    "bairesdev": "Agencia o plataforma que prefieres evitar",
-    "revature": "Agencia o plataforma que prefieres evitar",
-    "turing": "Agencia o plataforma que prefieres evitar",
+    # Examples (uncomment or manage from the Web App / AI Agent):
+    # "your-current-employer": "Current employer",
+    # "already-applied-corp": "Already applied",
 }
 
 # Plain list view of the slugs, used by the scanner

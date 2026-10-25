@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 const YES_NO = ['Yes', 'No']
@@ -13,6 +14,7 @@ export function createConfigFiles({ root }) {
   const backupDir = path.join(root, 'output', 'backups')
   const profileFile = path.join(configDir, 'profile.json')
   const exclusionsFile = path.join(configDir, 'exclusions.py')
+  const exclusionsJsonFile = path.join(configDir, 'exclusions.json')
 
   // Read-modify-write cycles on these files are serialized, like the applications store.
   let queue = Promise.resolve()
@@ -80,6 +82,10 @@ export function createConfigFiles({ root }) {
     const platforms = list(a.enabled_platforms ?? [], 'ats_settings.enabled_platforms')
     for (const pl of platforms) oneOf(pl, PLATFORMS, 'ats_settings.enabled_platforms')
 
+    const dependentSalary = intOrNull(pr.dependent_salary_usd ?? pr.desired_salary_usd, 'Salario empleado dependiente')
+    const contractorSalary = intOrNull(pr.contractor_salary_usd, 'Salario contractor')
+    const desiredSalary = intOrNull(pr.desired_salary_usd ?? dependentSalary, 'Salario deseado')
+
     return {
       personal_info: {
         full_name: str(p.full_name, 'Nombre completo', { required: true }),
@@ -90,16 +96,20 @@ export function createConfigFiles({ root }) {
         github_url: str(p.github_url, 'GitHub'),
         portfolio_url: str(p.portfolio_url, 'Portfolio'),
         current_company: str(p.current_company, 'Empresa actual'),
+        years_of_experience: intOrNull(p.years_of_experience, 'Años de experiencia'),
         requires_us_visa_sponsorship: oneOf(p.requires_us_visa_sponsorship ?? 'No', YES_NO, 'requires_us_visa_sponsorship'),
       },
       search_criteria: {
         target_roles: list(s.target_roles ?? [], 'Roles objetivo'),
         keywords: list(s.keywords ?? [], 'Keywords'),
         location_keywords: list(s.location_keywords ?? [], 'Ubicaciones'),
+        max_years_of_experience: intOrNull(s.max_years_of_experience, 'Tope máximo de años de experiencia'),
         min_salary_usd: intOrNull(s.min_salary_usd, 'Salario mínimo'),
       },
       preferences: {
-        desired_salary_usd: intOrNull(pr.desired_salary_usd, 'Salario deseado'),
+        dependent_salary_usd: dependentSalary,
+        contractor_salary_usd: contractorSalary,
+        desired_salary_usd: desiredSalary,
         salary_period: oneOf(pr.salary_period ?? 'monthly', PERIODS, 'salary_period'),
         notice_period: str(pr.notice_period, 'Disponibilidad', { required: true }),
         english_level: str(pr.english_level, 'Nivel de inglés'),
@@ -179,6 +189,13 @@ def is_excluded_company(company_name: str) -> bool:
 
   async function readExclusions() {
     try {
+      if (existsSync(exclusionsJsonFile)) {
+        const data = JSON.parse(await fs.readFile(exclusionsJsonFile, 'utf-8'))
+        if (Array.isArray(data)) return data
+        if (typeof data === 'object' && data) {
+          return Object.entries(data).map(([company, reason]) => ({ company, reason: String(reason || '') }))
+        }
+      }
       return parseExclusions(await fs.readFile(exclusionsFile, 'utf-8'))
     } catch (err) {
       if (err.code === 'ENOENT') return []
@@ -196,12 +213,22 @@ def is_excluded_company(company_name: str) -> bool:
   function mutateExclusions(change) {
     return serialize(async () => {
       const entries = await readExclusions()
+      const prevJson = JSON.stringify(entries)
       const result = change(entries)
+      const nextJson = JSON.stringify(entries)
+
+      if (prevJson === nextJson) {
+        return result
+      }
+
       try {
-        await backup(exclusionsFile)
+        if (existsSync(exclusionsJsonFile)) await backup(exclusionsJsonFile)
+        else if (existsSync(exclusionsFile)) await backup(exclusionsFile)
       } catch {
         // a missing backup must not block the edit
       }
+
+      await writeAtomic(exclusionsJsonFile, JSON.stringify(entries, null, 2) + '\n')
       await writeAtomic(exclusionsFile, renderExclusions(entries))
       return result
     })
