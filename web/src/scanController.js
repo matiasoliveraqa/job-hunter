@@ -90,7 +90,7 @@ export async function loadPersistedResults(existingApps = []) {
 export const form = reactive({
   roles: ['QA Automation Engineer', 'Senior QA Engineer', 'SDET', 'Quality Engineer', 'Software Engineer in Test', 'QA Engineer'],
   platforms: ['ashby', 'greenhouse', 'lever'],
-  latamOnly: true,
+  locationScope: 'latam_global',
   maxYears: 7,
   allowCaptcha: false,
   concurrency: 50,
@@ -299,10 +299,20 @@ export async function startScan(existingApps = []) {
     ? Number(form.maxYears)
     : null
 
+  let locations = []
+  if (form.locationScope === 'latam_only') {
+    locations = ['latam', 'latin america', 'south america', 'uruguay']
+  } else if (form.locationScope === 'any') {
+    locations = ['any']
+  } else {
+    locations = ['remote', 'latam', 'latin america', 'worldwide', 'global', 'anywhere', 'americas', 'uruguay']
+  }
+
   const payload = {
     roles: form.roles,
     platforms: form.platforms,
-    locations: form.latamOnly ? ['remote', 'latam', 'latin america', 'worldwide', 'global', 'anywhere', 'americas'] : [],
+    locations,
+    locationScope: form.locationScope,
     maxYears: parsedMaxYears,
     allowCaptcha: form.allowCaptcha,
     concurrency: Number(form.concurrency) || 50,

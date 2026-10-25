@@ -46,7 +46,7 @@ class AshbyScanner(BaseScanner):
                             f"{j.get('descriptionPlain') or ''} "
                             f"{j.get('descriptionHtml') or ''}"
                         )
-                        if self.has_residency_restriction(desc):
+                        if self.has_residency_restriction(desc, location_keywords):
                             continue
                         if not self.matches_experience(desc, max_years_experience):
                             continue

@@ -15,23 +15,56 @@ def test_keyword_matching():
 
 def test_location_matching():
     scanner = AshbyScanner()
-    assert scanner.matches_location("Backend Dev", "Remote - LATAM", ["remote", "latam"]) is True
-    assert scanner.matches_location("QA Engineer", "South America (Remote)", ["remote", "latam"]) is True
-    assert scanner.matches_location("QA Engineer", "Remote (US & LATAM)", ["remote", "latam"]) is True
-    assert scanner.matches_location("QA Engineer", "United States (Remote)", ["remote", "latam"]) is False
-    assert scanner.matches_location("Remote Frontend Engineer", "New York Office", ["latam", "remote"]) is False
-    assert scanner.matches_location("Staff Engineer", "Berlin, Germany Office", ["latam", "worldwide"]) is False
-    assert scanner.matches_location("Senior QA Engineer", "São Paulo, Brazil onsite", ["remote", "latam"]) is False
-    assert scanner.matches_location("QA Engineer", "Draper, UT (Hybrid)", ["remote", "latam"]) is False
-    assert scanner.matches_location("QA Engineer", "Montevideo, Uruguay (Hybrid)", ["remote", "latam"]) is True
+    # Scope 1: Apto LATAM y Global (discards US/EU/Asia exclusives, accepts LATAM and worldwide)
+    latam_global_keywords = ["remote", "latam", "worldwide", "global", "anywhere", "uruguay"]
+    assert scanner.matches_location("Backend Dev", "Remote - LATAM", latam_global_keywords) is True
+    assert scanner.matches_location("QA Engineer", "South America (Remote)", latam_global_keywords) is True
+    assert scanner.matches_location("QA Engineer", "Remote (US & LATAM)", latam_global_keywords) is True
+    assert scanner.matches_location("QA Engineer", "Remote - Worldwide", latam_global_keywords) is True
+    assert scanner.matches_location("QA Engineer", "United States (Remote)", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Anywhere in the US.", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Anywhere in the US", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Anywhere in the United States", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Remote, US", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Remote - US", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Remote in the US", latam_global_keywords) is False
+    assert scanner.matches_location("Join us as QA Engineer", "Remote - Worldwide", latam_global_keywords) is True
+    assert scanner.matches_location("Remote Frontend Engineer", "New York Office", latam_global_keywords) is False
+    assert scanner.matches_location("Staff Engineer", "Berlin, Germany Office", latam_global_keywords) is False
+    assert scanner.matches_location("Senior QA Engineer", "São Paulo, Brazil onsite", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Draper, UT (Hybrid)", latam_global_keywords) is False
+    assert scanner.matches_location("Senior Manager, Content Operations & QC, LATAM", "Mexico City, Mexico City, Mexico", latam_global_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Montevideo, Uruguay (Hybrid)", latam_global_keywords) is True
+
+    # Scope 2: Solo Latinoamérica (only explicit LATAM/Uruguay, rejects general worldwide)
+    latam_only_keywords = ["latam", "latin america", "south america", "uruguay"]
+    assert scanner.matches_location("QA Engineer", "Remote - LATAM", latam_only_keywords) is True
+    assert scanner.matches_location("QA Engineer", "Montevideo, Uruguay", latam_only_keywords) is True
+    assert scanner.matches_location("QA Engineer", "Remote - Worldwide", latam_only_keywords) is False
+    assert scanner.matches_location("QA Engineer", "United States (Remote)", latam_only_keywords) is False
+
+    # Scope 3: Cualquier país / Sin filtro (allows remote anywhere)
+    any_keywords = ["any"]
+    assert scanner.matches_location("QA Engineer", "United States (Remote)", any_keywords) is True
+    assert scanner.matches_location("QA Engineer", "London, UK (Remote)", any_keywords) is True
+    assert scanner.matches_location("QA Engineer", "Tokyo, Japan (Remote)", any_keywords) is True
+    assert scanner.matches_location("QA Engineer", "New York Office (Onsite)", any_keywords) is False
 
 def test_residency_restriction():
     scanner = AshbyScanner()
     assert scanner.has_residency_restriction("What is your state of residence within the United States?") is True
     assert scanner.has_residency_restriction("Candidates must reside in the US to be considered.") is True
+    assert scanner.has_residency_restriction("Location: Anywhere in the US.") is True
+    assert scanner.has_residency_restriction("<p><strong>Location</strong></p><p>Anywhere in the US. This role requires travel.</p>") is True
+    assert scanner.has_residency_restriction("US based candidates only.") is True
+    assert scanner.has_residency_restriction("Remote within the United States.") is True
+    assert scanner.has_residency_restriction("Open to candidates in the US or Latin America.") is False
     assert scanner.has_residency_restriction("Open to remote candidates across Latin America.") is False
     assert scanner.has_residency_restriction("Vaga exclusiva para residentes no Brasil (Contrato CLT)") is True
     assert scanner.has_residency_restriction("This role requires on-site availability in São Paulo.") is True
+
+    # "any" scope ignores residency restrictions
+    assert scanner.has_residency_restriction("Candidates must reside in the US to be considered.", ["any"]) is False
 
 def test_applicator_custom_questions():
     from src.core.config import load_candidate_profile

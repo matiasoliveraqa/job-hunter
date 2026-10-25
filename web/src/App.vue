@@ -5,6 +5,7 @@ import { api } from './api.js'
 import { initTheme, isDark, toggleTheme } from './theme.js'
 import { appStats, refreshAppStats } from './stats.js'
 import { scanning, startScan, stopScan, lastScanTime, initScanSync } from './scanController.js'
+import { currentLang, toggleLanguage, t } from './i18n/index.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,27 +13,27 @@ const router = useRouter()
 const collapsed = ref(false)
 const profile = ref(null)
 
-const candidateName = computed(() => profile.value?.personal_info?.full_name || 'Candidato')
-const candidateRole = computed(() => profile.value?.search_criteria?.target_roles?.[0] || 'Mi perfil')
+const candidateName = computed(() => profile.value?.personal_info?.full_name || t('nav.candidateDefault'))
+const candidateRole = computed(() => profile.value?.search_criteria?.target_roles?.[0] || t('nav.profileDefault'))
 const candidateInitials = computed(() => {
   const name = candidateName.value
-  if (!name || name === 'Candidato') return 'C'
+  if (!name || name === t('nav.candidateDefault') || name === 'Candidato' || name === 'Candidate') return 'C'
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 })
 
-const navLinks = [
-  { to: '/search', label: 'Buscar vacantes', icon: 'travel_explore' },
-  { to: '/applications', label: 'Postulaciones', icon: 'send', countKey: 'applications' },
-  { to: '/cvs', label: 'CVs generados', icon: 'description', countKey: 'cvs' },
-  { to: '/profile', label: 'Mi perfil', icon: 'badge' },
-  { to: '/exclusions', label: 'Exclusiones', icon: 'do_not_disturb_on', countKey: 'exclusions' },
-]
+const navLinks = computed(() => [
+  { to: '/search', label: t('nav.search'), icon: 'travel_explore' },
+  { to: '/applications', label: t('nav.applications'), icon: 'send', countKey: 'applications' },
+  { to: '/cvs', label: t('nav.cvs'), icon: 'description', countKey: 'cvs' },
+  { to: '/profile', label: t('nav.profile'), icon: 'badge' },
+  { to: '/exclusions', label: t('nav.exclusions'), icon: 'do_not_disturb_on', countKey: 'exclusions' },
+])
 
 const pageTitle = computed(() => {
-  const match = navLinks.find((l) => l.to === route.path)
-  return match ? match.label : 'Panel de control'
+  const match = navLinks.value.find((l) => l.to === route.path)
+  return match ? match.label : t('nav.dashboard')
 })
 
 const isSearchRoute = computed(() => route.path === '/search')
@@ -123,7 +124,7 @@ onMounted(() => {
           <button
             v-else
             class="p-1 rounded-lg hover:bg-surface-container transition-all group flex items-center justify-center"
-            title="Expandir menú (Job Hunter)"
+            :title="$t('nav.expandMenu')"
             @click="collapsed = false"
           >
             <img
@@ -137,7 +138,7 @@ onMounted(() => {
           <button
             v-if="!collapsed"
             class="text-outline hover:text-on-surface transition-colors p-1 rounded hover:bg-surface-container shrink-0"
-            title="Colapsar menú"
+            :title="$t('nav.collapseMenu')"
             @click="collapsed = true"
           >
             <span class="material-symbols-outlined text-[18px]">
@@ -150,7 +151,7 @@ onMounted(() => {
         <!-- Navigation links -->
         <nav class="px-3 py-1 flex flex-col gap-0.5">
           <div v-if="!collapsed" class="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-outline uppercase font-mono">
-            Navegación
+            {{ $t('nav.title') }}
           </div>
           <router-link
             v-for="link in navLinks"
@@ -194,7 +195,7 @@ onMounted(() => {
         <div
           v-if="!collapsed"
           class="flex items-center justify-between px-1 cursor-pointer hover:opacity-85 transition-opacity py-0.5"
-          :title="agentStatus.connected ? `Motor activo: ${agentStatus.activeProviderName}. Clic para ajustar.` : 'Sin motor de IA detectado. Las postulaciones usarán tu CV base estándar. Clic para configurar.'"
+          :title="agentStatus.connected ? $t('topbar.agentActive', { name: agentStatus.activeProviderName }) : $t('topbar.agentNone')"
           @click="router.push('/profile?tab=ai')"
         >
           <div class="flex items-center gap-1.5 min-w-0">
@@ -203,14 +204,14 @@ onMounted(() => {
               :class="agentStatus.connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'"
             ></span>
             <span class="text-[11px] font-mono text-outline truncate">
-              {{ agentStatus.connected ? agentStatus.activeProviderName : 'Sin IA (Modo CV base)' }}
+              {{ agentStatus.connected ? agentStatus.activeProviderName : $t('topbar.agentNoAi') }}
             </span>
           </div>
           <span
             class="text-[10px] font-mono px-1 py-0.5 rounded shrink-0 ml-1"
             :class="agentStatus.connected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
           >
-            {{ agentStatus.connected ? 'ready' : 'base cv' }}
+            {{ agentStatus.connected ? $t('topbar.statusReady') : $t('topbar.statusBaseCv') }}
           </span>
         </div>
         <div
@@ -236,7 +237,7 @@ onMounted(() => {
         collapsed ? 'pl-16' : 'pl-60'
       ]"
     >
-      <!-- TOPBAR (Breadcrumbs + Date / Status + Theme Switcher + Scan CTA) -->
+      <!-- TOPBAR (Breadcrumbs + Date / Status + Theme Switcher + Language Selector + Scan CTA) -->
       <header class="h-14 border-b border-border-subtle bg-surface sticky top-0 z-40 px-6 flex items-center justify-between">
         <!-- Breadcrumbs -->
         <div class="flex items-center gap-2 text-on-surface-variant text-[13px]">
@@ -252,13 +253,24 @@ onMounted(() => {
           <!-- Scan status badge -->
           <div class="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container border border-border-subtle text-[11px] font-mono text-on-surface-variant">
             <span class="material-symbols-outlined text-[14px] text-outline">calendar_today</span>
-            <span>{{ lastScanTime ? `Último escaneo: ${lastScanTime}` : 'Listo para escanear' }}</span>
+            <span>{{ lastScanTime ? $t('topbar.lastScan', { time: lastScanTime }) : $t('topbar.readyToScan') }}</span>
           </div>
+
+          <!-- Language Selector / Toggle Button -->
+          <button
+            class="p-1.5 px-2 rounded-md border border-border-subtle bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors flex items-center gap-1.5 font-mono text-xs font-semibold cursor-pointer"
+            :title="currentLang === 'es' ? 'Switch to English' : 'Cambiar a Español'"
+            type="button"
+            @click="toggleLanguage"
+          >
+            <span class="material-symbols-outlined text-[16px] text-accent">language</span>
+            <span class="text-[11px] uppercase tracking-wider text-on-surface">{{ currentLang }}</span>
+          </button>
 
           <!-- Light / Dark Mode Toggle Button -->
           <button
             class="p-1.5 rounded-md border border-border-subtle bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
-            title="Alternar tema claro/oscuro"
+            :title="$t('topbar.toggleTheme')"
             type="button"
             @click="toggleTheme"
           >
@@ -282,7 +294,7 @@ onMounted(() => {
             <span class="material-symbols-outlined text-[16px]">
               {{ scanning ? 'pause' : 'play_arrow' }}
             </span>
-            <span>{{ scanning ? 'Detener búsqueda' : '+ Iniciar escaneo' }}</span>
+            <span>{{ scanning ? $t('topbar.stopScan') : $t('topbar.startScan') }}</span>
           </button>
         </div>
       </header>

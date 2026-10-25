@@ -19,7 +19,7 @@ class GreenhouseScanner(BaseScanner):
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
     ) -> List[JobPosting]:
-        url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs"
+        url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs?content=true"
         postings: List[JobPosting] = []
         timeout = aiohttp.ClientTimeout(total=12, sock_connect=5, sock_read=8)
         try:
@@ -44,7 +44,7 @@ class GreenhouseScanner(BaseScanner):
                         job_id = j.get("id")
                         desc_text = f"{title} {j.get('content') or ''}"
 
-                        if self.has_residency_restriction(desc_text):
+                        if self.has_residency_restriction(desc_text, location_keywords):
                             continue
                         if not self.matches_experience(desc_text, max_years_experience):
                             continue

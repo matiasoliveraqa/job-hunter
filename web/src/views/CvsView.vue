@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api.js'
+import { t } from '../i18n/index.js'
 
 const router = useRouter()
 
@@ -40,7 +41,7 @@ function formatDate(iso) {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
   if (diffHours < 48) {
-    return 'Ayer'
+    return t('common.yesterday')
   }
   return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
@@ -282,7 +283,7 @@ async function loadData() {
       selectedCv.value = match || enrichedFiles.value[0] || null
     }
   } catch (err) {
-    showSnack(`Error al cargar CVs: ${err.message}`, 'error')
+    showSnack(`${t('cvs.toasts.loadError')}${err.message}`, 'error')
   } finally {
     loading.value = false
   }
@@ -299,9 +300,9 @@ async function openLocalFolder() {
     if (res?.path && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(res.path).catch(() => {})
     }
-    showSnack(`Carpeta abierta en el explorador: ${res?.path || 'output/applications'}`, 'success')
+    showSnack(t('cvs.toasts.folderOpened', { path: res?.path || 'output/applications' }), 'success')
   } catch (err) {
-    showSnack(`Error al abrir carpeta: ${err.message}`, 'error')
+    showSnack(`${t('cvs.toasts.folderError')}${err.message}`, 'error')
   } finally {
     openingFolder.value = false
   }
@@ -313,10 +314,10 @@ async function copyPath(item) {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(fullPath)
-      showSnack(`Ruta copiada al portapapeles: ${item.fileName}`, 'success')
+      showSnack(t('cvs.toasts.pathCopied', { file: item.fileName }), 'success')
     }
   } catch {
-    showSnack(`Ruta: ${fullPath}`, 'info')
+    showSnack(t('cvs.toasts.pathInfo', { path: fullPath }), 'info')
   }
 }
 
@@ -356,14 +357,14 @@ onMounted(() => {
     <section class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
       <div class="flex flex-col gap-1">
         <div class="flex items-center gap-3">
-          <h1 class="text-2xl font-semibold text-on-surface tracking-tight">CVs generados</h1>
+          <h1 class="text-2xl font-semibold text-on-surface tracking-tight">{{ $t('cvs.title') }}</h1>
           <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high text-accent font-mono text-xs border border-border-subtle">
             <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
-            <span>{{ stats.total }} documentos</span>
+            <span>{{ $t('cvs.documentsCount', { count: stats.total }) }}</span>
           </div>
         </div>
         <p class="text-xs text-on-surface-variant max-w-2xl">
-          Curriculum Vitae adaptados y generados automáticamente por el agente local según cada oferta ATS y vacante detectada.
+          {{ $t('cvs.subtitle') }}
         </p>
       </div>
 
@@ -372,24 +373,24 @@ onMounted(() => {
         <button
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors shadow-sm active:scale-[0.98]"
           :disabled="openingFolder"
-          title="Abrir carpeta output/applications en el explorador de archivos del sistema (Linux, Mac o Windows)"
+          :title="$t('cvs.openFolderTip')"
           type="button"
           @click="openLocalFolder"
         >
           <span :class="['material-symbols-outlined text-[16px] text-outline', openingFolder ? 'animate-spin text-accent' : '']">
             {{ openingFolder ? 'sync' : 'folder_open' }}
           </span>
-          <span>Abrir carpeta local</span>
+          <span>{{ $t('cvs.openLocalFolder') }}</span>
         </button>
 
         <button
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors shadow-sm active:scale-[0.98]"
-          title="Recargar archivos de CVs y postulaciones"
+          :title="$t('cvs.refreshTip')"
           type="button"
           @click="loadData"
         >
           <span class="material-symbols-outlined text-[16px] text-outline">refresh</span>
-          <span>Actualizar</span>
+          <span>{{ $t('cvs.refresh') }}</span>
         </button>
       </div>
     </section>
@@ -399,9 +400,9 @@ onMounted(() => {
       <!-- KPI 1: TOTAL CVS GENERADOS -->
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">Total CVs Generados</span>
+          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.totalGenerated') }}</span>
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-accent font-mono text-[11px]">
-            +{{ stats.recentWeek }} esta semana
+            {{ $t('cvs.kpi.thisWeek', { count: stats.recentWeek }) }}
           </span>
         </div>
         <div class="flex items-baseline justify-between mt-3 mb-1">
@@ -419,16 +420,16 @@ onMounted(() => {
       <!-- KPI 2: ADAPTACIONES ATS -->
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">Adaptaciones ATS</span>
+          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.atsTailored') }}</span>
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-sky-400 font-mono text-[11px]">
-            Greenhouse & Lever & Ashby
+            {{ $t('cvs.kpi.atsPlatforms') }}
           </span>
         </div>
         <div class="flex items-baseline justify-between mt-3 mb-1">
           <span class="text-2xl font-semibold text-on-surface tracking-tight">
             {{ stats.tailored }} <span class="text-xs text-outline font-normal">/ {{ stats.total }}</span>
           </span>
-          <span class="font-mono text-xs text-sky-400">{{ stats.tailoredRatio }}% ratio</span>
+          <span class="font-mono text-xs text-sky-400">{{ $t('cvs.kpi.tailoredRatio', { ratio: stats.tailoredRatio }) }}</span>
         </div>
         <div class="h-7 w-full mt-1">
           <svg class="w-full h-full text-sky-400 overflow-visible" fill="none" preserveAspectRatio="none" viewBox="0 0 100 28">
@@ -438,17 +439,17 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- KPI 3: POSTULACIONES ACTIVAS (OPCIÓN C) -->
+      <!-- KPI 3: POSTULACIONES ACTIVAS -->
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">Postulaciones Activas</span>
+          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.activeApps') }}</span>
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-amber-400 font-mono text-[11px]">
-            En seguimiento
+            {{ $t('cvs.kpi.inTracking') }}
           </span>
         </div>
         <div class="flex items-baseline justify-between mt-3 mb-1">
           <span class="text-2xl font-semibold text-amber-400 tracking-tight">{{ stats.activeCount }}</span>
-          <span class="font-mono text-xs text-outline">{{ stats.activeRatio }}% en proceso</span>
+          <span class="font-mono text-xs text-outline">{{ $t('cvs.kpi.inProcessRatio', { ratio: stats.activeRatio }) }}</span>
         </div>
         <div class="h-7 w-full mt-1">
           <svg class="w-full h-full text-amber-400 overflow-visible" fill="none" preserveAspectRatio="none" viewBox="0 0 100 28">
@@ -461,17 +462,17 @@ onMounted(() => {
       <!-- KPI 4: ALMACENAMIENTO LOCAL -->
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">Almacenamiento Local</span>
+          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.localStorage') }}</span>
           <span class="inline-flex items-center gap-1.5 text-emerald-400 font-mono text-[11px]">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            Sincronizado
+            {{ $t('cvs.kpi.synced') }}
           </span>
         </div>
         <div class="flex items-baseline justify-between mt-3 mb-1">
           <span class="text-2xl font-semibold text-on-surface tracking-tight">
             {{ stats.totalMb }} <span class="text-xs text-outline font-normal">MB</span>
           </span>
-          <span class="font-mono text-xs text-outline">~{{ stats.avgKb }} KB/pdf</span>
+          <span class="font-mono text-xs text-outline">{{ $t('cvs.kpi.avgPerPdf', { avg: stats.avgKb }) }}</span>
         </div>
         <div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden mt-3">
           <div class="bg-accent h-full rounded-full transition-all" style="width: 28%;"></div>
@@ -490,7 +491,7 @@ onMounted(() => {
             <input
               v-model="search"
               class="w-full pl-9 pr-8 py-1.5 rounded-lg bg-surface-container text-on-surface text-xs placeholder:text-outline border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-              placeholder="Buscar por empresa, rol, fecha o archivo..."
+              :placeholder="$t('cvs.list.searchPlaceholder')"
               type="text"
             />
             <button
@@ -515,7 +516,7 @@ onMounted(() => {
               type="button"
               @click="selectedPlatform = 'all'"
             >
-              Todos ({{ stats.total }})
+              {{ $t('common.all') }} ({{ stats.total }})
             </button>
 
             <button
@@ -578,7 +579,7 @@ onMounted(() => {
             v-if="!filteredFiles.length && !loading"
             class="p-6 text-center text-xs text-outline font-mono bg-surface-container/30 rounded-lg border border-border-subtle"
           >
-            No se encontraron CVs con los filtros seleccionados
+            {{ $t('cvs.list.emptySearch') }}
           </div>
 
           <div
@@ -653,7 +654,7 @@ onMounted(() => {
                             : 'bg-surface-container text-outline'
                   ]"
                 >
-                  {{ item.applicationStatus }}
+                  {{ $t('status.' + item.applicationStatus) }}
                 </span>
               </div>
             </div>
@@ -662,7 +663,7 @@ onMounted(() => {
             <div class="absolute right-2 bottom-2 hidden group-hover:flex items-center gap-1 bg-surface-container-highest px-1.5 py-0.5 rounded shadow">
               <button
                 class="p-1 hover:text-accent transition-colors text-outline"
-                title="Descargar PDF"
+                :title="$t('cvs.detail.downloadPdf')"
                 type="button"
                 @click.stop="downloadPdf(item)"
               >
@@ -670,7 +671,7 @@ onMounted(() => {
               </button>
               <button
                 class="p-1 hover:text-accent transition-colors text-outline"
-                title="Copiar ruta local"
+                :title="$t('cvs.detail.copyLocalPath')"
                 type="button"
                 @click.stop="copyPath(item)"
               >
@@ -682,8 +683,8 @@ onMounted(() => {
 
         <!-- List Footer Counter -->
         <div class="pt-2 flex items-center justify-between font-mono text-[11px] text-outline border-t border-border-subtle">
-          <span>Mostrando {{ filteredFiles.length }} de {{ stats.total }} CVs</span>
-          <span v-if="selectedPlatform !== 'all'" class="text-accent">Filtro activo: {{ selectedPlatform }}</span>
+          <span>{{ $t('cvs.list.fileCount', { shown: filteredFiles.length, total: stats.total }) }}</span>
+          <span v-if="selectedPlatform !== 'all'" class="text-accent">{{ $t('cvs.list.activeFilter', { filter: selectedPlatform }) }}</span>
         </div>
       </div>
 
@@ -699,7 +700,7 @@ onMounted(() => {
                 {{ selectedCv?.company }} · {{ selectedCv?.role }}
               </span>
               <span class="font-mono text-[10px] text-outline truncate">
-                {{ selectedCv?.fileName || 'Ningún archivo seleccionado' }}
+                {{ selectedCv?.fileName || $t('cvs.detail.noFileSelected') }}
               </span>
             </div>
             <span
@@ -710,40 +711,40 @@ onMounted(() => {
                   : 'bg-accent/15 text-accent border border-accent/20'
               ]"
             >
-              {{ selectedCv?.isBase ? 'CV Base' : `${selectedCv?.platform} ATS-Ready` }}
+              {{ selectedCv?.isBase ? $t('cvs.detail.baseCv') : `${selectedCv?.platform} ATS-Ready` }}
             </span>
           </div>
 
           <!-- Right: Actions -->
           <div class="flex items-center gap-1.5 flex-wrap">
-            <!-- BOTÓN: VER VACANTE ASOCIADA (REQUERIMIENTO 4) -->
+            <!-- BOTÓN: VER VACANTE ASOCIADA -->
             <button
               v-if="selectedCv?.applicationUrl"
               class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-xs font-medium transition-colors shadow-sm"
-              title="Abrir la publicación original de la oferta en una pestaña nueva"
+              :title="$t('cvs.detail.openVacancyTip')"
               type="button"
               @click="openAssociatedVacancy(selectedCv)"
             >
               <span class="material-symbols-outlined text-[15px]">open_in_new</span>
-              <span>Ver vacante asociada</span>
+              <span>{{ $t('cvs.detail.openVacancy') }}</span>
             </button>
 
             <!-- BOTÓN: VER EN POSTULACIONES -->
             <button
               v-if="selectedCv?.applicationId"
               class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
-              title="Ir a la postulación en la vista de Postulaciones"
+              :title="$t('cvs.detail.goToAppTip')"
               type="button"
               @click="goToApplications(selectedCv)"
             >
               <span class="material-symbols-outlined text-[15px] text-accent">send</span>
-              <span>Ver postulación</span>
+              <span>{{ $t('cvs.detail.goToApp') }}</span>
             </button>
 
             <!-- Quick icon actions -->
             <button
               class="p-1.5 rounded hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors"
-              title="Copiar ruta absoluta del archivo al portapapeles"
+              :title="$t('cvs.detail.copyPathTip')"
               type="button"
               @click="copyPath(selectedCv)"
             >
@@ -752,7 +753,7 @@ onMounted(() => {
 
             <button
               class="p-1.5 rounded hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors"
-              title="Descargar este archivo PDF"
+              :title="$t('cvs.detail.downloadTip')"
               type="button"
               @click="downloadPdf(selectedCv)"
             >
@@ -761,7 +762,7 @@ onMounted(() => {
 
             <button
               class="p-1.5 rounded hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors"
-              title="Abrir PDF en pantalla completa en una nueva pestaña"
+              :title="$t('cvs.detail.openNewTabTip')"
               type="button"
               @click="openInNewTab(selectedCv)"
             >
@@ -777,25 +778,25 @@ onMounted(() => {
             :key="selectedCv.downloadUrl"
             class="viewer-frame rounded-md border border-border-subtle shadow-2xl"
             :src="selectedCv.downloadUrl"
-            title="Vista previa del CV generado"
+            :title="$t('cvs.detail.previewFrameTitle')"
           />
           <div
             v-else
             class="flex flex-col items-center justify-center p-12 text-center text-outline gap-2"
           >
             <span class="material-symbols-outlined text-4xl text-outline">description</span>
-            <span class="text-xs font-mono">Selecciona un CV de la lista para ver la vista previa</span>
+            <span class="text-xs font-mono">{{ $t('cvs.detail.selectCvPrompt') }}</span>
           </div>
         </div>
 
         <!-- VIEWER BOTTOM METADATA BAR -->
         <div class="h-10 px-4 bg-surface-container border-t border-border-subtle flex items-center justify-between text-outline font-mono text-[11px] flex-wrap gap-2">
           <div class="flex items-center gap-2.5">
-            <span>Archivo: <code class="text-on-surface-variant">{{ selectedCv?.fileName }}</code></span>
+            <span>{{ $t('cvs.detail.fileLabel') }} <code class="text-on-surface-variant">{{ selectedCv?.fileName }}</code></span>
             <span>•</span>
-            <span>Tamaño: <span class="text-on-surface">{{ selectedCv?.formattedSize }}</span></span>
+            <span>{{ $t('cvs.detail.sizeLabel') }} <span class="text-on-surface">{{ selectedCv?.formattedSize }}</span></span>
             <span class="hidden md:inline">•</span>
-            <span class="hidden md:inline">Modificado: <span class="text-on-surface">{{ selectedCv?.fullDate }}</span></span>
+            <span class="hidden md:inline">{{ $t('cvs.detail.modifiedLabel') }} <span class="text-on-surface">{{ selectedCv?.fullDate }}</span></span>
           </div>
 
           <div class="flex items-center gap-2.5">
@@ -804,10 +805,10 @@ onMounted(() => {
               class="inline-flex items-center gap-1 text-sky-400"
             >
               <span class="material-symbols-outlined text-[13px]">verified</span>
-              Postulación {{ selectedCv.applicationStatus }}
+              {{ $t('cvs.detail.applicationStatus', { status: $t('status.' + selectedCv.applicationStatus) }) }}
             </span>
             <span v-else class="text-outline">
-              {{ selectedCv?.isBase ? 'Plantilla Base' : 'Adaptado local' }}
+              {{ selectedCv?.isBase ? $t('cvs.detail.baseTemplate') : $t('cvs.detail.localTailored') }}
             </span>
           </div>
         </div>

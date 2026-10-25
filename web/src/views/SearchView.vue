@@ -15,6 +15,7 @@ import {
   stopScan,
   initScanSync,
 } from '../scanController.js'
+import { t } from '../i18n/index.js'
 
 const profile = ref(null)
 const loadingProfile = ref(true)
@@ -27,6 +28,13 @@ const platformFilter = ref('all')
 
 const existingApps = ref([])
 const activePreset = ref('QA / SDET')
+
+const localizedPresets = computed(() =>
+  PRESETS.map((p) => ({
+    ...p,
+    displayName: p.name === 'Todos' ? t('search.presets.all') : p.name,
+  }))
+)
 
 function notify(text, color = 'success') {
   Object.assign(snack, { show: true, text, color })
@@ -55,7 +63,7 @@ async function loadProfile() {
     await loadExistingApps()
     await initScanSync(existingApps.value)
   } catch (e) {
-    notify('No se pudo cargar el perfil: ' + e.message, 'warning')
+    notify(t('search.toasts.profileLoadError') + e.message, 'warning')
   } finally {
     loadingProfile.value = false
   }
@@ -65,14 +73,14 @@ onMounted(loadProfile)
 
 watch(scanning, (newVal, oldVal) => {
   if (oldVal === true && newVal === false) {
-    notify(`Búsqueda finalizada. ${matches.value.length} vacantes encontradas.`)
+    notify(t('search.toasts.scanFinished', { count: matches.value.length }))
   }
 })
 
 function applyPreset(preset) {
   activePreset.value = preset.name
   form.roles = [...preset.roles]
-  notify(`Preset "${preset.name}" aplicado (${preset.roles.length} roles)`)
+  notify(t('search.presets.appliedToast', { name: preset.name === 'Todos' ? t('search.presets.all') : preset.name, count: preset.roles.length }))
 }
 
 function resetToProfile() {
@@ -85,7 +93,7 @@ function resetToProfile() {
   if (profile.value?.personal_info?.years_of_experience) {
     form.maxYears = profile.value.personal_info.years_of_experience
   }
-  notify('Roles restablecidos desde tu perfil')
+  notify(t('search.presets.resetToast'))
 }
 
 function addRoleTag() {
@@ -107,7 +115,7 @@ function togglePlatform(plat) {
   const idx = form.platforms.indexOf(plat)
   if (idx > -1) {
     if (form.platforms.length === 1) {
-      return notify('Debes mantener al menos una plataforma seleccionada', 'warning')
+      return notify(t('search.params.mustKeepOne'), 'warning')
     }
     form.platforms.splice(idx, 1)
   } else {
@@ -118,9 +126,9 @@ function togglePlatform(plat) {
 async function triggerScan() {
   try {
     await startScan(existingApps.value)
-    notify('Búsqueda iniciada en segundo plano...')
+    notify(t('search.toasts.scanStarted'))
   } catch (err) {
-    notify('Error en el escaneo: ' + err.message, 'error')
+    notify(t('search.toasts.scanError') + err.message, 'error')
   }
 }
 
@@ -186,7 +194,7 @@ function isJobOpened(job) {
 async function prepareApplication(posting) {
   const compName = formatCompanyName(posting.company)
   if (isJobPrepared(posting)) {
-    return notify(`"${compName}" ya está en tu lista de postulaciones`, 'info')
+    return notify(t('search.toasts.prepared') + ` (${compName})`, 'info')
   }
   preparingMap[posting.url] = true
   try {
@@ -201,9 +209,9 @@ async function prepareApplication(posting) {
     preparedMap[posting.url] = true
     existingApps.value.unshift(created)
     await refreshAppStats()
-    notify(`Postulación agregada a "Pendiente de envío" para ${compName}`)
+    notify(t('search.toasts.prepared') + `: ${compName}`)
   } catch (err) {
-    notify('No se pudo guardar la postulación: ' + err.message, 'error')
+    notify(t('search.toasts.prepareError') + err.message, 'error')
   } finally {
     preparingMap[posting.url] = false
   }
@@ -213,6 +221,7 @@ async function tailorApplication(posting) {
   const compName = formatCompanyName(posting.company)
   tailoringMap[posting.url] = true
   try {
+    notify(t('search.toasts.tailorStarted'), 'info')
     const res = await api.tailorCv({
       company: compName,
       role: posting.title,
@@ -225,9 +234,9 @@ async function tailorApplication(posting) {
     }
     await loadExistingApps()
     await refreshAppStats()
-    notify(`CV adaptado generado para ${compName} (${res.cv})`)
+    notify(t('search.toasts.tailorSuccess') + `${compName} (${res.cv})`)
   } catch (err) {
-    notify('Error al adaptar CV con agente: ' + err.message, 'error')
+    notify(t('search.toasts.tailorError') + err.message, 'error')
   } finally {
     tailoringMap[posting.url] = false
   }
@@ -237,6 +246,7 @@ async function openInBrowser(posting) {
   const compName = formatCompanyName(posting.company)
   launchingMap[posting.url] = true
   try {
+    notify(t('search.toasts.playwrightLaunching'), 'info')
     await api.launchApply({
       url: posting.url,
       company: compName,
@@ -244,9 +254,9 @@ async function openInBrowser(posting) {
       cv: posting.cv || undefined,
     })
     openedMap[posting.url] = true
-    notify(`Navegador lanzado con Playwright para ${compName}`)
+    notify(t('search.toasts.playwrightSuccess') + `: ${compName}`)
   } catch (err) {
-    notify('Error al abrir navegador: ' + err.message, 'error')
+    notify(t('search.toasts.playwrightError') + err.message, 'error')
   } finally {
     launchingMap[posting.url] = false
   }
@@ -277,17 +287,17 @@ function getPlatformBadgeClass(ats) {
     <div class="flex flex-col gap-1">
       <div class="flex items-center justify-between flex-wrap gap-2">
         <h1 class="text-xl font-semibold text-on-surface tracking-tight">
-          Vacantes detectadas
+          {{ $t('search.title') }}
         </h1>
         <div class="flex items-center gap-2">
           <span class="inline-flex items-center gap-1.5 text-xs text-outline font-mono">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            Ashby • Greenhouse • Lever
+            {{ $t('search.platformsTag') }}
           </span>
         </div>
       </div>
       <p class="text-xs text-on-surface-variant">
-        Supervisión y preparación de posiciones filtradas en tiempo real sin requerimientos de residencia excluyentes.
+        {{ $t('search.subtitle') }}
       </p>
     </div>
 
@@ -296,7 +306,7 @@ function getPlatformBadgeClass(ats) {
       <!-- KPI 1: Total analizadas -->
       <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
         <div class="flex items-center justify-between text-on-surface-variant mb-2">
-          <span class="text-xs font-medium">Total analizadas</span>
+          <span class="text-xs font-medium">{{ $t('search.kpi.totalAnalyzed') }}</span>
           <span class="material-symbols-outlined text-[15px] text-outline">analytics</span>
         </div>
         <div class="flex items-end justify-between">
@@ -308,7 +318,7 @@ function getPlatformBadgeClass(ats) {
               <span class="material-symbols-outlined text-[13px]">
                 {{ scanning ? 'sync' : 'arrow_upward' }}
               </span>
-              <span>{{ progressPercent }}% completado</span>
+              <span>{{ progressPercent }}% {{ $t('search.kpi.completed') }}</span>
             </div>
           </div>
           <!-- Sparkline SVG -->
@@ -323,7 +333,7 @@ function getPlatformBadgeClass(ats) {
       <!-- KPI 2: Vacantes encontradas -->
       <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
         <div class="flex items-center justify-between text-on-surface-variant mb-2">
-          <span class="text-xs font-medium">Vacantes encontradas</span>
+          <span class="text-xs font-medium">{{ $t('search.kpi.openingsFound') }}</span>
           <span class="material-symbols-outlined text-[15px] text-outline">travel_explore</span>
         </div>
         <div class="flex items-end justify-between">
@@ -333,7 +343,7 @@ function getPlatformBadgeClass(ats) {
             </span>
             <div class="flex items-center gap-1 text-[11px] font-mono text-accent mt-0.5">
               <span class="material-symbols-outlined text-[13px]">add</span>
-              <span>{{ matches.length }} calificadas</span>
+              <span>{{ matches.length }} {{ $t('search.kpi.qualified') }}</span>
             </div>
           </div>
           <!-- Sparkline SVG -->
@@ -348,7 +358,7 @@ function getPlatformBadgeClass(ats) {
       <!-- KPI 3: Empresas activas / analizadas -->
       <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
         <div class="flex items-center justify-between text-on-surface-variant mb-2">
-          <span class="text-xs font-medium">Empresas analizadas</span>
+          <span class="text-xs font-medium">{{ $t('search.kpi.companiesAnalyzed') }}</span>
           <span class="material-symbols-outlined text-[15px] text-outline">domain</span>
         </div>
         <div class="flex items-end justify-between">
@@ -358,7 +368,7 @@ function getPlatformBadgeClass(ats) {
             </span>
             <div class="flex items-center gap-1 text-[11px] font-mono text-amber-400 mt-0.5">
               <span class="material-symbols-outlined text-[13px]">trending_up</span>
-              <span>{{ progress.platform ? progress.platform.toUpperCase() : 'Bolsas ATS' }}</span>
+              <span>{{ progress.platform ? progress.platform.toUpperCase() : $t('search.kpi.atsBoards') }}</span>
             </div>
           </div>
           <!-- Sparkline SVG -->
@@ -373,7 +383,7 @@ function getPlatformBadgeClass(ats) {
       <!-- KPI 4: Errores / descartadas -->
       <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
         <div class="flex items-center justify-between text-on-surface-variant mb-2">
-          <span class="text-xs font-medium">Errores / descartadas</span>
+          <span class="text-xs font-medium">{{ $t('search.kpi.errors') }}</span>
           <span class="material-symbols-outlined text-[15px] text-outline">error_outline</span>
         </div>
         <div class="flex items-end justify-between">
@@ -385,7 +395,7 @@ function getPlatformBadgeClass(ats) {
               <span class="material-symbols-outlined text-[13px]">
                 {{ errorCount === 0 ? 'check_circle' : 'warning' }}
               </span>
-              <span>{{ errorCount === 0 ? '0.00% tasa fallas' : `${errorCount} incidencias` }}</span>
+              <span>{{ errorCount === 0 ? $t('search.kpi.zeroErrors') : $t('search.kpi.incidents', { count: errorCount }) }}</span>
             </div>
           </div>
           <!-- Sparkline SVG -->
@@ -405,15 +415,15 @@ function getPlatformBadgeClass(ats) {
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center gap-2">
             <span class="text-[11px] font-mono uppercase tracking-wider text-outline font-semibold">
-              Presets de especialidad
+              {{ $t('search.presets.title') }}
             </span>
             <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-container-high text-accent border border-border-subtle">
-              Filtros sincronizados
+              {{ $t('search.presets.syncedBadge') }}
             </span>
           </div>
           <div class="flex items-center gap-1.5 overflow-x-auto py-1">
             <button
-              v-for="p in PRESETS"
+              v-for="p in localizedPresets"
               :key="p.name"
               :class="[
                 'px-3 py-1 rounded-md text-xs font-medium transition-colors shrink-0',
@@ -424,7 +434,7 @@ function getPlatformBadgeClass(ats) {
               type="button"
               @click="applyPreset(p)"
             >
-              {{ p.name }}
+              {{ p.displayName }}
             </button>
           </div>
         </div>
@@ -432,7 +442,7 @@ function getPlatformBadgeClass(ats) {
         <div class="flex items-center gap-3 self-end md:self-auto">
           <div class="flex items-center gap-1.5 text-xs text-outline font-mono bg-surface-container px-2.5 py-1.5 rounded-lg border border-border-subtle">
             <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
-            <span>Match activo: <strong class="text-on-surface font-semibold">{{ form.roles.length }} títulos</strong></span>
+            <span>{{ $t('search.presets.activeMatch', { count: form.roles.length }) }}</span>
           </div>
           <button
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border-subtle bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium transition-colors shadow-sm"
@@ -440,7 +450,7 @@ function getPlatformBadgeClass(ats) {
             @click="resetToProfile"
           >
             <span class="material-symbols-outlined text-[15px] text-outline">restart_alt</span>
-            <span>Restablecer</span>
+            <span>{{ $t('search.presets.reset') }}</span>
           </button>
         </div>
       </div>
@@ -448,25 +458,25 @@ function getPlatformBadgeClass(ats) {
       <!-- 2. BLOQUE CENTRAL: PARÁMETROS CLAVE & TOGGLES CON TOOLTIPS -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 py-1">
         <!-- Parámetro 1: Plataformas ATS -->
-        <div class="flex flex-col gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1">
-              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">Plataformas ATS</label>
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.atsPlatforms') }}</label>
               <div class="relative group/tip flex items-center cursor-help">
                 <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
                 <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-56 p-2 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
                   <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[13px]">hub</span> APIs Oficiales
+                    <span class="material-symbols-outlined text-[13px]">hub</span> {{ $t('search.params.officialApis') }}
                   </div>
-                  Escaneo directo en APIs públicas de Greenhouse, Ashby y Lever.
+                  {{ $t('search.params.atsTip') }}
                 </div>
               </div>
             </div>
             <span class="px-1.5 py-0.2 rounded bg-surface-container-high text-[10px] font-mono text-accent">
-              {{ form.platforms.length }} activas
+              {{ $t('search.params.activeCount', { count: form.platforms.length }) }}
             </span>
           </div>
-          <div class="flex items-center gap-1.5 pt-1 flex-wrap">
+          <div class="flex items-center gap-1.5 pt-0.5 flex-wrap">
             <button
               v-for="plat in ['greenhouse', 'ashby', 'lever']"
               :key="plat"
@@ -482,27 +492,33 @@ function getPlatformBadgeClass(ats) {
               {{ plat }}
             </button>
           </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">hub</span>
+              <span>{{ $t('search.params.scansPortals', { count: form.platforms.length }) }}</span>
+            </span>
+          </p>
         </div>
 
         <!-- Parámetro 2: Experiencia Máxima -->
-        <div class="flex flex-col gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1">
-              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">Experiencia Máx.</label>
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.maxExp') }}</label>
               <div class="relative group/tip flex items-center cursor-help">
                 <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
                 <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-56 p-2 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
                   <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[13px]">work_history</span> Límite de años
+                    <span class="material-symbols-outlined text-[13px]">work_history</span> {{ $t('search.params.yearsLimit') }}
                   </div>
-                  Descarta ofertas que exijan más años de experiencia de los configurados.
+                  {{ $t('search.params.maxExpTip') }}
                 </div>
               </div>
             </div>
-            <span class="text-[10px] font-mono text-outline">Rango 1-15</span>
+            <span class="text-[10px] font-mono text-outline">{{ $t('search.params.rangeExp') }}</span>
           </div>
-          <div class="flex items-center justify-between pt-1">
-            <span class="text-xs text-on-surface-variant font-medium">Hasta</span>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-xs text-on-surface-variant font-medium">{{ $t('search.params.upTo') }}</span>
             <div class="flex items-center gap-2">
               <input
                 v-model.number="form.maxYears"
@@ -511,63 +527,104 @@ function getPlatformBadgeClass(ats) {
                 min="1"
                 type="number"
               />
-              <span class="text-xs text-outline font-mono">años</span>
+              <span class="text-xs text-outline font-mono">{{ $t('search.params.years') }}</span>
             </div>
           </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">filter_list</span>
+              <span>{{ $t('search.params.discardsOver', { count: form.maxYears || 0 }) }}</span>
+            </span>
+          </p>
         </div>
 
-        <!-- Toggle 1: Solo LATAM / Global -->
-        <div class="flex items-center justify-between p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
-          <div class="flex flex-col gap-0.5">
+        <!-- Parámetro 3: Alcance Territorial (Filtro de Residencia) -->
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+          <div class="flex items-center justify-between">
             <div class="flex items-center gap-1">
-              <span class="text-xs font-medium text-on-surface">Solo LATAM / Global</span>
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.territorialScope') }}</label>
               <div class="relative group/tip flex items-center cursor-help">
                 <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
-                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-60 p-2.5 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
-                  <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[13px]">public</span> Filtro de Residencia
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-72 p-2.5 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
+                  <div class="font-semibold text-accent mb-1 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">public</span> {{ $t('search.params.residencyFilter') }}
                   </div>
-                  Descarta vacantes que exigen residencia en EE. UU., Europa o Asia.
+                  <div class="space-y-1.5 text-[11px]">
+                    <div>
+                      {{ $t('search.params.residencyLatamGlobalDesc') }}
+                    </div>
+                    <div>
+                      {{ $t('search.params.residencyLatamOnlyDesc') }}
+                    </div>
+                    <div>
+                      {{ $t('search.params.residencyAnyDesc') }}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <span class="text-[11px] text-outline leading-tight">Filtro territorial estricto</span>
+            <span class="text-[10px] font-mono text-outline">{{ $t('search.params.residence') }}</span>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer ml-3">
-            <input
-              v-model="form.latamOnly"
-              class="sr-only peer"
-              type="checkbox"
-            />
-            <div class="w-8 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-accent"></div>
-          </label>
+          <div class="pt-0.5">
+            <select
+              v-model="form.locationScope"
+              class="w-full py-1 px-2 text-xs font-medium bg-surface-card border border-border-muted rounded text-on-surface focus:outline-none focus:border-accent transition-colors shadow-sm cursor-pointer"
+            >
+              <option value="latam_global">{{ $t('search.params.optLatamGlobal') }}</option>
+              <option value="latam_only">{{ $t('search.params.optLatamOnly') }}</option>
+              <option value="any">{{ $t('search.params.optAny') }}</option>
+            </select>
+          </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span v-if="form.locationScope === 'latam_global'" class="text-amber-500/95 dark:text-amber-400 font-medium flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">filter_alt</span>
+              <span>{{ $t('search.params.tipLatamGlobal') }}</span>
+            </span>
+            <span v-else-if="form.locationScope === 'latam_only'" class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">location_on</span>
+              <span>{{ $t('search.params.tipLatamOnly') }}</span>
+            </span>
+            <span v-else class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">public_off</span>
+              <span>{{ $t('search.params.tipAny') }}</span>
+            </span>
+          </p>
         </div>
 
-        <!-- Toggle 2: Anti-CAPTCHA -->
-        <div class="flex items-center justify-between p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
-          <div class="flex flex-col gap-0.5">
+        <!-- Parámetro 4: Anti-CAPTCHA -->
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+          <div class="flex items-center justify-between">
             <div class="flex items-center gap-1">
-              <span class="text-xs font-medium text-on-surface">Anti-CAPTCHA</span>
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.antiCaptcha') }}</label>
               <div class="relative group/tip flex items-center cursor-help">
                 <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
                 <div class="absolute bottom-full right-0 mb-2 hidden group-hover/tip:flex flex-col w-64 p-2.5 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
                   <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[13px]">security</span> Protección Cloudflare
+                    <span class="material-symbols-outlined text-[13px]">security</span> {{ $t('search.params.cloudflareProtection') }}
                   </div>
-                  Oculta ofertas protegidas por Cloudflare Turnstile o reCAPTCHA invasivo.
+                  {{ $t('search.params.captchaTip') }}
                 </div>
               </div>
             </div>
-            <span class="text-[11px] text-outline leading-tight">Ocultar Turnstile / v3</span>
+            <span class="text-[10px] font-mono text-outline">{{ $t('search.params.botFilter') }}</span>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer ml-3">
-            <input
-              v-model="form.allowCaptcha"
-              class="sr-only peer"
-              type="checkbox"
-            />
-            <div class="w-8 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-accent"></div>
-          </label>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-xs text-on-surface-variant font-medium">{{ $t('search.params.hideTurnstile') }}</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                v-model="form.allowCaptcha"
+                class="sr-only peer"
+                type="checkbox"
+              />
+              <div class="w-8 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-accent"></div>
+            </label>
+          </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">shield</span>
+              <span>{{ form.allowCaptcha ? $t('search.params.captchaAllowed') : $t('search.params.captchaDiscarded') }}</span>
+            </span>
+          </p>
         </div>
       </div>
 
@@ -576,11 +633,11 @@ function getPlatformBadgeClass(ats) {
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <span class="text-[12px] font-semibold text-on-surface tracking-tight">
-              Cargos y Títulos ATS a buscar
+              {{ $t('search.roles.title') }}
             </span>
-            <span class="text-[11px] font-mono text-outline">({{ form.roles.length }} agregados)</span>
+            <span class="text-[11px] font-mono text-outline">{{ $t('search.roles.addedCount', { count: form.roles.length }) }}</span>
           </div>
-          <span class="text-[11px] text-outline font-mono">Presiona Enter o Añadir para sumar variantes</span>
+          <span class="text-[11px] text-outline font-mono">{{ $t('search.roles.helpText') }}</span>
         </div>
 
         <div class="flex items-center gap-2">
@@ -589,7 +646,7 @@ function getPlatformBadgeClass(ats) {
             <input
               v-model="newRoleInput"
               class="w-full pl-9 pr-4 py-2 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors shadow-sm"
-              placeholder="Escribe un rol o palabra clave y presiona Enter o Añadir..."
+              :placeholder="$t('search.roles.placeholder')"
               type="text"
               @keydown.enter.prevent="addRoleTag"
             />
@@ -600,7 +657,7 @@ function getPlatformBadgeClass(ats) {
             @click="addRoleTag"
           >
             <span class="material-symbols-outlined text-[15px] text-accent">add</span>
-            <span>Añadir título</span>
+            <span>{{ $t('search.roles.addBtn') }}</span>
           </button>
         </div>
 
@@ -613,7 +670,7 @@ function getPlatformBadgeClass(ats) {
           >
             <span>{{ r }}</span>
             <button
-              aria-label="Eliminar tag"
+              :aria-label="$t('search.roles.deleteAria')"
               class="text-outline hover:text-on-surface p-0.5 transition-colors"
               type="button"
               @click="removeRoleTag(idx)"
@@ -633,13 +690,13 @@ function getPlatformBadgeClass(ats) {
       <div class="flex items-center justify-between flex-wrap gap-2">
         <div class="flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-accent animate-ping"></span>
-          <span class="text-xs font-semibold text-on-surface">Escaneando bolsas ATS en tiempo real...</span>
+          <span class="text-xs font-semibold text-on-surface">{{ $t('search.live.scanningRealtime') }}</span>
           <span v-if="progress.company" class="text-xs font-mono text-outline">
             [{{ progress.platform.toUpperCase() }}] {{ formatCompanyName(progress.company) }}
           </span>
         </div>
         <div class="text-xs font-mono text-on-surface-variant">
-          {{ progress.checked }} / {{ progress.total }} empresas ({{ progressPercent }}%)
+          {{ $t('search.live.companiesProgress', { checked: progress.checked, total: progress.total, percent: progressPercent }) }}
         </div>
       </div>
       <div class="w-full bg-surface-container h-2 rounded-full overflow-hidden">
@@ -659,7 +716,7 @@ function getPlatformBadgeClass(ats) {
           <input
             v-model="tableSearch"
             class="w-full pl-8 pr-3 py-1.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors"
-            placeholder="Filtrar por puesto o empresa..."
+            :placeholder="$t('search.table.searchPlaceholder')"
             type="text"
           />
         </div>
@@ -668,7 +725,7 @@ function getPlatformBadgeClass(ats) {
             v-model="platformFilter"
             class="px-2.5 py-1.5 rounded-lg bg-surface-container border border-border-subtle text-xs text-on-surface focus:outline-none cursor-pointer"
           >
-            <option value="all">Todas las plataformas ({{ matches.length }})</option>
+            <option value="all">{{ $t('search.table.allPlatforms', { count: matches.length }) }}</option>
             <option value="greenhouse">Greenhouse</option>
             <option value="ashby">Ashby</option>
             <option value="lever">Lever</option>
@@ -680,7 +737,7 @@ function getPlatformBadgeClass(ats) {
             @click="showLogs = !showLogs"
           >
             <span class="material-symbols-outlined text-[15px]">warning</span>
-            <span>{{ showLogs ? 'Ocultar errores' : `Ver errores (${errorCount})` }}</span>
+            <span>{{ showLogs ? $t('search.table.hideErrors') : $t('search.table.viewErrors', { count: errorCount }) }}</span>
           </button>
         </div>
       </div>
@@ -697,13 +754,13 @@ function getPlatformBadgeClass(ats) {
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="border-b border-border-subtle bg-surface-card text-outline uppercase tracking-wider text-[11px] font-mono">
-              <th class="py-2.5 px-3 font-medium">ATS / ID</th>
-              <th class="py-2.5 px-3 font-medium">Empresa</th>
-              <th class="py-2.5 px-3 font-medium">Puesto de trabajo</th>
-              <th class="py-2.5 px-3 font-medium">Ubicación</th>
-              <th class="py-2.5 px-3 font-medium">Exp. requerida</th>
-              <th class="py-2.5 px-3 font-medium">Match</th>
-              <th class="py-2.5 px-3 font-medium text-right pr-4">Acciones</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colAts') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colCompany') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colRole') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colLocation') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colExp') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colMatch') }}</th>
+              <th class="py-2.5 px-3 font-medium text-right pr-4">{{ $t('search.table.colActions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-border-subtle">
@@ -729,7 +786,7 @@ function getPlatformBadgeClass(ats) {
                   <span
                     v-if="job.has_captcha"
                     class="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 font-mono text-[9px] border border-amber-500/20"
-                    title="Esta vacante requiere resolver captcha"
+                    :title="$t('search.table.captchaRequired')"
                   >
                     Captcha
                   </span>
@@ -752,16 +809,16 @@ function getPlatformBadgeClass(ats) {
               <td class="py-3 px-3">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[11px]">
                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  {{ job.location || 'Remote' }}
+                  {{ job.location || $t('common.remote') }}
                 </span>
               </td>
 
               <!-- Exp. requerida -->
               <td class="py-3 px-3 font-mono text-on-surface-variant">
-                {{ job.required_years ? `${job.required_years}+ años` : 'No especificada' }}
+                {{ job.required_years ? $t('search.table.expYears', { count: job.required_years }) : $t('search.table.expNotSpecified') }}
               </td>
 
-              <!-- Match (Punto 1 implementado) -->
+              <!-- Match -->
               <td class="py-3 px-3">
                 <div class="flex items-center gap-2">
                   <div class="w-14 bg-surface-container h-1.5 rounded-full overflow-hidden">
@@ -803,7 +860,7 @@ function getPlatformBadgeClass(ats) {
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span>{{ preparingMap[job.url] ? 'Preparando...' : (isJobPrepared(job) ? 'Preparado' : 'Preparar') }}</span>
+                    <span>{{ preparingMap[job.url] ? $t('search.table.btnPreparing') : (isJobPrepared(job) ? $t('search.table.btnPrepared') : $t('search.table.btnPrepare')) }}</span>
                   </button>
 
                   <!-- Adaptar CV con agente IA -->
@@ -817,7 +874,7 @@ function getPlatformBadgeClass(ats) {
                           : 'bg-accent-subtle hover:bg-accent/20 text-accent border border-transparent'
                     ]"
                     :disabled="tailoringMap[job.url]"
-                    :title="tailoringMap[job.url] ? 'El agente está adaptando el CV para esta vacante...' : (job.cv ? `CV generado: ${job.cv}` : 'Generar CV adaptado a medida para esta vacante')"
+                    :title="tailoringMap[job.url] ? $t('search.table.tailorTipInProgress') : (job.cv ? $t('search.table.tailorTipReady', { cv: job.cv }) : $t('search.table.tailorTipDefault'))"
                     type="button"
                     @click="tailorApplication(job)"
                   >
@@ -854,7 +911,7 @@ function getPlatformBadgeClass(ats) {
                       class="material-symbols-outlined text-[13px] leading-none text-accent"
                     >auto_fix_high</span>
 
-                    <span>{{ tailoringMap[job.url] ? 'Adaptando CV...' : (isJobTailored(job) ? 'CV Adaptado' : 'Adaptar CV') }}</span>
+                    <span>{{ tailoringMap[job.url] ? $t('search.table.btnTailoring') : (isJobTailored(job) ? $t('search.table.btnTailored') : $t('search.table.btnTailor')) }}</span>
                   </button>
 
                   <!-- Abrir formulario Playwright -->
@@ -868,7 +925,7 @@ function getPlatformBadgeClass(ats) {
                           : 'bg-surface-container hover:bg-surface-container-high border-border-subtle text-outline hover:text-on-surface'
                     ]"
                     :disabled="launchingMap[job.url]"
-                    title="Abrir formulario en navegador Playwright"
+                    :title="$t('search.table.openPlaywright')"
                     type="button"
                     @click="openInBrowser(job)"
                   >
@@ -890,7 +947,7 @@ function getPlatformBadgeClass(ats) {
                     class="p-1 rounded text-outline hover:text-on-surface transition-colors"
                     rel="noopener noreferrer"
                     target="_blank"
-                    title="Abrir vacante externa"
+                    :title="$t('search.table.openExternal')"
                   >
                     <span class="material-symbols-outlined text-[15px] block">open_in_new</span>
                   </a>
@@ -904,10 +961,10 @@ function getPlatformBadgeClass(ats) {
                 <div class="flex flex-col items-center justify-center gap-2">
                   <span class="material-symbols-outlined text-[36px] text-outline opacity-60">search_off</span>
                   <p class="text-xs font-medium text-on-surface">
-                    {{ scanning ? 'Buscando ofertas que coincidan con tus filtros...' : 'No hay vacantes en esta vista' }}
+                    {{ scanning ? $t('search.table.emptyTitleScanning') : $t('search.table.emptyTitleIdle') }}
                   </p>
                   <p class="text-[11px] text-outline max-w-sm">
-                    {{ scanning ? 'Las ofertas aparecerán aquí en tiempo real a medida que sean descubiertas.' : 'Inicia un nuevo escaneo desde el botón superior o amplía tus filtros de búsqueda.' }}
+                    {{ scanning ? $t('search.table.emptyDescScanning') : $t('search.table.emptyDescIdle') }}
                   </p>
                 </div>
               </td>
@@ -920,7 +977,7 @@ function getPlatformBadgeClass(ats) {
       <div class="p-3 border-t border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-outline">
         <div class="flex items-center gap-2">
           <span>
-            Mostrando <span class="text-on-surface font-medium">{{ filteredMatches.length }}</span> de <span class="text-on-surface font-medium">{{ matches.length }}</span> vacantes
+            {{ $t('search.table.showingFooter', { shown: filteredMatches.length, total: matches.length }) }}
           </span>
         </div>
       </div>

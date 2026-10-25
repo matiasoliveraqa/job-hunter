@@ -321,18 +321,19 @@ def apply_command(args):
             # Audit and highlight any required fields (* or required attribute)
             missing_required = await applicator.audit_and_highlight_required_fields()
             if missing_required:
-                console.print(f"[yellow][REQUIRED][/yellow] Se detectaron {len(missing_required)} campos obligatorios pendientes resaltados en amarillo en el navegador.")
+                console.print(f"[yellow][REQUIRED][/yellow] Detected {len(missing_required)} missing required field(s) highlighted in yellow in the browser.")
             else:
-                console.print("[green][OK][/green] Todos los campos obligatorios (*) fueron completados.")
+                console.print("[green][OK][/green] All required fields (*) have been completed.")
 
             detected_captcha = await applicator.detect_captcha()
             if detected_captcha:
-                console.print(f"[yellow][CAPTCHA][/yellow] Formulario protegido con [bold]{detected_captcha}[/bold]. Modo de evasión stealth activo.")
+                console.print(f"[yellow][CAPTCHA][/yellow] Form protected by [bold]{detected_captcha}[/bold]. Stealth evasion mode active.")
 
             # Save execution script and metadata with URL + completed fields inside the company folder
+            target_url = page.url if page.url and not any(p in page.url for p in ["proxy.html", "about:blank", "googleapis.com"]) else url
             script_path = _save_application_artifacts(
                 app_dir=app_dir,
-                url=page.url,
+                url=target_url,
                 company=company,
                 role=role,
                 cv_path=cv_path,
@@ -343,8 +344,8 @@ def apply_command(args):
             console.print(f"[green][SAVED][/green] Application script & field log saved to: [cyan]{script_path}[/cyan]")
             console.print("Please review the details in the opened browser, complete any employer-specific questions, and click Submit.")
         except Exception as e:
-            console.print(f"[yellow][WARNING][/yellow] Error durante el autocompletado: {e}")
-            console.print("El navegador permanecerá abierto para que puedas completar o revisar los campos manualmente.")
+            console.print(f"[yellow][WARNING][/yellow] Error during auto-fill: {e}")
+            console.print("The browser will remain open so you can review or complete fields manually.")
 
         console.print("[dim]The session will close when you close the browser window.[/dim]\n")
 

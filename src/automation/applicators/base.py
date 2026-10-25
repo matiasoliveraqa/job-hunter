@@ -37,6 +37,44 @@ class BaseApplicator(ABC):
         and some Greenhouse boards), automatically switch to the application form view.
         """
         try:
+            # 0. Check for embedded ATS form iframes ONLY if we are NOT already on an ATS domain
+            current_url = self.page.url
+            url_lower = current_url.lower()
+            is_on_ats = any(d in url_lower for d in ["greenhouse.io", "lever.co", "ashbyhq.com"])
+
+            if not is_on_ats:
+                from urllib.parse import urlparse
+                iframe_selectors = [
+                    "iframe#grnhse_iframe",
+                    "iframe[name='grnhse_iframe']",
+                    "iframe[src*='boards.greenhouse.io']",
+                    "iframe[src*='job-boards.greenhouse.io']",
+                    "iframe[src*='jobs.lever.co']",
+                    "iframe[src*='jobs.ashbyhq.com']",
+                ]
+                for ifr_sel in iframe_selectors:
+                    ifr = self.page.locator(ifr_sel)
+                    if await ifr.count() > 0:
+                        src = await ifr.first.get_attribute("src")
+                        if src and (src.startswith("http://") or src.startswith("https://") or src.startswith("//")):
+                            full_src = ("https:" + src) if src.startswith("//") else src
+                            parsed_host = urlparse(full_src).netloc.lower()
+                            if any(d in parsed_host for d in ["greenhouse.io", "lever.co", "ashbyhq.com"]):
+                                print(f"  [OK] Found embedded ATS form iframe ({full_src[:65]}...). Navigating directly to form...")
+                                await self.page.goto(full_src, wait_until="domcontentloaded")
+                                await asyncio.sleep(2)
+                                return
+
+                for f in self.page.frames:
+                    if f != self.page.main_frame:
+                        f_url = f.url or ""
+                        parsed_host = urlparse(f_url).netloc.lower()
+                        if any(d in parsed_host for d in ["job-boards.greenhouse.io", "boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com"]):
+                            print(f"  [OK] Found embedded ATS frame URL. Navigating directly to {f_url[:65]}...")
+                            await self.page.goto(f_url, wait_until="domcontentloaded")
+                            await asyncio.sleep(2)
+                            return
+
             # Check if core form inputs are already visible
             core_inputs = self.page.locator(
                 "input[type='file'], input[type='email'], input#first_name, "
@@ -575,6 +613,13 @@ class BaseApplicator(ABC):
             return self.p_info.current_company
         if any(k in q for k in ["english level", "english proficiency", "level of english", "your english"]):
             return self.prefs.english_level or "B2 Upper Intermediate"
+        if any(k in q for k in ["native language", "mother tongue", "first language", "idioma nativo"]):
+            return "Spanish"
+
+        # Explicit instruction: e.g. "type 'YES' to confirm" or "enter 'AGREE'"
+        m_type = re.search(r"(?:type|enter|write)\s+['\"]([^'\"]+)['\"]", question_text, re.IGNORECASE)
+        if m_type:
+            return m_type.group(1).strip()
 
         oq = getattr(self.profile, "open_questions", None)
         if any(k in q for k in ["level of education", "highest level of education", "education completed", "educational background"]):
@@ -701,11 +746,130 @@ class BaseApplicator(ABC):
 
         return None
 
+    async def fill_react_select(
+        self,
+        target,
+        preferred_choices: Optional[List[str]] = None,
+        query_text: str = "",
+        fallback_first: bool = False,
+        description: str = "",
+        allow_multi: bool = True,
+    ) -> Optional[str]:
+        """
+        Interact with a React-Select, Ashby, or custom ARIA combobox component:
+        1. Click or focus the target input/control.
+        2. If query_text is provided, type it sequentially to query autocomplete options.
+        3. Scopes search strictly to the active .select__menu / .select__menu-list container.
+        4. Matches against preferred_choices. Supports multi-selection if supported by the component.
+        5. If no match and fallback_first is True, clicks the first enabled option.
+        """
+        try:
+            loc = self.page.locator(target) if isinstance(target, str) else target
+            if await loc.count() == 0:
+                return None
+            el = loc.first
+            await el.scroll_into_view_if_needed()
+
+            # Check if this is a multi-select control
+            is_multi = allow_multi and await el.evaluate(
+                """(node) => {
+                    if (node.id && node.id.includes('[]')) return true;
+                    if (node.getAttribute('aria-multiselectable') === 'true') return true;
+                    const ctrl = node.closest('.select__control, [class*="select__control"]');
+                    if (ctrl && (ctrl.querySelector('[class*="multi-value"]') || (ctrl.className || '').includes('is-multi'))) return true;
+                    const wrapper = node.closest('[class*="field"], [class*="question"]');
+                    if (wrapper && /select all/i.test(wrapper.innerText)) return true;
+                    return false;
+                }"""
+            )
+
+            await el.click()
+            await asyncio.sleep(0.35)
+
+            if query_text:
+                try:
+                    await el.fill("")
+                except Exception:
+                    pass
+                await el.press_sequentially(query_text, delay=50)
+                await asyncio.sleep(0.8)
+
+            menu = self.page.locator(".select__menu, .select__menu-list, [class*='menu-list']").first
+            if await menu.count() == 0:
+                # Retry clicking parent container if input didn't open menu
+                parent_ctrl = el.locator("xpath=ancestor::*[contains(@class, 'select__control')][1]")
+                if await parent_ctrl.count() > 0:
+                    await parent_ctrl.first.click()
+                    await asyncio.sleep(0.35)
+                menu = self.page.locator(".select__menu, .select__menu-list, [class*='menu-list']").first
+
+            if await menu.count() == 0:
+                return None
+
+            selected_list = []
+
+            # 1. Match preferred choices
+            if preferred_choices:
+                for choice in preferred_choices:
+                    if not choice:
+                        continue
+                    menu = self.page.locator(".select__menu, .select__menu-list, [class*='menu-list']").first
+                    if await menu.count() == 0:
+                        await el.click()
+                        await asyncio.sleep(0.3)
+                        menu = self.page.locator(".select__menu, .select__menu-list, [class*='menu-list']").first
+                        if await menu.count() == 0:
+                            break
+
+                    opt = menu.locator(".select__option, [role='option']").filter(has_text=choice).first
+                    if await opt.count() > 0 and await opt.is_visible():
+                        txt = (await opt.inner_text() or "").strip()
+                        await opt.click()
+                        selected_list.append(txt)
+                        await asyncio.sleep(0.3)
+                        if not is_multi:
+                            break
+
+            if selected_list:
+                result_txt = ", ".join(selected_list)
+                if description:
+                    self.filled_fields[description] = result_txt
+                    print(f"  [OK] Selected {description}: '{result_txt}'")
+                await self.page.keyboard.press("Escape")
+                return result_txt
+
+            # 2. If required or fallback_first, select first non-disabled option
+            if fallback_first:
+                first_opt = menu.locator(
+                    ".select__option:not([class*='disabled']):not([aria-disabled='true']), "
+                    "[role='option']:not([aria-disabled='true'])"
+                ).first
+                if await first_opt.count() > 0 and await first_opt.is_visible():
+                    txt = (await first_opt.inner_text() or "").strip()
+                    await first_opt.click()
+                    if description:
+                        self.filled_fields[description] = txt
+                        print(f"  [OK] Selected {description} (fallback): '{txt}'")
+                    await asyncio.sleep(0.3)
+                    await self.page.keyboard.press("Escape")
+                    return txt
+
+            await self.page.keyboard.press("Escape")
+        except Exception as e:
+            print(f"  [!] fill_react_select error on {description}: {e}")
+        return None
+
     def _desired_dropdown_choice(self, question_text: str) -> Optional[List[str]]:
         """Return prioritized list of option substrings to pick for a dropdown/select question."""
         q = (question_text or "").strip().lower()
         if not q:
             return None
+
+        # Explicit instruction in question: e.g. "please select 'Digital Therapeutics' from the list below"
+        m_instruct = re.search(r"(?:please\s+)?select\s+['\"]([^'\"]+)['\"]", question_text, re.IGNORECASE)
+        if m_instruct:
+            target_val = m_instruct.group(1).strip()
+            return [target_val]
         if any(k in q for k in ["visa sponsorship", "require sponsorship", "require employer sponsorship", "h-1b"]):
             return ["No"] if self.p_info.requires_us_visa_sponsorship.strip().lower() != "yes" else ["Yes"]
         if "authorized to work" in q and any(c in q for c in ["united states", "u.s.", " in the us", "brazil", "brasil", "uk", "canada"]):
@@ -716,10 +880,31 @@ class BaseApplicator(ABC):
             return ["Yes"]
         if any(k in q for k in ["privacy policy", "consent", "interview transcript", "acknowledge", "data processing", "agree"]):
             return ["Yes, I consent", "Yes", "I agree", "Agree", "Accept"]
-        if any(k in q for k in ["english"]):
+        if any(k in q for k in ["country are you currently a resident", "country of residence", "current resident of", "resident of", "country you reside", "country do you reside", "país de residencia"]):
+            return [self.p_info.country, "Uruguay"]
+        if any(k in q for k in ["based in united states", "state of residence", "outside of the united states", "outside the united states", "state in the us"]):
+            return [
+                "I am not located in the United States of America currently",
+                "I am not located in the United States",
+                "Not located in the United States",
+                "Outside the United States",
+                "N/A",
+                "None",
+            ]
+        if any(k in q for k in ["native language", "mother tongue", "first language", "primary language", "idioma nativo", "lengua materna"]):
+            return ["Spanish (es)", "Spanish", "Español"]
+        if any(k in q for k in ["english level", "english proficiency", "level of english", "proficiency in english", "your english", "english"]):
             return ["B2", "Upper Intermediate", "Fluent", "Advanced", "Professional", "Intermediate"]
-        if any(k in q for k in ["level of education", "highest level of education", "education"]):
-            return ["Bachelor", "University", "Undergraduate", "Some College", "Associate"]
+        if any(k in q for k in ["languages you are proficient in", "language proficiency", "languages you speak", "working language", "idiomas", "language"]):
+            return ["American English (en)", "English", "Spanish (es)", "Spanish"]
+        if any(k in q for k in ["skills category", "core strengths", "functional area", "primary skill", "area of expertise"]):
+            return ["Software Engineering", "Quality Assurance", "Information Technology", "Computer Science"]
+        if any(k in q for k in ["degree", "título", "titulo", "level of education", "highest level of education", "education"]):
+            return ["Bachelors Degree", "Bachelor", "Engineer's Degree", "Associates Degree", "University", "Undergraduate", "Some College"]
+        if any(k in q for k in ["discipline", "major", "field of study", "carrera"]):
+            return ["Computer Science", "Information Systems", "Information Technology", "Software Engineering", "Engineering"]
+        if any(k in q for k in ["location (city)", "city of residence", "current city", "ciudad"]):
+            return [self.p_info.location, "Montevideo, Uruguay", self.p_info.city, "Montevideo"]
         if any(k in q for k in ["gender", "sex"]):
             chosen = getattr(self.p_info, "gender", None)
             return [chosen, "Decline to self-identify", "Prefer not to say"] if chosen else ["Decline to self-identify", "Prefer not to say"]
@@ -737,8 +922,13 @@ class BaseApplicator(ABC):
     async def fill_custom_questions(self, salary_str: str = "", salary_num: Optional[int] = None) -> None:
         """Inspect visible empty textareas, text inputs, selects, radio groups, and comboboxes."""
         try:
-            # 1. Textareas and text inputs (excluding React-Select comboboxes)
-            fields = self.page.locator("textarea, input[type='text']:not([role='combobox']), input:not([type]):not([role='combobox'])")
+            # 1. Textareas, text inputs, and number inputs (strictly excluding comboboxes & react-select hidden validation inputs)
+            fields = self.page.locator(
+                "textarea, "
+                "input[type='text']:not([role='combobox']), "
+                "input:not([type]):not([role='combobox']), "
+                "input[type='number']"
+            )
             count = await fields.count()
             for i in range(count):
                 el = fields.nth(i)
@@ -750,7 +940,15 @@ class BaseApplicator(ABC):
 
                 meta = await el.evaluate(
                     """(node) => {
-                        if (node.classList && node.classList.contains('select__input')) return null;
+                        // Exclude React-Select inputs and hidden dummy validation fields
+                        if (node.classList && (
+                            node.classList.contains('select__input') ||
+                            node.classList.contains('iti__search-input') ||
+                            node.className.includes('requiredInput')
+                        )) return null;
+                        if (node.getAttribute('tabindex') === '-1' || node.getAttribute('aria-hidden') === 'true') return null;
+                        if (node.closest('.select__control, .select__value-container, [class*="select__"], [id*="country-listbox"]')) return null;
+
                         const parts = [];
                         let required = false;
                         if (node.hasAttribute('required') || node.getAttribute('aria-required') === 'true') {
@@ -792,7 +990,7 @@ class BaseApplicator(ABC):
                         if (/\\*|\\b(required|mandatory)\\b/i.test(text)) {
                             required = true;
                         }
-                        return { qText: text, isRequired: required };
+                        return { qText: text, isRequired: required, inputType: node.type || 'text', id: node.id || '' };
                     }"""
                 )
                 if not meta or not meta.get("qText"):
@@ -800,7 +998,27 @@ class BaseApplicator(ABC):
 
                 q_text = meta["qText"]
                 is_required = bool(meta.get("isRequired"))
+                input_type = meta.get("inputType", "text")
                 short_q = (q_text[:45] + "...") if len(q_text) > 45 else q_text
+
+                # Number inputs (e.g. education start/end year)
+                if input_type == "number":
+                    lower_q = (q_text + " " + meta.get("id", "")).lower()
+                    if "start" in lower_q and ("year" in lower_q or "date" in lower_q):
+                        await el.fill("2021")
+                        self.filled_fields[f"Number ({short_q})"] = "2021"
+                        print(f"  [OK] Filled year '2021' for '{short_q}'")
+                        continue
+                    elif ("end" in lower_q or "graduat" in lower_q) and ("year" in lower_q or "date" in lower_q):
+                        await el.fill("2024")
+                        self.filled_fields[f"Number ({short_q})"] = "2024"
+                        print(f"  [OK] Filled year '2024' for '{short_q}'")
+                        continue
+                    elif is_required:
+                        await el.fill("7")
+                        self.filled_fields[f"Number ({short_q})"] = "7"
+                        print(f"  [OK] Filled '7' for '{short_q}'")
+                        continue
 
                 # A. Deterministic profile & preferences fields
                 answer = self._generate_deterministic_answer(q_text, salary_str=salary_str, salary_num=salary_num)
@@ -808,9 +1026,9 @@ class BaseApplicator(ABC):
                 # B. Open-ended employer questions: analyze with local LLM agent based on candidate profile and job context
                 if not answer:
                     try:
-                        req_badge = " [Obligatorio *]" if is_required else ""
-                        await self.show_hud_status(f"Job Hunter IA: Pensando respuesta para '{short_q}'{req_badge}...", status="thinking")
-                        await self.highlight_field_thinking(el, placeholder_text="Job Hunter IA pensando respuesta...")
+                        req_badge = " [Required *]" if is_required else ""
+                        await self.show_hud_status(f"Job Hunter AI: Drafting answer for '{short_q}'{req_badge}...", status="thinking")
+                        await self.highlight_field_thinking(el, placeholder_text="Job Hunter AI drafting answer...")
 
                         from src.automation.agent_adapter import answer_form_question
                         body_ctx = await self.page.evaluate("() => (document.body ? document.body.innerText.slice(0, 1500) : '')")
@@ -823,7 +1041,7 @@ class BaseApplicator(ABC):
                             is_required=is_required,
                         )
                     except Exception as err:
-                        print(f"  [!] Error consultando IA para '{short_q}': {err}")
+                        print(f"  [!] Error querying AI for '{short_q}': {err}")
                         answer = None
                     finally:
                         await self.clear_field_highlight(el)
@@ -858,55 +1076,90 @@ class BaseApplicator(ABC):
                 cb = combos.nth(i)
                 if not await cb.is_visible():
                     continue
+
                 meta = await cb.evaluate(
                     """(node) => {
+                        // Skip phone search input inside international phone dropdown
+                        if (node.classList && node.classList.contains('iti__search-input')) return null;
+                        if (node.closest('#iti-0__country-listbox')) return null;
+
                         const ctrl = node.closest('.select__control, [class*="select__control"], [class*="select-shell"]');
-                        if (ctrl && ctrl.querySelector('[class*="single-value"]')) {
-                            return { alreadySelected: true, qText: '' };
+                        if (ctrl && (ctrl.querySelector('[class*="single-value"]') || ctrl.querySelector('[class*="multi-value"]'))) {
+                            return { alreadySelected: true, qText: '', isRequired: false };
                         }
                         const parts = [];
+                        let required = false;
+                        if (node.hasAttribute('required') || node.getAttribute('aria-required') === 'true') {
+                            required = true;
+                        }
                         if (node.id) {
                             const lbl = document.querySelector(`label[for="${CSS.escape(node.id)}"]`);
-                            if (lbl) parts.push(lbl.innerText);
+                            if (lbl) {
+                                parts.push(lbl.innerText);
+                                if (lbl.innerText.includes('*') || lbl.querySelector('.asterisk, [class*="required"], [class*="asterisk"]')) {
+                                    required = true;
+                                }
+                            }
                         }
                         const wrapper = node.closest('[class*="field"], [class*="question"], .application-question, .select, fieldset');
-                        if (wrapper) parts.push(wrapper.innerText.slice(0, 320));
+                        if (wrapper) {
+                            parts.push(wrapper.innerText.slice(0, 320));
+                            if (wrapper.innerText.includes('*') || wrapper.querySelector('.asterisk, [class*="required"], [class*="asterisk"]')) {
+                                required = true;
+                            }
+                            if (/\\b(required|mandatory)\\b/i.test(wrapper.className || '')) {
+                                required = true;
+                            }
+                        }
                         if (node.getAttribute('aria-label')) parts.push(node.getAttribute('aria-label'));
-                        return { alreadySelected: false, qText: parts.join(' ').replace(/\\s+/g, ' ').trim() };
+                        const text = parts.join(' ').replace(/\\s+/g, ' ').trim();
+                        if (/\\*|\\b(required|mandatory)\\b/i.test(text)) {
+                            required = true;
+                        }
+                        return { alreadySelected: false, qText: text, isRequired: required, id: node.id || '' };
                     }"""
                 )
-                if meta.get("alreadySelected") or not meta.get("qText"):
+                if not meta or meta.get("alreadySelected") or not meta.get("qText"):
                     continue
+
                 q_text = meta["qText"]
-                choices = self._desired_dropdown_choice(q_text)
-                if not choices:
+                is_required = bool(meta.get("isRequired"))
+                short_q = (q_text[:45] + "...") if len(q_text) > 45 else q_text
+                q_lower = q_text.lower()
+
+                # A. Location (City)
+                if any(k in q_lower for k in ["location (city)", "city", "ciudad"]) or "candidate-location" in meta.get("id", ""):
+                    await self.fill_react_select(
+                        cb,
+                        preferred_choices=[self.p_info.location, "Montevideo, Uruguay", self.p_info.city, "Montevideo"],
+                        query_text=self.p_info.city or "Montevideo",
+                        fallback_first=True,
+                        description="Location (City)"
+                    )
                     continue
-                try:
-                    await cb.click()
-                    await asyncio.sleep(0.35)
-                    options = self.page.locator("[role='option'], .select__option")
-                    opt_count = await options.count()
-                    picked = None
-                    for wanted in choices:
-                        for j in range(opt_count):
-                            opt_el = options.nth(j)
-                            if not await opt_el.is_visible():
-                                continue
-                            opt_txt = (await opt_el.inner_text() or "").strip()
-                            if wanted.lower() == opt_txt.lower() or wanted.lower() in opt_txt.lower():
-                                await opt_el.click()
-                                picked = opt_txt
-                                break
-                        if picked:
-                            break
-                    if picked:
-                        short_q = (q_text[:55] + "...") if len(q_text) > 55 else q_text
-                        self.filled_fields[f"Dropdown ({short_q})"] = picked
-                        print(f"  [OK] Selected '{picked}' for '{short_q}'")
-                    else:
-                        await self.page.keyboard.press("Escape")
-                except Exception:
-                    pass
+
+                # B. School / University
+                if any(k in q_lower for k in ["school", "university", "universidad", "institution"]) or "school" in meta.get("id", ""):
+                    await self.fill_react_select(
+                        cb,
+                        preferred_choices=["UTEC", "Universidad", "University"],
+                        query_text="Universidad",
+                        fallback_first=True,
+                        description="School"
+                    )
+                    continue
+
+                # C. General dropdown question via _desired_dropdown_choice
+                choices = self._desired_dropdown_choice(q_text)
+                if choices or is_required:
+                    is_single_choice = any(k in q_lower for k in ["best describes", "primary", "single", "main", "core strength"])
+                    await self.fill_react_select(
+                        cb,
+                        preferred_choices=choices or [],
+                        fallback_first=is_required,
+                        description=short_q,
+                        allow_multi=not is_single_choice,
+                    )
         except Exception:
             pass
 
@@ -1065,14 +1318,17 @@ class BaseApplicator(ABC):
                 if not await cb.is_visible() or await cb.is_checked():
                     continue
 
-                text = await cb.evaluate(
+                meta = await cb.evaluate(
                     """(node) => {
-                        const parent = node.closest('label, .application-question, [class*="consent"], [class*="privacy"], [class*="terms"]');
-                        return parent ? parent.innerText.slice(0, 200).trim() : '';
+                        const parent = node.closest('label, .application-question, [class*="consent"], [class*="privacy"], [class*="terms"], [class*="field"], [class*="question"], fieldset');
+                        const txt = parent ? parent.innerText.slice(0, 300).trim() : '';
+                        const isReq = node.hasAttribute('required') || node.getAttribute('aria-required') === 'true' || txt.includes('*');
+                        return { text: txt, isRequired: isReq };
                     }"""
                 )
-                text_lower = text.lower()
-                if any(k in text_lower for k in ["privacy", "terms", "consent", "agree", "acknowledge", "data processing", "autorizo"]):
+                text_lower = (meta.get("text") or "").lower()
+                is_req = bool(meta.get("isRequired"))
+                if is_req or any(k in text_lower for k in ["privacy", "terms", "consent", "agree", "acknowledge", "data processing", "autorizo", "yes"]):
                     await cb.check(force=True)
                     self.filled_fields["Consent/Privacy"] = "Checked"
                     print("  [OK] Accepted privacy policy / terms checkbox")
@@ -1204,7 +1460,7 @@ class BaseApplicator(ABC):
         except Exception:
             pass
 
-    async def highlight_field_thinking(self, el, placeholder_text: str = "Job Hunter IA pensando respuesta...") -> None:
+    async def highlight_field_thinking(self, el, placeholder_text: str = "Job Hunter AI drafting answer...") -> None:
         """Highlight active input/textarea and set temporary placeholder."""
         try:
             await el.scroll_into_view_if_needed()
@@ -1270,13 +1526,34 @@ class BaseApplicator(ABC):
         If any empty required field exists, attempt a fallback fill or highlight in amber.
         """
         try:
-            missing_fields: List[str] = await self.page.evaluate(
+            audit_res: Dict[str, Any] = await self.page.evaluate(
                 """() => {
                     const missing = [];
                     const nodes = document.querySelectorAll(
                         'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select'
                     );
                     nodes.forEach(node => {
+                        // Check if input is part of a React-Select combobox
+                        const reactControl = node.closest('.select__control, [class*="select__control"], [class*="select-shell"]');
+                        if (reactControl) {
+                            const valEl = reactControl.querySelector('[class*="single-value"], [class*="multi-value"]');
+                            if (valEl && valEl.innerText.trim()) {
+                                return; // Successfully selected!
+                            }
+                            let isReq = node.hasAttribute('required') || node.getAttribute('aria-required') === 'true';
+                            const wrapper = node.closest('.application-question, [class*="field"], [class*="question"], fieldset');
+                            const combinedText = (wrapper ? wrapper.innerText : '').slice(0, 320);
+                            if (/\\*|\\b(required|mandatory)\\b/i.test(combinedText) || (wrapper && /\\b(required|mandatory)\\b/i.test(wrapper.className || ''))) {
+                                isReq = true;
+                            }
+                            if (isReq) {
+                                reactControl.style.border = '2px solid #eab308';
+                                const labelName = wrapper ? wrapper.innerText.slice(0, 60).replace(/\\s+/g, ' ').replace(/\\*/g, '').trim() : 'Desplegable';
+                                missing.push(labelName);
+                            }
+                            return;
+                        }
+
                         if (!node.offsetParent && node.type !== 'file') return;
 
                         let isReq = node.hasAttribute('required') || node.getAttribute('aria-required') === 'true';
@@ -1321,18 +1598,28 @@ class BaseApplicator(ABC):
                             }
                         }
                     });
-                    return Array.from(new Set(missing.filter(Boolean)));
+                    return {
+                        missing: Array.from(new Set(missing.filter(Boolean))),
+                        totalInputs: nodes.length
+                    };
                 }"""
             )
 
+            missing_fields = audit_res.get("missing", [])
+            total_inputs = audit_res.get("totalInputs", 0)
+
+            if total_inputs == 0:
+                print("  [AUDIT] No form fields found on current page.")
+                return []
+
             if missing_fields:
                 count = len(missing_fields)
-                msg = f"Atención: {count} campo(s) obligatorio(s) pendiente(s) resaltado(s) en amarillo"
+                msg = f"Warning: {count} required field(s) pending and highlighted in yellow"
                 await self.show_hud_status(msg, status="warning")
-                print(f"  [AUDIT] {count} campo(s) obligatorio(s) pendiente(s): {', '.join(missing_fields)}")
+                print(f"  [AUDIT] {count} required field(s) pending: {', '.join(missing_fields)}")
             else:
-                await self.show_hud_status("Todos los campos obligatorios fueron completados", status="success", auto_hide_ms=4000)
-                print("  [AUDIT] Todos los campos obligatorios (*) fueron completados.")
+                await self.show_hud_status("All required fields completed", status="success", auto_hide_ms=4000)
+                print("  [AUDIT] All required fields (*) have been completed.")
             return missing_fields
         except Exception as e:
             print(f"  [AUDIT] Error during audit: {e}")

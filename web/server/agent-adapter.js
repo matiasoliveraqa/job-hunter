@@ -94,7 +94,7 @@ export async function readAiSettings() {
       return JSON.parse(await fs.readFile(AI_SETTINGS_FILE, 'utf-8'))
     }
   } catch (e) {
-    console.warn('[AI Settings] No se pudo leer ai_settings.json:', e.message)
+    console.warn('[AI Settings] Failed to read ai_settings.json:', e.message)
   }
   return {
     provider: 'auto',
@@ -454,7 +454,7 @@ export async function queryIsolatedModel(prompt, preferredProvider = 'auto') {
         baseUrl: 'https://api.deepseek.com/v1',
         model: 'deepseek-chat',
       })
-    } catch (e) { console.warn('[Auto] DeepSeek API falló:', e.message) }
+    } catch (e) { console.warn('[Auto] DeepSeek API failed:', e.message) }
   }
 
   if (settings.kimiApiKey && settings.kimiApiKey.startsWith('sk-')) {
@@ -465,7 +465,7 @@ export async function queryIsolatedModel(prompt, preferredProvider = 'auto') {
         baseUrl: 'https://api.moonshot.cn/v1',
         model: 'moonshot-v1-8k',
       })
-    } catch (e) { console.warn('[Auto] Kimi API falló:', e.message) }
+    } catch (e) { console.warn('[Auto] Kimi API failed:', e.message) }
   }
 
   if (settings.customOpenAiBaseUrl) {
@@ -476,11 +476,11 @@ export async function queryIsolatedModel(prompt, preferredProvider = 'auto') {
         baseUrl: settings.customOpenAiBaseUrl,
         model: settings.customOpenAiModel || 'gpt-4o',
       })
-    } catch (e) { console.warn('[Auto] Custom OpenAI API falló:', e.message) }
+    } catch (e) { console.warn('[Auto] Custom OpenAI API failed:', e.message) }
   }
 
   if (settings.anthropicApiKey && settings.anthropicApiKey.startsWith('sk-ant-')) {
-    try { return await queryAnthropicApi(prompt, settings.anthropicApiKey) } catch (e) { console.warn('[Auto] Anthropic API falló:', e.message) }
+    try { return await queryAnthropicApi(prompt, settings.anthropicApiKey) } catch (e) { console.warn('[Auto] Anthropic API failed:', e.message) }
   }
   if (settings.openaiApiKey && settings.openaiApiKey.startsWith('sk-')) {
     try {
@@ -490,10 +490,10 @@ export async function queryIsolatedModel(prompt, preferredProvider = 'auto') {
         baseUrl: 'https://api.openai.com/v1',
         model: 'gpt-4o',
       })
-    } catch (e) { console.warn('[Auto] OpenAI API falló:', e.message) }
+    } catch (e) { console.warn('[Auto] OpenAI API failed:', e.message) }
   }
   if (settings.geminiApiKey && settings.geminiApiKey.length > 15) {
-    try { return await queryGeminiApi(prompt, settings.geminiApiKey) } catch (e) { console.warn('[Auto] Gemini API falló:', e.message) }
+    try { return await queryGeminiApi(prompt, settings.geminiApiKey) } catch (e) { console.warn('[Auto] Gemini API failed:', e.message) }
   }
 
   const isAntigravity = Boolean(
@@ -565,8 +565,8 @@ INSTRUCTIONS:
   const response = await queryIsolatedModel(prompt, provider)
   const extracted = extractHtml(response)
   if (!extracted || extracted.length < 100 || !extracted.includes('<html')) {
-    console.error('[tailorCvHtml] Respuesta del modelo no válida como HTML. Longitud:', response?.length || 0, 'Snippet:', (response || '').slice(0, 300))
-    throw new Error('El modelo generó una respuesta vacía o incompleta para el CV')
+    console.error('[tailorCvHtml] Model response is not valid HTML. Length:', response?.length || 0, 'Snippet:', (response || '').slice(0, 300))
+    throw new Error('The model generated an empty or incomplete response for the CV')
   }
   return extracted
 }

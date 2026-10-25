@@ -34,4 +34,6 @@ const vuetify = createVuetify({
   },
 })
 
-createApp(App).use(router).use(vuetify).mount('#app')
+import { i18nPlugin } from './i18n/index.js'
+
+createApp(App).use(router).use(vuetify).use(i18nPlugin).mount('#app')

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { api } from '../api.js'
+import { t } from '../i18n/index.js'
 
 const items = ref([])
 const loading = ref(false)
@@ -54,7 +55,7 @@ async function add() {
     await api.addExclusion({ company: form.company, reason: form.reason })
     Object.assign(form, { company: '', reason: '' })
     await load()
-    notify('Empresa excluida correctamente')
+    notify(t('exclusions.toasts.added'))
   } catch (e) {
     notify(e.message, 'error')
   } finally {
@@ -79,7 +80,7 @@ async function saveEdit() {
     await api.updateExclusion(edit.original, { company: edit.company, reason: edit.reason })
     edit.show = false
     await load()
-    notify('Exclusión actualizada')
+    notify(t('exclusions.toasts.updated'))
   } catch (e) {
     notify(e.message, 'error')
   } finally {
@@ -88,11 +89,11 @@ async function saveEdit() {
 }
 
 async function remove(item) {
-  if (!confirm(`¿Quitar "${item.company}" de las exclusiones? Volverá a aparecer en las búsquedas.`)) return
+  if (!confirm(t('exclusions.confirmDelete', { company: item.company }))) return
   try {
     await api.removeExclusion(item.company)
     await load()
-    notify('Exclusión eliminada')
+    notify(t('exclusions.toasts.deleted'))
   } catch (e) {
     notify(e.message, 'error')
   }
@@ -107,9 +108,9 @@ function exportJson() {
     document.body.appendChild(downloadAnchor)
     downloadAnchor.click()
     downloadAnchor.remove()
-    notify('Archivo exclusions.json exportado')
+    notify(t('exclusions.toasts.exported'))
   } catch (e) {
-    notify('Error al exportar: ' + e.message, 'error')
+    notify(t('exclusions.toasts.exportError') + e.message, 'error')
   }
 }
 
@@ -125,9 +126,9 @@ async function onFileSelected(event) {
     const parsed = JSON.parse(text)
     const res = await api.importExclusions(parsed)
     await load()
-    notify(`Se importaron ${res.added} nuevas exclusiones (Total: ${res.total})`)
+    notify(t('exclusions.toasts.imported', { added: res.added, total: res.total }))
   } catch (e) {
-    notify('Error al importar archivo: ' + e.message, 'error')
+    notify(t('exclusions.toasts.importError') + e.message, 'error')
   } finally {
     event.target.value = ''
   }
@@ -143,7 +144,7 @@ async function confirmClearAll() {
     const res = await api.clearExclusions()
     showClearModal.value = false
     await load()
-    notify(`Lista vaciada (${res.cleared} exclusiones eliminadas)`)
+    notify(t('exclusions.toasts.cleared', { cleared: res.cleared }))
   } catch (e) {
     notify(e.message, 'error')
   } finally {
@@ -175,14 +176,14 @@ onUnmounted(() => {
     <!-- SECCIÓN SUPERIOR: Título, contextualización de archivo de configuración y descripción -->
     <section class="flex flex-col gap-3 pb-2 border-b border-border-subtle">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 class="text-2xl font-semibold text-on-surface tracking-tight">Exclusiones</h1>
+        <h1 class="text-2xl font-semibold text-on-surface tracking-tight">{{ $t('exclusions.title') }}</h1>
         <div class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container text-outline font-mono text-[11px] border border-border-subtle">
           <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span>Filtro de coincidencias por subcadena activo</span>
+          <span>{{ $t('exclusions.activeFilterBadge') }}</span>
         </div>
       </div>
       <p class="text-xs text-on-surface-variant max-w-4xl leading-relaxed">
-        Las empresas registradas en este archivo se omiten automáticamente durante los barridos de ofertas y el motor del agente descarta cualquier postulación coincidente. Se excluye de forma no estricta cualquier empresa cuyo nombre o slug corporativo contenga el término ingresado.
+        {{ $t('exclusions.description') }}
       </p>
     </section>
 
@@ -194,7 +195,7 @@ onUnmounted(() => {
           <input
             v-model="form.company"
             class="w-full pl-9 pr-3 py-2 bg-surface-container text-on-surface placeholder:text-outline font-mono text-xs rounded-lg border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-            placeholder="Empresa o slug técnico (ej: amazon, mercadolibre, globant...)"
+            :placeholder="$t('exclusions.companyPlaceholder')"
             required
             type="text"
           />
@@ -204,7 +205,7 @@ onUnmounted(() => {
           <input
             v-model="form.reason"
             class="w-full pl-9 pr-3 py-2 bg-surface-container text-on-surface placeholder:text-outline text-xs rounded-lg border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-            placeholder="Motivo o referencia (ej: Ya postulado en Oct 2026, rol descartado...)"
+            :placeholder="$t('exclusions.reasonPlaceholder')"
             type="text"
           />
         </div>
@@ -214,11 +215,11 @@ onUnmounted(() => {
           type="submit"
         >
           <span class="material-symbols-outlined text-[17px]">add_circle</span>
-          <span>+ Agregar exclusión</span>
+          <span>{{ $t('exclusions.addBtn') }}</span>
         </button>
       </form>
       <p v-if="shortSlug" class="text-[11px] font-mono text-amber-400 mt-2 ml-1">
-        Aviso: el slug ingresado tiene menos de 4 caracteres y podría coincidir con empresas no deseadas.
+        {{ $t('exclusions.shortSlugWarning') }}
       </p>
     </section>
 
@@ -232,23 +233,23 @@ onUnmounted(() => {
             ref="searchInputRef"
             v-model="search"
             class="w-full pl-9 pr-12 py-1.5 bg-surface-container text-on-surface placeholder:text-outline text-xs rounded-lg border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-            placeholder="Buscar en exclusiones... (Ctrl+F o ⌘F)"
+            :placeholder="$t('exclusions.searchPlaceholder')"
             type="text"
           />
           <kbd
             class="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-surface-container-high text-outline font-mono text-[10px] border border-border-subtle cursor-pointer hover:text-on-surface"
-            title="Presiona Ctrl+F o ⌘F para buscar"
+            title="Ctrl+F / ⌘F"
             @click="searchInputRef?.focus()"
           >
             ⌘F
           </kbd>
         </div>
         <div class="whitespace-nowrap font-mono text-xs text-outline px-2.5 py-1 rounded bg-surface-container border border-border-subtle">
-          <span class="text-on-surface font-semibold">{{ filteredItems.length }}</span> activas
+          {{ $t('exclusions.activeCount', { count: filteredItems.length }) }}
         </div>
       </div>
 
-      <!-- Botones de archivo / exportación (B: las 3 implementadas) -->
+      <!-- Botones de archivo / exportación -->
       <div class="flex items-center gap-2">
         <input
           ref="fileInputRef"
@@ -260,53 +261,53 @@ onUnmounted(() => {
         <button
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface text-xs font-medium border border-border-subtle transition-colors cursor-pointer"
           type="button"
-          title="Exportar archivo de exclusiones a JSON"
+          :title="$t('exclusions.exportBtn')"
           @click="exportJson"
         >
           <span class="material-symbols-outlined text-[16px]">download</span>
-          <span>Exportar</span>
+          <span>{{ $t('exclusions.exportBtn') }}</span>
         </button>
         <button
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface text-xs font-medium border border-border-subtle transition-colors cursor-pointer"
           type="button"
-          title="Importar archivo JSON"
+          :title="$t('exclusions.importBtn')"
           @click="triggerImport"
         >
           <span class="material-symbols-outlined text-[16px]">file_upload</span>
-          <span>Importar lista</span>
+          <span>{{ $t('exclusions.importBtn') }}</span>
         </button>
         <button
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-rose-950/40 text-outline hover:text-rose-400 text-xs font-medium border border-border-subtle hover:border-rose-900/50 transition-colors cursor-pointer"
           type="button"
-          title="Vaciar todas las exclusiones"
+          :title="$t('exclusions.clearBtn')"
           @click="clearAll"
         >
           <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
-          <span>Limpiar lista</span>
+          <span>{{ $t('exclusions.clearBtn') }}</span>
         </button>
       </div>
     </section>
 
-    <!-- TABLA DE EXCLUSIONES (A - Opción 2: 3 columnas Empresa, Motivo y Acciones) -->
+    <!-- TABLA DE EXCLUSIONES -->
     <section class="rounded-xl bg-surface-card border border-border-subtle shadow-sm overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-surface-container border-b border-border-subtle text-outline font-mono text-[11px] uppercase tracking-wider">
-              <th class="py-3 px-4 w-[32%] font-medium">Empresa (slug / nombre)</th>
-              <th class="py-3 px-4 w-[54%] font-medium">Motivo / Nota de exclusión</th>
-              <th class="py-3 px-4 w-[14%] text-right font-medium">Acciones</th>
+              <th class="py-3 px-4 w-[32%] font-medium">{{ $t('exclusions.colCompany') }}</th>
+              <th class="py-3 px-4 w-[54%] font-medium">{{ $t('exclusions.colReason') }}</th>
+              <th class="py-3 px-4 w-[14%] text-right font-medium">{{ $t('exclusions.colActions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-border-subtle text-on-surface text-xs font-sans">
             <tr v-if="loading">
               <td colspan="3" class="py-8 text-center text-outline font-mono text-xs">
-                Cargando lista de exclusiones...
+                {{ $t('exclusions.loading') }}
               </td>
             </tr>
             <tr v-else-if="filteredItems.length === 0">
               <td colspan="3" class="py-8 text-center text-outline text-xs">
-                {{ search ? 'No se encontraron exclusiones que coincidan con la búsqueda.' : 'Aún no hay empresas en la lista de exclusiones.' }}
+                {{ search ? $t('exclusions.emptySearch') : $t('exclusions.emptyList') }}
               </td>
             </tr>
             <tr
@@ -321,14 +322,14 @@ onUnmounted(() => {
                 </span>
               </td>
               <td class="py-2.5 px-4 text-on-surface-variant">
-                {{ item.reason || 'Sin motivo' }}
+                {{ item.reason || $t('exclusions.noReason') }}
               </td>
               <td class="py-2.5 px-4 text-right">
                 <div class="inline-flex items-center justify-end gap-1">
                   <button
                     class="p-1 rounded text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer"
                     type="button"
-                    title="Editar nota"
+                    :title="$t('common.edit')"
                     @click="openEdit(item)"
                   >
                     <span class="material-symbols-outlined text-[16px]">edit</span>
@@ -336,7 +337,7 @@ onUnmounted(() => {
                   <button
                     class="p-1 rounded text-outline hover:text-rose-400 hover:bg-surface-container-high transition-colors cursor-pointer"
                     type="button"
-                    title="Eliminar exclusión"
+                    :title="$t('common.delete')"
                     @click="remove(item)"
                   >
                     <span class="material-symbols-outlined text-[16px]">delete</span>
@@ -352,16 +353,16 @@ onUnmounted(() => {
       <div class="p-3 bg-surface-container border-t border-border-subtle flex items-center justify-between text-outline text-xs font-sans">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[16px]">database</span>
-          <span>Mostrando {{ filteredItems.length }} de {{ items.length }} exclusiones locales</span>
+          <span>{{ $t('exclusions.showingStats', { shown: filteredItems.length, total: items.length }) }}</span>
         </div>
         <div class="flex items-center gap-1.5 font-mono text-[11px] text-outline">
           <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span>Sincronizado con disco local</span>
+          <span>{{ $t('exclusions.syncedWithDisk') }}</span>
         </div>
       </div>
     </section>
 
-    <!-- MODAL DE EDICIÓN (C - Opción 1: Ventana modal compacta en Tailwind) -->
+    <!-- MODAL DE EDICIÓN -->
     <div
       v-if="edit.show"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
@@ -371,7 +372,7 @@ onUnmounted(() => {
         <div class="flex items-center justify-between border-b border-border-subtle pb-3">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-accent text-[20px]">edit</span>
-            <h2 class="text-sm font-semibold text-on-surface">Editar exclusión</h2>
+            <h2 class="text-sm font-semibold text-on-surface">{{ $t('exclusions.editTitle') }}</h2>
           </div>
           <button
             class="text-outline hover:text-on-surface p-1 transition-colors cursor-pointer"
@@ -384,7 +385,7 @@ onUnmounted(() => {
 
         <div class="flex flex-col gap-3">
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs text-on-surface-variant font-medium">Empresa o slug técnico</label>
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('exclusions.editCompanyLabel') }}</label>
             <input
               v-model="edit.company"
               class="h-9 px-3 rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
@@ -393,12 +394,12 @@ onUnmounted(() => {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs text-on-surface-variant font-medium">Motivo o referencia</label>
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('exclusions.editReasonLabel') }}</label>
             <textarea
               v-model="edit.reason"
               rows="3"
               class="p-2.5 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors resize-none font-sans"
-              placeholder="Motivo de la exclusión..."
+              :placeholder="$t('exclusions.editReasonPlaceholder')"
             ></textarea>
           </div>
         </div>
@@ -409,7 +410,7 @@ onUnmounted(() => {
             type="button"
             @click="edit.show = false"
           >
-            Cancelar
+            {{ $t('common.cancel') }}
           </button>
           <button
             class="px-4 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium shadow-sm transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
@@ -418,7 +419,7 @@ onUnmounted(() => {
             @click="saveEdit"
           >
             <span v-if="edit.saving" class="material-symbols-outlined text-[16px] animate-spin">sync</span>
-            <span>{{ edit.saving ? 'Guardando...' : 'Guardar cambios' }}</span>
+            <span>{{ edit.saving ? $t('exclusions.savingEditBtn') : $t('exclusions.saveEditBtn') }}</span>
           </button>
         </div>
       </div>
@@ -436,9 +437,9 @@ onUnmounted(() => {
             <span class="material-symbols-outlined text-[22px]">warning</span>
           </div>
           <div class="flex flex-col gap-1">
-            <h2 class="text-sm font-semibold text-on-surface">¿Vaciar lista de exclusiones?</h2>
+            <h2 class="text-sm font-semibold text-on-surface">{{ $t('exclusions.clearModalTitle') }}</h2>
             <p class="text-xs text-on-surface-variant leading-relaxed">
-              Se eliminarán de forma permanente las <span class="font-semibold text-on-surface">{{ items.length }}</span> empresas de la lista de exclusiones en disco. Esta acción no se puede deshacer.
+              {{ $t('exclusions.clearModalDesc', { count: items.length }) }}
             </p>
           </div>
         </div>
@@ -450,7 +451,7 @@ onUnmounted(() => {
             :disabled="clearing"
             @click="showClearModal = false"
           >
-            Cancelar
+            {{ $t('common.cancel') }}
           </button>
           <button
             class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium shadow-sm transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
@@ -459,7 +460,7 @@ onUnmounted(() => {
             @click="confirmClearAll"
           >
             <span v-if="clearing" class="material-symbols-outlined text-[16px] animate-spin">sync</span>
-            <span>{{ clearing ? 'Vaciando...' : 'Sí, vaciar lista' }}</span>
+            <span>{{ clearing ? $t('exclusions.clearingBtn') : $t('exclusions.confirmClearBtn') }}</span>
           </button>
         </div>
       </div>

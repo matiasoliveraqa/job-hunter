@@ -890,10 +890,10 @@ function startServer(port = PORT, attemptsLeft = 10) {
       })
       server.on('error', (err) => {
         if (err.code === 'EADDRINUSE' && attempts > 0) {
-          console.warn(`Puerto ${p} ocupado. Probando puerto ${p + 1}...`)
+          console.warn(`Port ${p} in use. Trying port ${p + 1}...`)
           tryPort(p + 1, attempts - 1)
         } else {
-          console.error(`No se pudo iniciar el servidor web: ${err.message}`)
+          console.error(`Failed to start web server: ${err.message}`)
           if (process.env.NODE_ENV === 'test') {
             reject(err)
           } else {

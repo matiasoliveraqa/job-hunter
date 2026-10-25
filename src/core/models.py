@@ -38,6 +38,19 @@ class PersonalInfo(BaseModel):
         parts = self.full_name.strip().split() if self.full_name else []
         return " ".join(parts[1:]) if len(parts) > 1 else ""
 
+    @property
+    def city(self) -> str:
+        if not self.location:
+            return ""
+        return self.location.split(",")[0].strip()
+
+    @property
+    def country(self) -> str:
+        if not self.location:
+            return ""
+        parts = self.location.split(",")
+        return parts[-1].strip() if len(parts) > 1 else self.location.strip()
+
 class SearchCriteria(BaseModel):
     target_roles: List[str] = Field(default_factory=list, description="Target job titles / roles")
     keywords: List[str] = Field(default_factory=list, description="Technical skill keywords")

@@ -41,6 +41,7 @@ config/exclusions.json
 config/ai_settings.json
 GEMINI.md
 HANDOFF.md
+PROMPT_FIX.md
 my_cv/
 output/
 resumes/
@@ -51,6 +52,11 @@ resumes/
 *.png
 *.db
 *.sqlite*
+
+# Demo & promo recordings (publish as release assets, not in git history)
+*.mp4
+*.mov
+*.webm
 
 # Playwright & Browser Artefacts
 .playwright/

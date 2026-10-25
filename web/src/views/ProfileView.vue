@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { t } from '../i18n/index.js'
 
 const route = useRoute()
 
@@ -120,18 +121,18 @@ const agentConfig = reactive({
 })
 const savingAgentConfig = ref(false)
 
-const providerOptions = [
-  { value: 'auto', title: 'Detección automática (CLI o API disponible)' },
-  { value: 'deepseek_api', title: 'DeepSeek (API directa)' },
-  { value: 'kimi_api', title: 'Kimi / Moonshot AI (API directa)' },
-  { value: 'custom_openai_api', title: 'Personalizado (OpenAI compatible / Ollama / Groq)' },
-  { value: 'anthropic_api', title: 'Anthropic Claude (API Key directa)' },
-  { value: 'openai_api', title: 'OpenAI GPT-4o (API Key directa)' },
-  { value: 'gemini_api', title: 'Google Gemini (API Key directa)' },
-  { value: 'claude', title: 'Anthropic Claude Code (CLI local)' },
-  { value: 'agy', title: 'Google Antigravity / Gemini (CLI local)' },
-  { value: 'codex', title: 'OpenAI Codex (CLI local)' },
-]
+const providerOptions = computed(() => [
+  { value: 'auto', title: t('profile.providers.auto') },
+  { value: 'deepseek_api', title: t('profile.providers.deepseek') },
+  { value: 'kimi_api', title: t('profile.providers.kimi') },
+  { value: 'custom_openai_api', title: t('profile.providers.custom') },
+  { value: 'anthropic_api', title: t('profile.providers.anthropic') },
+  { value: 'openai_api', title: t('profile.providers.openai') },
+  { value: 'gemini_api', title: t('profile.providers.gemini') },
+  { value: 'claude', title: t('profile.providers.claude') },
+  { value: 'agy', title: t('profile.providers.agy') },
+  { value: 'codex', title: t('profile.providers.codex') },
+])
 
 async function loadAgentConfig() {
   try {
@@ -162,13 +163,13 @@ async function saveAgentConfigAction() {
     }
     notify(
       agentStatus.value?.connected
-        ? `Configuración guardada. Motor activo: ${agentStatus.value.activeProviderName}`
-        : 'Configuración guardada. Sin motor de IA detectado (Modo CV base activo)',
+        ? t('profile.toasts.agentTestedSuccess', { name: agentStatus.value.activeProviderName })
+        : t('profile.toasts.agentNoAiWarn'),
       agentStatus.value?.connected ? 'success' : 'warning',
     )
     await loadAgentConfig()
   } catch (err) {
-    notify('Error al guardar configuración de IA: ' + err.message, 'error')
+    notify(t('profile.toasts.agentTestedError') + err.message, 'error')
   } finally {
     savingAgentConfig.value = false
   }
@@ -228,12 +229,12 @@ async function handleCvUpload(file) {
         profile.value.search_criteria.target_roles = Array.from(curRoles)
       }
 
-      notify('CV cargado con éxito. Se actualizaron tus datos a partir del documento. Revisa los campos y pulsa Guardar perfil.')
+      notify(t('profile.toasts.cvUploadedParsed'))
     } else {
-      notify('CV guardado en my_cv/ como documento base.')
+      notify(t('profile.toasts.cvUploaded'))
     }
   } catch (err) {
-    notify('Error al procesar el CV: ' + err.message, 'error')
+    notify(t('profile.toasts.cvUploadError') + err.message, 'error')
   } finally {
     uploadingCv.value = false
   }
@@ -243,9 +244,9 @@ async function save() {
   saving.value = true
   try {
     adopt(await api.saveProfile(profile.value))
-    notify('Perfil guardado en config/profile.json')
+    notify(t('profile.toasts.saved'))
   } catch (e) {
-    notify(e.message, 'error')
+    notify(t('profile.toasts.saveError') + e.message, 'error')
   } finally {
     saving.value = false
   }
@@ -345,7 +346,7 @@ onMounted(async () => {
     <!-- TOP ACTION & TITLE HEADER -->
     <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-border-subtle">
       <div class="flex flex-col gap-1">
-        <h1 class="text-2xl font-semibold text-on-surface tracking-tight">Mi perfil profesional</h1>
+        <h1 class="text-2xl font-semibold text-on-surface tracking-tight">{{ $t('profile.title') }}</h1>
       </div>
 
       <!-- Action Cluster -->
@@ -357,7 +358,7 @@ onMounted(async () => {
           @click="reset"
         >
           <span class="material-symbols-outlined text-[16px]">restart_alt</span>
-          <span>Descartar cambios</span>
+          <span>{{ $t('profile.discardChanges') }}</span>
         </button>
 
         <button
@@ -369,7 +370,7 @@ onMounted(async () => {
           <span :class="['material-symbols-outlined text-[16px]', saving ? 'animate-spin' : '']">
             {{ saving ? 'sync' : 'save' }}
           </span>
-          <span>{{ saving ? 'Guardando...' : 'Guardar perfil' }}</span>
+          <span>{{ saving ? $t('profile.savingProfile') : $t('profile.saveProfile') }}</span>
         </button>
       </div>
     </div>
@@ -387,7 +388,7 @@ onMounted(async () => {
         @click="activeTab = 'profile'"
       >
         <span class="material-symbols-outlined text-[17px] text-accent">badge</span>
-        <span>Perfil y Criterios</span>
+        <span>{{ $t('profile.tabs.profile') }}</span>
       </button>
 
       <button
@@ -401,7 +402,7 @@ onMounted(async () => {
         @click="activeTab = 'questions'"
       >
         <span class="material-symbols-outlined text-[17px] text-sky-400">forum</span>
-        <span>Preguntas abiertas ATS</span>
+        <span>{{ $t('profile.tabs.questions') }}</span>
         <span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-surface-container-high text-outline">6</span>
       </button>
 
@@ -416,7 +417,7 @@ onMounted(async () => {
         @click="activeTab = 'ai'"
       >
         <span class="material-symbols-outlined text-[17px] text-tertiary">smart_toy</span>
-        <span>Motor de IA & LLM</span>
+        <span>{{ $t('profile.tabs.ai') }}</span>
         <span
           class="w-2 h-2 rounded-full"
           :class="agentStatus?.connected ? 'bg-emerald-400' : 'bg-amber-400'"
@@ -430,34 +431,34 @@ onMounted(async () => {
       <span class="material-symbols-outlined text-accent text-[20px] shrink-0 mt-0.5">verified_user</span>
       <div class="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <p class="text-xs text-on-surface-variant">
-          Estos datos son los que el agente local usa para autorellenar formularios ATS y filtrar ofertas automáticamente. Se guardan localmente en
-          <code class="font-mono text-outline px-1.5 py-0.5 bg-surface-container rounded text-[11px]">config/profile.json</code> (ignorado por git), con copia de respaldo incremental en
+          {{ $t('profile.banner.text') }}
+          <code class="font-mono text-outline px-1.5 py-0.5 bg-surface-container rounded text-[11px]">config/profile.json</code> (ignorado por git), {{ $t('profile.banner.backupText') }}
           <code class="font-mono text-outline px-1.5 py-0.5 bg-surface-container rounded text-[11px]">output/backups/</code>.
         </p>
-        <span class="shrink-0 font-mono text-outline text-[11px] self-end sm:self-auto">Almacenamiento local privado</span>
+        <span class="shrink-0 font-mono text-outline text-[11px] self-end sm:self-auto">{{ $t('profile.banner.localStorageBadge') }}</span>
       </div>
     </div>
 
     <!-- LOADING STATE -->
     <div v-if="loading" class="p-12 text-center text-xs font-mono text-outline">
-      Cargando configuración del perfil...
+      {{ $t('common.loading') }}
     </div>
 
     <!-- TAB 1: PERFIL Y CRITERIOS -->
     <div v-else-if="activeTab === 'profile' && profile" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       <!-- LEFT COLUMN: CV BASE, PERSONAL DATA & DEMOGRAPHICS (7 cols) -->
       <div class="lg:col-span-7 flex flex-col gap-6">
-        <!-- 1. Card: CV Base del Candidato (Punto 1 implementado) -->
+        <!-- 1. Card: CV Base del Candidato -->
         <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
           <div class="flex items-center justify-between pb-1">
             <div class="flex items-center gap-2.5">
               <span class="material-symbols-outlined text-accent text-[20px]">picture_as_pdf</span>
               <div>
-                <h2 class="text-sm font-semibold text-on-surface">CV Base del Candidato</h2>
-                <p class="font-mono text-[11px] text-outline">Documento maestro guardado en my_cv/. Se usa como base para autocompletar tu perfil y adaptar ofertas.</p>
+                <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.baseCv') }}</h2>
+                <p class="font-mono text-[11px] text-outline">{{ $t('profile.sections.baseCvDesc') }}</p>
               </div>
             </div>
-            <span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-mono text-[11px]">Documento Maestro</span>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-mono text-[11px]">{{ $t('profile.sections.masterDocBadge') }}</span>
           </div>
 
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-surface-container/60 border border-border-subtle">
@@ -468,7 +469,7 @@ onMounted(async () => {
                   {{ baseCv?.filename || 'Matias_Olivera_QA_CV.pdf' }}
                 </span>
                 <span class="font-mono text-[10px] text-outline">
-                  {{ baseCv?.exists ? `${Math.round((baseCv.sizeBytes || 0) / 1024)} KB` : 'No cargado aún' }} • my_cv/
+                  {{ baseCv?.exists ? `${Math.round((baseCv.sizeBytes || 0) / 1024)} KB` : $t('profile.sections.notUploadedYet') }} • my_cv/
                 </span>
               </div>
             </div>
@@ -481,7 +482,7 @@ onMounted(async () => {
                 class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors"
               >
                 <span class="material-symbols-outlined text-[15px]">visibility</span>
-                <span>Ver CV actual</span>
+                <span>{{ $t('profile.sections.viewCvBtn') }}</span>
               </a>
 
               <input
@@ -501,7 +502,7 @@ onMounted(async () => {
                 <span :class="['material-symbols-outlined text-[15px]', uploadingCv ? 'animate-spin' : '']">
                   {{ uploadingCv ? 'sync' : 'upload' }}
                 </span>
-                <span>{{ uploadingCv ? 'Analizando CV...' : 'Cargar nuevo CV' }}</span>
+                <span>{{ uploadingCv ? $t('profile.sections.analyzingCv') : $t('profile.sections.loadNewCv') }}</span>
               </button>
             </div>
           </div>
@@ -513,8 +514,8 @@ onMounted(async () => {
             <div class="flex items-center gap-2.5">
               <span class="material-symbols-outlined text-accent text-[20px]">badge</span>
               <div>
-                <h2 class="text-sm font-semibold text-on-surface">Datos personales</h2>
-                <p class="font-mono text-[11px] text-outline">Información primaria inyectada en campos ATS de primer contacto</p>
+                <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.personalInfo') }}</h2>
+                <p class="font-mono text-[11px] text-outline">{{ $t('profile.sections.personalInfoDesc') }}</p>
               </div>
             </div>
           </div>
@@ -524,7 +525,7 @@ onMounted(async () => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Nombre completo <span class="text-accent">*</span>
+                  {{ $t('profile.sections.fullName') }} <span class="text-accent">*</span>
                 </label>
                 <input
                   v-model="profile.personal_info.full_name"
@@ -534,7 +535,7 @@ onMounted(async () => {
               </div>
               <div class="flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Email de contacto <span class="text-accent">*</span>
+                  {{ $t('profile.sections.email') }} <span class="text-accent">*</span>
                 </label>
                 <input
                   v-model="profile.personal_info.email"
@@ -548,7 +549,7 @@ onMounted(async () => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Teléfono / WhatsApp <span class="text-accent">*</span>
+                  {{ $t('profile.sections.phone') }} <span class="text-accent">*</span>
                 </label>
                 <div class="relative flex items-center">
                   <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">call</span>
@@ -561,7 +562,7 @@ onMounted(async () => {
               </div>
               <div class="flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Ubicación actual <span class="text-accent">*</span>
+                  {{ $t('profile.sections.currentLocation') }} <span class="text-accent">*</span>
                 </label>
                 <div class="relative flex items-center">
                   <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">pin_drop</span>
@@ -577,7 +578,7 @@ onMounted(async () => {
             <!-- LinkedIn -->
             <div class="flex flex-col gap-1.5">
               <label class="text-xs text-on-surface-variant font-medium">
-                Perfil de LinkedIn <span class="text-accent">*</span>
+                {{ $t('profile.sections.linkedin') }} <span class="text-accent">*</span>
               </label>
               <div class="relative flex items-center">
                 <input
@@ -600,7 +601,7 @@ onMounted(async () => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Perfil de GitHub
+                  {{ $t('profile.sections.github') }}
                 </label>
                 <div class="relative flex items-center">
                   <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">code</span>
@@ -622,7 +623,7 @@ onMounted(async () => {
 
               <div class="flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Portfolio / Sitio web
+                  {{ $t('profile.sections.portfolio') }}
                 </label>
                 <div class="relative flex items-center">
                   <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">language</span>
@@ -647,7 +648,7 @@ onMounted(async () => {
             <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
               <div class="md:col-span-6 flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Empresa actual
+                  {{ $t('profile.sections.currentCompany') }}
                 </label>
                 <input
                   v-model="profile.personal_info.current_company"
@@ -658,7 +659,7 @@ onMounted(async () => {
 
               <div class="md:col-span-3 flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium">
-                  Años exp.
+                  {{ $t('profile.sections.yearsOfExperience') }}
                 </label>
                 <div class="flex items-center gap-2">
                   <input
@@ -676,14 +677,14 @@ onMounted(async () => {
 
               <div class="md:col-span-3 flex flex-col gap-1.5">
                 <label class="text-xs text-on-surface-variant font-medium truncate">
-                  Sponsorship US?
+                  {{ $t('profile.sections.visaSponsorship') }}
                 </label>
                 <select
                   v-model="profile.personal_info.requires_us_visa_sponsorship"
                   class="h-9 px-2 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
                 >
-                  <option value="No">No</option>
-                  <option value="Yes">Yes</option>
+                  <option value="No">{{ $t('common.no') }}</option>
+                  <option value="Yes">{{ $t('common.yes') }}</option>
                 </select>
               </div>
             </div>
@@ -696,71 +697,71 @@ onMounted(async () => {
             <div class="flex items-center gap-2.5">
               <span class="material-symbols-outlined text-outline text-[20px]">public</span>
               <div>
-                <h2 class="text-sm font-semibold text-on-surface">Datos demográficos / EEO</h2>
-                <p class="text-xs text-outline">Campos estandarizados de igualdad de oportunidades (EEOC/OFCCP) usados por Greenhouse, Lever y Ashby.</p>
+                <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.demographics') }}</h2>
+                <p class="text-xs text-outline">{{ $t('profile.sections.eeoSubtitle') }}</p>
               </div>
             </div>
-            <span class="px-2 py-0.5 rounded bg-surface-container-high text-outline font-mono text-[10px]">Opcional</span>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-outline font-mono text-[10px]">{{ $t('profile.sections.optionalBadge') }}</span>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
             <div class="flex flex-col gap-1.5">
               <label class="text-xs text-on-surface-variant font-medium">
-                Género
+                {{ $t('profile.sections.gender') }}
               </label>
               <select
                 v-model="profile.personal_info.gender"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="Male">Masculino / Male</option>
-                <option value="Female">Femenino / Female</option>
-                <option value="Non-binary">No binario / Non-binary</option>
-                <option value="Decline to Self-Identify">Prefiero no responder</option>
+                <option value="Male">{{ $lang === 'es' ? 'Masculino / Male' : 'Male' }}</option>
+                <option value="Female">{{ $lang === 'es' ? 'Femenino / Female' : 'Female' }}</option>
+                <option value="Non-binary">{{ $lang === 'es' ? 'No binario / Non-binary' : 'Non-binary' }}</option>
+                <option value="Decline to Self-Identify">{{ $lang === 'es' ? 'Prefiero no responder' : 'Decline to Self-Identify' }}</option>
               </select>
             </div>
 
             <div class="flex flex-col gap-1.5">
               <label class="text-xs text-on-surface-variant font-medium">
-                Etnia / Raza
+                {{ $t('profile.sections.race') }}
               </label>
               <select
                 v-model="profile.personal_info.race"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="Hispanic or Latino">Hispano o Latino</option>
-                <option value="White">Blanco (no hispano o latino)</option>
-                <option value="Black or African American">Negro o afroamericano</option>
-                <option value="Asian">Asiático</option>
-                <option value="Two or More Races">Dos o más etnias</option>
-                <option value="Decline to Self-Identify">Prefiero no responder</option>
+                <option value="Hispanic or Latino">{{ $lang === 'es' ? 'Hispano o Latino' : 'Hispanic or Latino' }}</option>
+                <option value="White">{{ $lang === 'es' ? 'Blanco (no hispano o latino)' : 'White (Not Hispanic or Latino)' }}</option>
+                <option value="Black or African American">{{ $lang === 'es' ? 'Negro o afroamericano' : 'Black or African American' }}</option>
+                <option value="Asian">{{ $lang === 'es' ? 'Asiático' : 'Asian' }}</option>
+                <option value="Two or More Races">{{ $lang === 'es' ? 'Dos o más etnias' : 'Two or More Races' }}</option>
+                <option value="Decline to Self-Identify">{{ $lang === 'es' ? 'Prefiero no responder' : 'Decline to Self-Identify' }}</option>
               </select>
             </div>
 
             <div class="flex flex-col gap-1.5">
               <label class="text-xs text-on-surface-variant font-medium">
-                Condición de veterano
+                {{ $t('profile.sections.veteran') }}
               </label>
               <select
                 v-model="profile.personal_info.veteran_status"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="I am not a veteran">No soy veterano</option>
-                <option value="I identify as one or more of the classifications of protected veteran">Soy veterano protegido</option>
-                <option value="I decline to self-identify">Prefiero no responder</option>
+                <option value="I am not a veteran">{{ $lang === 'es' ? 'No soy veterano' : 'I am not a veteran' }}</option>
+                <option value="I identify as one or more of the classifications of protected veteran">{{ $lang === 'es' ? 'Soy veterano protegido' : 'Protected veteran' }}</option>
+                <option value="I decline to self-identify">{{ $lang === 'es' ? 'Prefiero no responder' : 'I decline to self-identify' }}</option>
               </select>
             </div>
 
             <div class="flex flex-col gap-1.5">
               <label class="text-xs text-on-surface-variant font-medium">
-                Situación de discapacidad
+                {{ $t('profile.sections.disability') }}
               </label>
               <select
                 v-model="profile.personal_info.disability_status"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="No, I do not have a disability">No tengo discapacidad</option>
-                <option value="Yes, I have a disability (or previously had one)">Sí tengo o tuve una discapacidad</option>
-                <option value="I do not wish to answer">Prefiero no responder</option>
+                <option value="No, I do not have a disability">{{ $lang === 'es' ? 'No tengo discapacidad' : 'No, I do not have a disability' }}</option>
+                <option value="Yes, I have a disability (or previously had one)">{{ $lang === 'es' ? 'Sí tengo o tuve una discapacidad' : 'Yes, I have a disability (or previously had one)' }}</option>
+                <option value="I do not wish to answer">{{ $lang === 'es' ? 'Prefiero no responder' : 'I do not wish to answer' }}</option>
               </select>
             </div>
           </div>
@@ -774,13 +775,13 @@ onMounted(async () => {
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <span class="material-symbols-outlined text-accent text-[20px]">filter_alt</span>
-              <h2 class="text-sm font-semibold text-on-surface">Criterios de búsqueda</h2>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.searchCriteria') }}</h2>
             </div>
           </div>
 
           <!-- Roles Objetivo -->
           <div class="flex flex-col gap-2">
-            <label class="text-xs text-on-surface-variant font-medium">Roles objetivo aceptados</label>
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.targetRoles') }}</label>
             <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle min-h-[44px]">
               <span
                 v-for="(role, idx) in profile.search_criteria.target_roles"
@@ -801,7 +802,7 @@ onMounted(async () => {
               <input
                 v-model="newRoleInput"
                 class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-                placeholder="Añadir nuevo rol objetivo..."
+                :placeholder="$t('profile.sections.targetRolesPlaceholder')"
                 type="text"
                 @keyup.enter="addTargetRole"
               />
@@ -810,7 +811,7 @@ onMounted(async () => {
                 type="button"
                 @click="addTargetRole"
               >
-                + Añadir
+                {{ $t('profile.sections.addRoleBtn') }}
               </button>
             </div>
           </div>
@@ -818,7 +819,7 @@ onMounted(async () => {
           <!-- Keywords Técnicas -->
           <div class="flex flex-col gap-2">
             <div class="flex items-center justify-between">
-              <label class="text-xs text-on-surface-variant font-medium">Keywords técnicas (match en descripción)</label>
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.keywords') }}</label>
               <span class="font-mono text-[10px] text-outline">{{ profile.search_criteria.keywords?.length || 0 }} tags</span>
             </div>
             <div class="flex flex-wrap gap-1 p-2 rounded-lg bg-surface-container border border-border-subtle max-h-36 overflow-y-auto">
@@ -841,7 +842,7 @@ onMounted(async () => {
               <input
                 v-model="newKeywordInput"
                 class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors font-mono"
-                placeholder="Añadir keyword técnica..."
+                :placeholder="$t('profile.sections.keywordsPlaceholder')"
                 type="text"
                 @keyup.enter="addKeyword"
               />
@@ -850,14 +851,14 @@ onMounted(async () => {
                 type="button"
                 @click="addKeyword"
               >
-                + Añadir
+                {{ $t('profile.sections.addRoleBtn') }}
               </button>
             </div>
           </div>
 
           <!-- Ubicaciones Aceptadas -->
           <div class="flex flex-col gap-2">
-            <label class="text-xs text-on-surface-variant font-medium">Ubicaciones aceptadas (whitelist)</label>
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.locationKeywords') }}</label>
             <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle">
               <span
                 v-for="(loc, idx) in profile.search_criteria.location_keywords"
@@ -878,7 +879,7 @@ onMounted(async () => {
               <input
                 v-model="newLocationInput"
                 class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors font-mono"
-                placeholder="Añadir ubicación (ej. remote, latam)..."
+                :placeholder="$t('profile.sections.locationKeywordsPlaceholder')"
                 type="text"
                 @keyup.enter="addLocation"
               />
@@ -887,7 +888,7 @@ onMounted(async () => {
                 type="button"
                 @click="addLocation"
               >
-                + Añadir
+                {{ $t('profile.sections.addRoleBtn') }}
               </button>
             </div>
           </div>
@@ -895,19 +896,19 @@ onMounted(async () => {
           <!-- Filtros Numéricos -->
           <div class="grid grid-cols-2 gap-3 pt-1">
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant truncate">Tope máx. años exp.</label>
+              <label class="text-xs text-on-surface-variant truncate">{{ $t('profile.sections.maxYears') }}</label>
               <input
                 :value="profile.search_criteria.max_years_of_experience"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-                placeholder="Sin límite"
+                :placeholder="$t('profile.sections.noLimitPlaceholder')"
                 type="number"
                 min="0"
                 @input="profile.search_criteria.max_years_of_experience = toNumber($event.target.value)"
               />
-              <span class="font-mono text-[10px] text-outline">Vacío = sin límite</span>
+              <span class="font-mono text-[10px] text-outline">{{ $t('profile.sections.emptyNoLimit') }}</span>
             </div>
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant truncate">Salario mínimo (USD)</label>
+              <label class="text-xs text-on-surface-variant truncate">{{ $t('profile.sections.minSalary') }}</label>
               <div class="relative flex items-center">
                 <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
                 <input
@@ -918,7 +919,7 @@ onMounted(async () => {
                   @input="profile.search_criteria.min_salary_usd = toNumber($event.target.value)"
                 />
               </div>
-              <span class="font-mono text-[10px] text-outline">Filtro excluyente</span>
+              <span class="font-mono text-[10px] text-outline">{{ $t('profile.sections.strictFilterNote') }}</span>
             </div>
           </div>
         </section>
@@ -928,14 +929,14 @@ onMounted(async () => {
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <span class="material-symbols-outlined text-accent text-[20px]">payments</span>
-              <h2 class="text-sm font-semibold text-on-surface">Preferencias & Disponibilidad</h2>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.compensation') }}</h2>
             </div>
           </div>
 
           <!-- Salarios en USD / mes con cálculo anual en tiempo real (Opción A) -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant font-medium">Salario Dependiente (USD / mes)</label>
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.dependentSalary') }}</label>
               <div class="relative flex items-center">
                 <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
                 <input
@@ -947,12 +948,12 @@ onMounted(async () => {
                 />
               </div>
               <span class="font-mono text-[10px] text-outline">
-                Planilla directa • Equivalente anual: ${{ formatSalaryNumber((profile.preferences.dependent_salary_usd || 0) * 12) }} USD / año
+                {{ $t('profile.sections.payrollDirectAnnual', { amount: formatSalaryNumber((profile.preferences.dependent_salary_usd || 0) * 12) }) }}
               </span>
             </div>
 
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant font-medium">Salario Contractor (USD / mes)</label>
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.contractorSalary') }}</label>
               <div class="relative flex items-center">
                 <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
                 <input
@@ -964,14 +965,14 @@ onMounted(async () => {
                 />
               </div>
               <span class="font-mono text-[10px] text-outline">
-                B2B / W8-BEN • Equivalente anual: ${{ formatSalaryNumber((profile.preferences.contractor_salary_usd || 0) * 12) }} USD / año
+                {{ $t('profile.sections.contractorAnnual', { amount: formatSalaryNumber((profile.preferences.contractor_salary_usd || 0) * 12) }) }}
               </span>
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant font-medium">Disponibilidad / Preaviso <span class="text-accent">*</span></label>
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.noticePeriod') }} <span class="text-accent">*</span></label>
               <input
                 v-model="profile.preferences.notice_period"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
@@ -980,19 +981,19 @@ onMounted(async () => {
             </div>
 
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant font-medium">¿Habilitado legalmente para trabajar en tu país de residencia?</label>
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.legallyAuthorized') }}</label>
               <select
                 v-model="profile.preferences.legally_authorized_to_work"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="Yes">Sí</option>
-                <option value="No">No</option>
+                <option value="Yes">{{ $t('common.yes') }}</option>
+                <option value="No">{{ $t('common.no') }}</option>
               </select>
             </div>
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs text-on-surface-variant font-medium">Nivel de inglés certificado</label>
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.englishLevel') }}</label>
             <div class="flex items-center gap-2">
               <input
                 v-model="profile.preferences.english_level"
@@ -1011,14 +1012,14 @@ onMounted(async () => {
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <span class="material-symbols-outlined text-accent text-[20px]">smart_toy</span>
-              <h2 class="text-sm font-semibold text-on-surface">Automatización & ATS</h2>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.atsSettings') }}</h2>
             </div>
             <span class="px-2 py-0.5 rounded bg-surface-container-high text-accent font-mono text-[10px]">Headless Ready</span>
           </div>
 
           <!-- ATS Engine Checklist -->
           <div class="flex flex-col gap-2">
-            <label class="text-xs text-on-surface-variant font-medium">Plataformas soportadas habilitadas</label>
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.enabledPlatforms') }}</label>
             <div class="grid grid-cols-3 gap-2">
               <label
                 v-for="pl in platforms"
@@ -1040,8 +1041,8 @@ onMounted(async () => {
           <div class="flex flex-col gap-3 pt-2">
             <div class="flex items-center justify-between py-1">
               <div class="flex flex-col">
-                <span class="text-xs font-medium text-on-surface">Adjuntar CV automáticamente</span>
-                <span class="text-[11px] text-outline">Sube el archivo PDF de tu CV al abrir formularios de postulación</span>
+                <span class="text-xs font-medium text-on-surface">{{ $t('profile.sections.autoUploadResume') }}</span>
+                <span class="text-[11px] text-outline">{{ $t('profile.sections.autoUploadResumeDesc') }}</span>
               </div>
               <input
                 v-model="profile.ats_settings.auto_upload_resume"
@@ -1052,8 +1053,8 @@ onMounted(async () => {
 
             <div class="flex items-center justify-between py-1">
               <div class="flex flex-col">
-                <span class="text-xs font-medium text-on-surface">Modo sigiloso del navegador</span>
-                <span class="text-[11px] text-outline">Evita bloqueos de Cloudflare y detectores de automatización al navegar</span>
+                <span class="text-xs font-medium text-on-surface">{{ $t('profile.sections.stealthMode') }}</span>
+                <span class="text-[11px] text-outline">{{ $t('profile.sections.stealthModeDesc') }}</span>
               </div>
               <input
                 v-model="profile.ats_settings.stealth_mode"
@@ -1071,18 +1072,18 @@ onMounted(async () => {
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-1">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-sky-400 text-[20px]">forum</span>
-          <h2 class="text-sm font-semibold text-on-surface">Respuestas predefinidas a preguntas abiertas</h2>
+          <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.questionsTabTitle') }}</h2>
         </div>
         <p class="text-xs text-on-surface-variant">
-          Playwright inyecta estas respuestas en campos de texto extensos de los formularios (Greenhouse, Lever y Ashby) cuando no se requiere redacción específica generada por IA.
+          {{ $t('profile.sections.questionsTabDesc') }}
         </p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- 1. Motivación e interés por la empresa -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <label class="text-xs font-semibold text-on-surface">Motivación e interés por la empresa</label>
-          <span class="text-[11px] text-outline">Por qué te interesa sumarte a la empresa o qué te entusiasma del puesto.</span>
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.motivation') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.motivationDesc') }}</span>
           <textarea
             v-model="profile.open_questions.motivation"
             rows="5"
@@ -1092,8 +1093,8 @@ onMounted(async () => {
 
         <!-- 2. Resumen de trayectoria y experiencia relevante -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <label class="text-xs font-semibold text-on-surface">Resumen de trayectoria y experiencia relevante</label>
-          <span class="text-[11px] text-outline">Síntesis de tu perfil profesional, años de experiencia y herramientas principales.</span>
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.experienceSummary') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.experienceSummaryDesc') }}</span>
           <textarea
             v-model="profile.open_questions.experience_summary"
             rows="5"
@@ -1103,8 +1104,8 @@ onMounted(async () => {
 
         <!-- 3. Proyecto destacado o mayor desafío resuelto -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <label class="text-xs font-semibold text-on-surface">Proyecto destacado o mayor desafío resuelto</label>
-          <span class="text-[11px] text-outline">Descripción de un proyecto del que estés orgulloso o un problema complejo que hayas resuelto.</span>
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.keyProject') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.keyProjectDesc') }}</span>
           <textarea
             v-model="profile.open_questions.key_project"
             rows="5"
@@ -1114,8 +1115,8 @@ onMounted(async () => {
 
         <!-- 4. Información adicional o notas para la postulación -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <label class="text-xs font-semibold text-on-surface">Información adicional o carta de presentación</label>
-          <span class="text-[11px] text-outline">Detalles adicionales, enlaces a portafolio o repositorios, o aclaraciones para el reclutador.</span>
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.additionalInfo') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.additionalInfoDesc') }}</span>
           <textarea
             v-model="profile.open_questions.additional_info"
             rows="5"
@@ -1125,8 +1126,8 @@ onMounted(async () => {
 
         <!-- 5. Nivel de formación académica o certificaciones -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <label class="text-xs font-semibold text-on-surface">Nivel de formación académica o certificaciones</label>
-          <span class="text-[11px] text-outline">Título universitario, carrera en curso o certificaciones principales.</span>
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.educationLevel') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.educationLevelDesc') }}</span>
           <input
             v-model="profile.open_questions.education_level"
             type="text"
@@ -1136,8 +1137,8 @@ onMounted(async () => {
 
         <!-- 6. Disponibilidad horaria y huso horario -->
         <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
-          <label class="text-xs font-semibold text-on-surface">Disponibilidad horaria y huso horario</label>
-          <span class="text-[11px] text-outline">Zona horaria (UTC) y franja horaria de solapamiento con el equipo.</span>
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.timezoneOverlap') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.timezoneOverlapDesc') }}</span>
           <input
             v-model="profile.open_questions.timezone_overlap"
             type="text"
@@ -1151,10 +1152,10 @@ onMounted(async () => {
         <div class="flex flex-col gap-1">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-amber-400 text-[18px]">tune</span>
-            <h3 class="text-xs font-semibold text-on-surface">Preguntas personalizadas adicionales (palabra clave y respuesta)</h3>
+            <h3 class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.customQa') }}</h3>
           </div>
           <p class="text-[11px] text-on-surface-variant">
-            Si una postulación formula una pregunta específica (por ejemplo sobre un sector como fintech, cripto o liderazgo), el autocompletado buscará si la pregunta contiene la palabra clave y responderá con este texto.
+            {{ $t('profile.sections.customQaDesc') }}
           </p>
         </div>
 
@@ -1170,7 +1171,7 @@ onMounted(async () => {
                 <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-container-highest text-accent border border-border-subtle font-semibold">
                   {{ key }}
                 </span>
-                <span class="text-[11px] text-outline">Palabra clave detectada en el formulario</span>
+                <span class="text-[11px] text-outline">{{ $t('profile.sections.customKeywordBadge') }}</span>
               </div>
               <p class="text-xs text-on-surface font-sans leading-relaxed pt-0.5">
                 {{ val }}
@@ -1178,7 +1179,7 @@ onMounted(async () => {
             </div>
             <button
               class="self-end sm:self-start p-1.5 rounded-lg text-outline hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-              title="Eliminar pregunta personalizada"
+              :title="$t('profile.sections.customQa')"
               type="button"
               @click="removeCustomQa(key)"
             >
@@ -1187,23 +1188,23 @@ onMounted(async () => {
           </div>
         </div>
         <div v-else class="text-xs text-outline italic py-2">
-          No hay preguntas personalizadas adicionales configuradas.
+          {{ $t('profile.sections.noCustomQuestions') }}
         </div>
 
         <!-- Formulario para agregar nueva clave/valor -->
         <div class="pt-3 border-t border-border-subtle flex flex-col gap-2.5">
-          <span class="text-xs font-medium text-on-surface">Agregar nueva respuesta personalizada:</span>
+          <span class="text-xs font-medium text-on-surface">{{ $t('profile.sections.addNewCustomResponse') }}</span>
           <div class="flex flex-col sm:flex-row items-stretch sm:items-start gap-2.5">
             <input
               v-model="newCustomKey"
               class="h-9 px-3 w-full sm:w-48 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-              placeholder="Palabra clave (ej: fintech)"
+              :placeholder="$t('profile.sections.customKeywordPlaceholder')"
               type="text"
             />
             <input
               v-model="newCustomVal"
               class="h-9 px-3 flex-1 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-              placeholder="Respuesta a insertar cuando la pregunta contenga esa palabra"
+              :placeholder="$t('profile.sections.customResponsePlaceholder')"
               type="text"
               @keydown.enter.prevent="addCustomQa"
             />
@@ -1214,7 +1215,7 @@ onMounted(async () => {
               @click="addCustomQa"
             >
               <span class="material-symbols-outlined text-[16px]">add</span>
-              <span>Agregar</span>
+              <span>{{ $t('profile.sections.addBtn') }}</span>
             </button>
           </div>
         </div>
@@ -1228,15 +1229,15 @@ onMounted(async () => {
           <div class="flex items-center gap-2.5">
             <span class="material-symbols-outlined text-tertiary text-[20px]">smart_toy</span>
             <div>
-              <h2 class="text-sm font-semibold text-on-surface">Motor de IA y Asistente (LLM)</h2>
-              <p class="font-mono text-[11px] text-outline">Configuración del modelo para adaptar CVs en HTML y responder preguntas abiertas de formularios.</p>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.aiTitle') }}</h2>
+              <p class="font-mono text-[11px] text-outline">{{ $t('profile.sections.aiDesc') }}</p>
             </div>
           </div>
           <span
             class="px-2 py-0.5 rounded text-[10px] font-mono"
             :class="agentStatus?.connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'"
           >
-            {{ agentStatus?.connected ? `IA Activa (${agentStatus.activeProviderName})` : 'Modo CV Base Activo' }}
+            {{ agentStatus?.connected ? $t('profile.sections.aiActiveBadge', { name: agentStatus.activeProviderName }) : $t('profile.sections.aiBaseCvActiveBadge') }}
           </span>
         </div>
 
@@ -1251,23 +1252,21 @@ onMounted(async () => {
                 {{ agentStatus?.connected ? 'check_circle' : 'info' }}
               </span>
               <span class="text-xs font-semibold text-on-surface">
-                {{ agentStatus?.connected ? `Conectado: ${agentStatus.activeProviderName}` : 'Sin motor de IA detectado (Modo CV base activo)' }}
+                {{ agentStatus?.connected ? $t('profile.sections.aiConnectedTitle', { name: agentStatus.activeProviderName }) : $t('profile.sections.aiDisconnectedTitle') }}
               </span>
             </div>
             <span class="font-mono text-[11px] text-outline">
-              {{ agentStatus?.connected ? 'Adaptación ATS disponible' : 'CV base estándar' }}
+              {{ agentStatus?.connected ? $t('profile.sections.aiTailorAvailable') : $t('profile.sections.aiBaseCvStandard') }}
             </span>
           </div>
           <p class="text-xs text-on-surface-variant">
-            {{ agentStatus?.connected
-              ? 'El sistema adaptará el contenido del CV al perfil técnico de cada empresa y completará preguntas abiertas.'
-              : 'No necesitas instalar nada si no deseas usar IA: Job Hunter utilizará directamente tu CV base PDF (Matias_Olivera_QA_CV.pdf) para todas las postulaciones.' }}
+            {{ agentStatus?.connected ? $t('profile.sections.aiConnectedDesc') : $t('profile.sections.aiDisconnectedDesc') }}
           </p>
         </div>
 
         <!-- Provider Select -->
         <div class="flex flex-col gap-1.5 max-w-md">
-          <label class="text-xs text-on-surface-variant font-medium">Proveedor preferido de IA</label>
+          <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.aiPreferredProvider') }}</label>
           <select
             v-model="agentConfig.provider"
             class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
@@ -1280,8 +1279,8 @@ onMounted(async () => {
 
         <!-- Direct API Keys -->
         <div class="flex flex-col gap-1">
-          <h3 class="text-xs font-semibold text-on-surface">Claves de API directas (DeepSeek, Kimi, Anthropic, OpenAI, Gemini):</h3>
-          <p class="text-xs text-outline">Puedes ingresar tus claves de API directamente aquí sin necesidad de instalar o iniciar herramientas de consola.</p>
+          <h3 class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.apiKeysDirectTitle') }}</h3>
+          <p class="text-xs text-outline">{{ $t('profile.sections.apiKeysDirectDesc') }}</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1289,7 +1288,7 @@ onMounted(async () => {
           <div class="flex flex-col gap-1.5">
             <label class="text-xs text-on-surface-variant flex items-center justify-between">
               <span>DeepSeek API Key</span>
-              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasDeepSeekKey ? 'Configurada' : 'platform.deepseek.com' }}</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasDeepSeekKey ? $t('profile.sections.configured') : 'platform.deepseek.com' }}</span>
             </label>
             <input
               v-model="agentConfig.deepseekApiKey"
@@ -1303,7 +1302,7 @@ onMounted(async () => {
           <div class="flex flex-col gap-1.5">
             <label class="text-xs text-on-surface-variant flex items-center justify-between">
               <span>Kimi / Moonshot AI Key</span>
-              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasKimiKey ? 'Configurada' : 'platform.moonshot.cn' }}</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasKimiKey ? $t('profile.sections.configured') : 'platform.moonshot.cn' }}</span>
             </label>
             <input
               v-model="agentConfig.kimiApiKey"
@@ -1317,7 +1316,7 @@ onMounted(async () => {
           <div class="flex flex-col gap-1.5">
             <label class="text-xs text-on-surface-variant flex items-center justify-between">
               <span>Anthropic Claude API Key</span>
-              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasAnthropicKey ? 'Configurada' : 'sk-ant-...' }}</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasAnthropicKey ? $t('profile.sections.configured') : 'sk-ant-...' }}</span>
             </label>
             <input
               v-model="agentConfig.anthropicApiKey"
@@ -1331,7 +1330,7 @@ onMounted(async () => {
           <div class="flex flex-col gap-1.5">
             <label class="text-xs text-on-surface-variant flex items-center justify-between">
               <span>OpenAI API Key</span>
-              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasOpenAiKey ? 'Configurada' : 'sk-...' }}</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasOpenAiKey ? $t('profile.sections.configured') : 'sk-...' }}</span>
             </label>
             <input
               v-model="agentConfig.openaiApiKey"
@@ -1345,7 +1344,7 @@ onMounted(async () => {
           <div class="flex flex-col gap-1.5">
             <label class="text-xs text-on-surface-variant flex items-center justify-between">
               <span>Google Gemini API Key</span>
-              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasGeminiKey ? 'Configurada' : 'AI Studio' }}</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasGeminiKey ? $t('profile.sections.configured') : 'AI Studio' }}</span>
             </label>
             <input
               v-model="agentConfig.geminiApiKey"
@@ -1360,13 +1359,13 @@ onMounted(async () => {
 
         <!-- Custom endpoint -->
         <div class="flex flex-col gap-1">
-          <h3 class="text-xs font-semibold text-on-surface">Punto de enlace personalizado (OpenAI compatible / Ollama local / Groq / OpenRouter):</h3>
-          <p class="text-xs text-outline">Úsalo para conectar cualquier servidor local o proveedor que implemente el protocolo OpenAI (ej. http://localhost:11434/v1 para Ollama local).</p>
+          <h3 class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.customEndpointTitle') }}</h3>
+          <p class="text-xs text-outline">{{ $t('profile.sections.customEndpointDesc') }}</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
           <div class="md:col-span-5 flex flex-col gap-1.5">
-            <label class="text-xs text-on-surface-variant">URL Base de la API</label>
+            <label class="text-xs text-on-surface-variant">{{ $t('profile.sections.apiBaseUrlLabel') }}</label>
             <input
               v-model="agentConfig.customOpenAiBaseUrl"
               class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
@@ -1376,7 +1375,7 @@ onMounted(async () => {
           </div>
 
           <div class="md:col-span-3 flex flex-col gap-1.5">
-            <label class="text-xs text-on-surface-variant">Nombre del modelo</label>
+            <label class="text-xs text-on-surface-variant">{{ $t('profile.sections.modelNameLabel') }}</label>
             <input
               v-model="agentConfig.customOpenAiModel"
               class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
@@ -1387,8 +1386,8 @@ onMounted(async () => {
 
           <div class="md:col-span-4 flex flex-col gap-1.5">
             <label class="text-xs text-on-surface-variant flex items-center justify-between">
-              <span>Clave de API personalizada</span>
-              <span class="font-mono text-[10px] text-outline">Opcional para Ollama</span>
+              <span>{{ $t('profile.sections.customApiKeyLabel') }}</span>
+              <span class="font-mono text-[10px] text-outline">{{ $t('profile.sections.optionalOllama') }}</span>
             </label>
             <input
               v-model="agentConfig.customOpenAiApiKey"
@@ -1409,7 +1408,7 @@ onMounted(async () => {
             <span :class="['material-symbols-outlined text-[16px]', savingAgentConfig ? 'animate-spin' : '']">
               {{ savingAgentConfig ? 'sync' : 'check_circle' }}
             </span>
-            <span>{{ savingAgentConfig ? 'Probando conexión...' : 'Guardar y probar conexión' }}</span>
+            <span>{{ savingAgentConfig ? $t('profile.sections.testingConnection') : $t('profile.sections.saveAndTestConnection') }}</span>
           </button>
         </div>
       </section>

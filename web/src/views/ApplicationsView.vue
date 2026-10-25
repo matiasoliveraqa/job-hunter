@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { api, formatCompanyName, STATUS_META } from '../api.js'
 import { refreshAppStats } from '../stats.js'
+import { t } from '../i18n/index.js'
 
 const items = ref([])
 const files = ref([])
@@ -19,50 +20,50 @@ const expandedRows = ref(new Set())
 const currentPage = ref(1)
 const pageSize = ref(25)
 
-const STATUS_STYLES = {
+const STATUS_STYLES = computed(() => ({
   pending: {
     bg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
     dot: 'bg-amber-400 animate-pulse',
     icon: 'hourglass_top',
-    label: 'Pendiente de envío',
+    label: t('status.pending'),
   },
   applied: {
     bg: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
     dot: 'bg-sky-400',
     icon: 'send',
-    label: 'Enviada',
+    label: t('status.applied'),
   },
   interview: {
     bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
     dot: 'bg-amber-400',
     icon: 'calendar_month',
-    label: 'Entrevista',
+    label: t('status.interview'),
   },
   offer: {
     bg: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
     dot: 'bg-emerald-400',
     icon: 'verified',
-    label: 'Oferta / aceptada',
+    label: t('status.offer'),
   },
   rejected: {
     bg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
     dot: 'bg-rose-400',
     icon: 'cancel',
-    label: 'Rechazada',
+    label: t('status.rejected'),
   },
   withdrawn: {
     bg: 'bg-surface-container-high text-outline border-border-subtle',
     dot: 'bg-outline',
     icon: 'undo',
-    label: 'Retirada',
+    label: t('status.withdrawn'),
   },
   not_sent: {
     bg: 'bg-surface-container-high text-outline border-border-subtle',
     dot: 'bg-outline',
     icon: 'block',
-    label: 'No enviada',
+    label: t('status.not_sent'),
   },
-}
+}))
 
 function notify(text, color = 'success') {
   Object.assign(snack, { show: true, text, color })
@@ -90,7 +91,7 @@ function getAppAts(item) {
   if (u.includes('greenhouse.io')) return { key: 'greenhouse', label: 'Greenhouse ATS' }
   if (u.includes('lever.co')) return { key: 'lever', label: 'Lever ATS' }
   if (u.includes('ashbyhq.com')) return { key: 'ashby', label: 'Ashby ATS' }
-  return { key: 'direct', label: 'Postulación directa' }
+  return { key: 'direct', label: t('applications.toolbar.directApply') }
 }
 
 async function load() {
@@ -109,7 +110,7 @@ async function handleSync() {
   syncing.value = true
   try {
     await load()
-    notify('Postulaciones sincronizadas')
+    notify(t('applications.toasts.synced'))
   } finally {
     syncing.value = false
   }
@@ -186,9 +187,10 @@ const discardedSparkline = computed(() => generateSparklinePoints((a) => ['rejec
 
 // ---- Status pills counts ----
 const counts = computed(() =>
-  Object.keys(STATUS_META).map((key) => ({
+  Object.keys(STATUS_STYLES.value).map((key) => ({
     key,
     ...STATUS_META[key],
+    title: STATUS_STYLES.value[key]?.label || STATUS_META[key]?.title,
     count: items.value.filter((a) => !a.demo && a.status === key).length,
   })),
 )
@@ -557,13 +559,13 @@ async function clearDemos() {
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
       <div class="flex flex-col gap-1">
         <div class="flex items-center gap-3">
-          <h1 class="text-2xl font-semibold text-on-surface tracking-tight">Postulaciones</h1>
+          <h1 class="text-2xl font-semibold text-on-surface tracking-tight">{{ $t('applications.title') }}</h1>
           <span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-mono border border-border-subtle">
-            {{ totalCount }} en seguimiento
+            {{ $t('applications.trackingCount', { count: totalCount }) }}
           </span>
         </div>
         <p class="text-xs text-on-surface-variant">
-          Seguimiento de candidaturas enviadas, entrevistas, respuestas ATS y carpetas de CV generadas.
+          {{ $t('applications.subtitle') }}
         </p>
       </div>
 
@@ -576,19 +578,19 @@ async function clearDemos() {
           @click="clearDemos"
         >
           <span class="material-symbols-outlined text-[15px]">science</span>
-          <span>Limpiar demos ({{ demoCount }})</span>
+          <span>{{ $t('applications.clearDemos', { count: demoCount }) }}</span>
         </button>
 
         <button
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high border border-border-subtle text-xs font-medium transition-colors"
           :class="{ 'opacity-70 cursor-wait': syncing }"
           :disabled="syncing"
-          title="Sincronizar cambios con el servidor"
+          :title="$t('applications.syncTip')"
           type="button"
           @click="handleSync"
         >
           <span :class="['material-symbols-outlined text-[16px]', syncing ? 'animate-spin text-accent' : '']">sync</span>
-          <span>Sincronizar</span>
+          <span>{{ $t('applications.sync') }}</span>
         </button>
 
         <button
@@ -597,7 +599,7 @@ async function clearDemos() {
           @click="newDialog.show = true; newFormOpened = false"
         >
           <span class="material-symbols-outlined text-[17px]">add</span>
-          <span>Nueva postulación</span>
+          <span>{{ $t('applications.newApplication') }}</span>
         </button>
       </div>
     </div>
@@ -608,7 +610,7 @@ async function clearDemos() {
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-start justify-between">
           <div class="flex flex-col">
-            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">Total Registradas</span>
+            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">{{ $t('applications.kpi.totalRegistered') }}</span>
             <span class="text-[26px] font-semibold text-on-surface tracking-tight mt-1 group-hover:text-primary transition-colors">
               {{ totalCount }}
             </span>
@@ -620,7 +622,7 @@ async function clearDemos() {
         <div class="flex items-end justify-between mt-4">
           <div class="flex items-center gap-1 text-[11px] text-emerald-400 font-mono">
             <span class="material-symbols-outlined text-[14px]">trending_up</span>
-            <span>+{{ last7DaysCount }} esta semana</span>
+            <span>{{ $t('applications.kpi.thisWeek', { count: last7DaysCount }) }}</span>
           </div>
           <svg class="w-24 h-8 text-accent overflow-visible" fill="none" viewBox="0 0 100 32">
             <path :d="totalSparkline.linePath" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
@@ -633,7 +635,7 @@ async function clearDemos() {
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-start justify-between">
           <div class="flex flex-col">
-            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">En Proceso Activo</span>
+            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">{{ $t('applications.kpi.activeInProcess') }}</span>
             <span class="text-[26px] font-semibold text-on-surface tracking-tight mt-1">
               {{ activeProcesoCount }}
             </span>
@@ -644,7 +646,7 @@ async function clearDemos() {
         </div>
         <div class="flex items-end justify-between mt-4">
           <div class="flex items-center gap-1 text-[11px] text-on-surface-variant font-mono">
-            <span class="text-sky-400 font-semibold">{{ activeEnviadasCount }}</span> enviadas • <span class="text-amber-400 font-semibold">{{ activePendientesCount }}</span> pend.
+            <span>{{ $t('applications.kpi.activeRatio', { sent: activeEnviadasCount, pending: activePendientesCount }) }}</span>
           </div>
           <svg class="w-24 h-8 text-sky-400 overflow-visible" fill="none" viewBox="0 0 100 32">
             <path :d="activeSparkline.linePath" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
@@ -657,7 +659,7 @@ async function clearDemos() {
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-start justify-between">
           <div class="flex flex-col">
-            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">Entrevistas Agendadas</span>
+            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">{{ $t('applications.kpi.scheduledInterviews') }}</span>
             <span class="text-[26px] font-semibold text-amber-400 tracking-tight mt-1">
               {{ entrevistasCount }}
             </span>
@@ -669,7 +671,7 @@ async function clearDemos() {
         <div class="flex items-end justify-between mt-4">
           <div class="flex items-center gap-1 text-[11px] text-amber-400 font-mono">
             <span class="material-symbols-outlined text-[14px]">forum</span>
-            <span>{{ responseRatio }}% ratio respuesta</span>
+            <span>{{ $t('applications.kpi.responseRate', { rate: responseRatio }) }}</span>
           </div>
           <svg class="w-24 h-8 text-amber-400 overflow-visible" fill="none" viewBox="0 0 100 32">
             <path :d="interviewSparkline.linePath" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
@@ -682,7 +684,7 @@ async function clearDemos() {
       <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
         <div class="flex items-start justify-between">
           <div class="flex flex-col">
-            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">Descartadas / Retiradas</span>
+            <span class="text-[11px] uppercase tracking-wider text-outline font-mono">{{ $t('applications.kpi.discardedTotal') }}</span>
             <span class="text-[26px] font-semibold text-on-surface tracking-tight mt-1">
               {{ descartadasTotal }}
             </span>
@@ -693,7 +695,7 @@ async function clearDemos() {
         </div>
         <div class="flex items-end justify-between mt-4">
           <div class="flex items-center gap-1 text-[11px] text-outline font-mono">
-            <span>{{ rechazadasCount }} rechazada • {{ retiradasCount }} retirada</span>
+            <span>{{ $t('applications.kpi.discardedRatio', { rejected: rechazadasCount, withdrawn: retiradasCount }) }}</span>
           </div>
           <svg class="w-24 h-8 text-rose-500/60 overflow-visible" fill="none" viewBox="0 0 100 32">
             <path :d="discardedSparkline.linePath" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
@@ -715,7 +717,7 @@ async function clearDemos() {
         ]"
         @click="filterStatus = null; currentPage = 1"
       >
-        <span>Todas</span>
+        <span>{{ $t('applications.filterTabs.all') }}</span>
         <span class="px-1.5 py-0.2 rounded-md bg-surface-dim text-[11px] font-mono text-outline">{{ totalCount }}</span>
       </button>
 
@@ -745,7 +747,7 @@ async function clearDemos() {
         <input
           v-model="search"
           class="w-full pl-9 pr-12 py-2 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:border-accent focus:outline-none placeholder:text-outline transition-colors"
-          placeholder="Buscar por empresa, puesto, ATS o notas..."
+          :placeholder="$t('applications.toolbar.searchPlaceholder')"
           type="text"
           @input="currentPage = 1"
         />
@@ -761,11 +763,11 @@ async function clearDemos() {
             class="appearance-none pl-3 pr-8 py-2 rounded-lg bg-surface-container text-on-surface-variant text-xs border border-border-subtle hover:border-border-muted focus:border-accent focus:outline-none transition-colors cursor-pointer"
             @change="currentPage = 1"
           >
-            <option value="all">Portal / ATS: Todos</option>
+            <option value="all">{{ $t('applications.toolbar.allPlatforms') }}</option>
             <option value="greenhouse">Greenhouse ATS</option>
             <option value="lever">Lever ATS</option>
             <option value="ashby">Ashby ATS</option>
-            <option value="direct">Postulación directa</option>
+            <option value="direct">{{ $t('applications.toolbar.directApply') }}</option>
           </select>
           <span class="material-symbols-outlined absolute right-2 top-2.5 text-[16px] text-outline pointer-events-none">arrow_drop_down</span>
         </div>
@@ -776,10 +778,10 @@ async function clearDemos() {
             v-model="selectedSort"
             class="appearance-none pl-3 pr-8 py-2 rounded-lg bg-surface-container text-on-surface-variant text-xs border border-border-subtle hover:border-border-muted focus:border-accent focus:outline-none transition-colors cursor-pointer"
           >
-            <option value="recent">Más recientes primero</option>
-            <option value="oldest">Más antiguas primero</option>
-            <option value="company">Empresa (A-Z)</option>
-            <option value="status">Por estado</option>
+            <option value="recent">{{ $t('applications.toolbar.sortRecent') }}</option>
+            <option value="oldest">{{ $t('applications.toolbar.sortOldest') }}</option>
+            <option value="company">{{ $t('applications.toolbar.sortCompany') }}</option>
+            <option value="status">{{ $t('common.status') }}</option>
           </select>
           <span class="material-symbols-outlined absolute right-2 top-2.5 text-[16px] text-outline pointer-events-none">sort</span>
         </div>
@@ -787,7 +789,7 @@ async function clearDemos() {
         <!-- Reset button -->
         <button
           class="px-2.5 py-2 rounded-lg bg-surface-container text-outline hover:text-on-surface border border-border-subtle text-xs transition-colors"
-          title="Restablecer filtros"
+          :title="$t('search.presets.reset')"
           type="button"
           @click="resetFilters"
         >
@@ -801,7 +803,7 @@ async function clearDemos() {
       v-if="selectedIds.size > 0"
       class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-accent/10 border border-accent/30 text-on-surface text-xs animate-in fade-in duration-150"
     >
-      <span class="font-mono text-accent font-semibold">{{ selectedIds.size }} seleccionadas</span>
+      <span class="font-mono text-accent font-semibold">{{ $t('applications.toolbar.selectedCount', { count: selectedIds.size }) }}</span>
       <span class="text-border-muted">•</span>
       <button
         class="hover:text-accent font-medium transition-colors inline-flex items-center gap-1.5"
@@ -809,7 +811,7 @@ async function clearDemos() {
         @click="batchMarkApplied"
       >
         <span class="material-symbols-outlined text-[15px]">done_all</span>
-        Marcar como enviadas
+        {{ $t('applications.toolbar.changeStatus') }}
       </button>
       <span class="text-border-muted">•</span>
       <button
@@ -818,11 +820,11 @@ async function clearDemos() {
         @click="batchDelete"
       >
         <span class="material-symbols-outlined text-[15px]">delete</span>
-        Eliminar seleccionadas
+        {{ $t('applications.toolbar.deleteSelected', { count: selectedIds.size }) }}
       </button>
       <button
         class="text-outline hover:text-on-surface ml-auto p-1 rounded hover:bg-surface-container transition-colors"
-        title="Deseleccionar todas"
+        :title="$t('applications.toolbar.clearSelection')"
         type="button"
         @click="clearSelection"
       >
@@ -844,11 +846,11 @@ async function clearDemos() {
                   @change="toggleSelectAll"
                 />
               </th>
-              <th class="px-4 py-3 w-[22%]">Empresa</th>
-              <th class="px-4 py-3 w-[36%]">Puesto & CV</th>
-              <th class="px-3 py-3 w-[11%] whitespace-nowrap">Fecha Envío</th>
-              <th class="px-3 py-3 w-[13%] whitespace-nowrap">Estado</th>
-              <th class="px-4 py-3 text-right w-[18%] whitespace-nowrap">Acciones</th>
+              <th class="px-4 py-3 w-[22%]">{{ $t('common.company') }}</th>
+              <th class="px-4 py-3 w-[36%]">{{ $t('applications.table.colCompanyRole') }}</th>
+              <th class="px-3 py-3 w-[11%] whitespace-nowrap">{{ $t('applications.table.colDate') }}</th>
+              <th class="px-3 py-3 w-[13%] whitespace-nowrap">{{ $t('common.status') }}</th>
+              <th class="px-4 py-3 text-right w-[18%] whitespace-nowrap">{{ $t('common.actions') }}</th>
             </tr>
           </thead>
 
@@ -898,7 +900,7 @@ async function clearDemos() {
                       {{ item.notes }}
                     </span>
                     <span v-else class="text-[11px] text-outline font-mono mt-0.5">
-                      Sin CV adaptado
+                      {{ $t('applications.table.noCv') }}
                     </span>
                   </div>
                 </td>
@@ -917,7 +919,7 @@ async function clearDemos() {
                     ]"
                   >
                     <span :class="['w-1.5 h-1.5 rounded-full', STATUS_STYLES[item.status]?.dot || 'bg-outline']"></span>
-                    <span>{{ STATUS_META[item.status]?.title || item.status }}</span>
+                    <span>{{ STATUS_STYLES[item.status]?.label || item.status }}</span>
                   </span>
                 </td>
 
@@ -934,7 +936,7 @@ async function clearDemos() {
                           : 'bg-accent-subtle hover:bg-accent/20 text-accent border-transparent'
                       ]"
                       :disabled="tailoringMap[item.id]"
-                      title="Generar CV adaptado para esta postulación"
+                      :title="$t('search.table.btnTailor')"
                       type="button"
                       @click="tailorAppCv(item)"
                     >
@@ -949,19 +951,19 @@ async function clearDemos() {
                         <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
                       </svg>
                       <span v-else class="material-symbols-outlined text-[13px] leading-none text-accent">auto_fix_high</span>
-                      <span>{{ tailoringMap[item.id] ? 'Adaptando...' : 'Adaptar CV' }}</span>
+                      <span>{{ tailoringMap[item.id] ? $t('search.table.btnTailoring') : $t('search.table.btnTailor') }}</span>
                     </button>
 
                     <!-- Usar CV base directamente sin IA (solo cuando está pendiente y aún no tiene CV) -->
                     <button
                       v-if="item.status === 'pending' && !item.cv"
                       class="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-surface-container hover:bg-surface-container-high text-on-surface border border-border-subtle transition-colors"
-                      title="Asignar tu CV base estándar sin modificar con IA"
+                      :title="$t('topbar.statusBaseCv')"
                       type="button"
                       @click="assignBaseCv(item)"
                     >
                       <span class="material-symbols-outlined text-[13px] leading-none text-outline">description</span>
-                      <span>CV base</span>
+                      <span>{{ $t('topbar.statusBaseCv') }}</span>
                     </button>
 
                     <!-- Abrir Formulario Playwright -->
@@ -973,30 +975,30 @@ async function clearDemos() {
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                           : 'bg-surface-container hover:bg-surface-container-high border-border-subtle text-on-surface'
                       ]"
-                      :title="isAppOpened(item) ? 'Formulario abierto previamente' : 'Abrir y pre-rellenar formulario con Playwright'"
+                      :title="$t('search.table.openPlaywright')"
                       type="button"
                       @click="launchItemForm(item)"
                     >
                       <span class="material-symbols-outlined text-[13px]">{{ isAppOpened(item) ? 'check' : 'open_in_new' }}</span>
-                      <span>{{ isAppOpened(item) ? 'Abierto' : 'Abrir form' }}</span>
+                      <span>{{ isAppOpened(item) ? $t('common.open') : $t('applications.table.openPlaywright') }}</span>
                     </button>
 
                     <!-- Confirmar postulación enviada -->
                     <button
                       v-if="item.status === 'pending'"
                       class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors"
-                      title="Confirmar postulación enviada y registrar exclusión"
+                      :title="$t('common.confirm')"
                       type="button"
                       @click="confirmSent(item)"
                     >
                       <span class="material-symbols-outlined text-[13px]">done_all</span>
-                      <span>Marcar</span>
+                      <span>{{ $t('common.confirm') }}</span>
                     </button>
 
                     <!-- Cambiar estado / notas -->
                     <button
                       class="p-1 rounded text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
-                      title="Cambiar estado o editar notas"
+                      :title="$t('applications.table.editNotes')"
                       type="button"
                       @click="openStatus(item)"
                     >
@@ -1009,7 +1011,7 @@ async function clearDemos() {
                         'p-1 rounded text-outline hover:text-on-surface hover:bg-surface-container transition-colors',
                         expandedRows.has(item.id) ? 'text-accent bg-surface-container' : ''
                       ]"
-                      :title="expandedRows.has(item.id) ? 'Ocultar historial' : 'Ver historial de eventos y notas'"
+                      :title="$t('applications.table.colNotes')"
                       type="button"
                       @click="toggleExpandRow(item.id)"
                     >
@@ -1021,7 +1023,7 @@ async function clearDemos() {
                     <!-- Eliminar -->
                     <button
                       class="p-1 rounded text-outline hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                      title="Eliminar postulación"
+                      :title="$t('applications.table.deleteApp')"
                       type="button"
                       @click="remove(item)"
                     >
@@ -1038,7 +1040,7 @@ async function clearDemos() {
                     <div class="flex items-center justify-between border-b border-border-subtle pb-2">
                       <span class="font-mono text-[11px] uppercase tracking-wider text-outline flex items-center gap-1.5">
                         <span class="material-symbols-outlined text-[14px]">history</span>
-                        Historial de eventos y notas
+                        {{ $t('applications.table.colNotes') }}
                       </span>
                       <button
                         class="text-[11px] text-accent hover:underline flex items-center gap-1"
@@ -1046,7 +1048,7 @@ async function clearDemos() {
                         @click="openStatus(item)"
                       >
                         <span class="material-symbols-outlined text-[13px]">edit</span>
-                        Editar estado / notas
+                        {{ $t('applications.table.editNotes') }}
                       </button>
                     </div>
 
@@ -1054,14 +1056,14 @@ async function clearDemos() {
                     <div v-if="item.reason" class="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-2">
                       <span class="material-symbols-outlined text-[16px] text-rose-400 shrink-0 mt-0.5">priority_high</span>
                       <div>
-                        <span class="font-semibold">Motivo de rechazo:</span> {{ item.reason }}
+                        <span class="font-semibold">{{ $t('status.rejected') }}:</span> {{ item.reason }}
                       </div>
                     </div>
 
                     <!-- Notas -->
                     <div v-if="item.notes" class="text-xs text-on-surface-variant flex items-start gap-2">
                       <span class="material-symbols-outlined text-[15px] text-outline shrink-0 mt-0.5">notes</span>
-                      <span><strong class="text-on-surface">Notas:</strong> {{ item.notes }}</span>
+                      <span><strong class="text-on-surface">{{ $t('common.notes') }}:</strong> {{ item.notes }}</span>
                     </div>
 
                     <!-- Eventos cronológicos -->
@@ -1079,7 +1081,7 @@ async function clearDemos() {
                       </div>
                     </div>
                     <div v-else class="text-xs text-outline italic">
-                      Sin eventos registrados en la bitácora todavía.
+                      {{ $t('applications.table.noNotes') }}
                     </div>
                   </div>
                 </td>
@@ -1091,13 +1093,13 @@ async function clearDemos() {
               <td class="py-12 text-center text-outline" colspan="6">
                 <div class="flex flex-col items-center justify-center gap-2">
                   <span class="material-symbols-outlined text-[36px] text-outline/50">inbox</span>
-                  <span class="text-xs">No se encontraron postulaciones con los filtros activos</span>
+                  <span class="text-xs">{{ $t('applications.table.emptyTitle') }}</span>
                   <button
                     class="mt-2 text-xs text-accent hover:underline font-medium"
                     type="button"
                     @click="resetFilters"
                   >
-                    Restablecer filtros
+                    {{ $t('search.presets.reset') }}
                   </button>
                 </div>
               </td>
@@ -1109,13 +1111,7 @@ async function clearDemos() {
       <!-- TABLE FOOTER / PAGINATION -->
       <div class="px-4 py-3 border-t border-border-subtle bg-surface-container/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-outline font-mono">
         <div class="flex items-center gap-1.5">
-          <span>Mostrando</span>
-          <span class="text-on-surface font-medium">
-            {{ filteredItems.length ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, filteredItems.length) }}
-          </span>
-          <span>de</span>
-          <span class="text-on-surface font-medium">{{ filteredItems.length }}</span>
-          <span>postulaciones</span>
+          <span>{{ $t('applications.table.paginationShowing', { from: filteredItems.length ? (currentPage - 1) * pageSize + 1 : 0, to: Math.min(currentPage * pageSize, filteredItems.length), total: filteredItems.length }) }}</span>
         </div>
 
         <div class="flex items-center gap-1.5">
@@ -1125,16 +1121,16 @@ async function clearDemos() {
             type="button"
             @click="prevPage"
           >
-            Anterior
+            {{ $t('applications.table.prevPage') }}
           </button>
-          <span class="px-2 text-on-surface font-medium">Página {{ currentPage }} de {{ totalPages }}</span>
+          <span class="px-2 text-on-surface font-medium">{{ $t('applications.table.page', { current: currentPage, total: totalPages }) }}</span>
           <button
             class="px-2.5 py-1 rounded-md bg-surface-container border border-border-subtle text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             :disabled="currentPage >= totalPages"
             type="button"
             @click="nextPage"
           >
-            Siguiente
+            {{ $t('applications.table.nextPage') }}
           </button>
         </div>
       </div>
@@ -1161,24 +1157,24 @@ async function clearDemos() {
 
         <form class="p-5 flex flex-col gap-4 text-xs" @submit.prevent="saveStatus">
           <div>
-            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">Estado</label>
+            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">{{ $t('common.status') }}</label>
             <select
               v-model="statusDialog.status"
               class="w-full px-3 py-2 rounded-lg bg-surface-container border border-border-subtle text-on-surface text-xs focus:border-accent focus:outline-none cursor-pointer"
             >
-              <option value="pending">Pendiente de envío</option>
-              <option value="applied">Enviada</option>
-              <option value="interview">Entrevista</option>
-              <option value="offer">Oferta / aceptada</option>
-              <option value="rejected">Rechazada</option>
-              <option value="withdrawn">Retirada</option>
-              <option value="not_sent">No enviada</option>
+              <option value="pending">{{ STATUS_STYLES.pending?.label }}</option>
+              <option value="applied">{{ STATUS_STYLES.applied?.label }}</option>
+              <option value="interview">{{ STATUS_STYLES.interview?.label }}</option>
+              <option value="offer">{{ STATUS_STYLES.offer?.label }}</option>
+              <option value="rejected">{{ STATUS_STYLES.rejected?.label }}</option>
+              <option value="withdrawn">{{ STATUS_STYLES.withdrawn?.label }}</option>
+              <option value="not_sent">{{ STATUS_STYLES.not_sent?.label }}</option>
             </select>
           </div>
 
           <div v-if="statusDialog.status === 'rejected'">
             <label class="block text-[11px] font-mono uppercase tracking-wider text-rose-400 mb-1.5">
-              Motivo del rechazo (obligatorio)
+              {{ $t('status.rejected') }} ({{ $t('common.confirm') }})
             </label>
             <textarea
               v-model="statusDialog.reason"
@@ -1189,7 +1185,7 @@ async function clearDemos() {
           </div>
 
           <div>
-            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">Notas adicionales</label>
+            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">{{ $t('common.notes') }}</label>
             <textarea
               v-model="statusDialog.notes"
               class="w-full px-3 py-2 rounded-lg bg-surface-container border border-border-subtle text-on-surface text-xs focus:border-accent focus:outline-none"
@@ -1204,13 +1200,13 @@ async function clearDemos() {
               type="button"
               @click="statusDialog.show = false"
             >
-              Cancelar
+              {{ $t('common.cancel') }}
             </button>
             <button
               class="px-4 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium shadow-sm transition-colors"
               type="submit"
             >
-              Guardar cambios
+              {{ $t('common.save') }}
             </button>
           </div>
         </form>
@@ -1226,7 +1222,7 @@ async function clearDemos() {
         <div class="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-accent text-[20px]">add_circle</span>
-            <h3 class="text-sm font-semibold text-on-surface">Registrar Nueva Postulación</h3>
+            <h3 class="text-sm font-semibold text-on-surface">{{ $t('applications.dialogs.newTitle') }}</h3>
           </div>
           <button class="text-outline hover:text-on-surface p-1 rounded-md hover:bg-surface-container transition-colors" type="button" @click="newDialog.show = false">
             <span class="material-symbols-outlined text-[18px] block">close</span>
@@ -1235,44 +1231,44 @@ async function clearDemos() {
 
         <form class="p-5 flex flex-col gap-4 text-xs" @submit.prevent="register">
           <div>
-            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">Empresa *</label>
+            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">{{ $t('applications.dialogs.companyLabel') }} *</label>
             <input
               v-model="newDialog.form.company"
               class="w-full px-3 py-2 rounded-lg bg-surface-container border border-border-subtle text-on-surface text-xs focus:border-accent focus:outline-none"
-              placeholder="Ej: MercadoLibre, Automattic, GitLab..."
+              :placeholder="$t('applications.dialogs.companyPlaceholder')"
               required
               type="text"
             />
           </div>
 
           <div>
-            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">Puesto *</label>
+            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">{{ $t('applications.dialogs.roleLabel') }} *</label>
             <input
               v-model="newDialog.form.role"
               class="w-full px-3 py-2 rounded-lg bg-surface-container border border-border-subtle text-on-surface text-xs focus:border-accent focus:outline-none"
-              placeholder="Ej: QA Automation Engineer"
+              :placeholder="$t('applications.dialogs.rolePlaceholder')"
               required
               type="text"
             />
           </div>
 
           <div>
-            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">Enlace de la vacante / formulario</label>
+            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">{{ $t('applications.dialogs.urlLabel') }}</label>
             <input
               v-model="newDialog.form.url"
               class="w-full px-3 py-2 rounded-lg bg-surface-container border border-border-subtle text-on-surface text-xs focus:border-accent focus:outline-none"
-              placeholder="https://boards.greenhouse.io/..."
+              :placeholder="$t('applications.dialogs.urlPlaceholder')"
               type="url"
             />
           </div>
 
           <div>
-            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">CV a adjuntar</label>
+            <label class="block text-[11px] font-mono uppercase tracking-wider text-outline mb-1.5">{{ $t('applications.dialogs.cvLabel') }}</label>
             <select
               v-model="newDialog.form.cv"
               class="w-full px-3 py-2 rounded-lg bg-surface-container border border-border-subtle text-on-surface text-xs focus:border-accent focus:outline-none cursor-pointer"
             >
-              <option value="">Ninguno / Por defecto</option>
+              <option value="">{{ $t('applications.dialogs.cvNone') }}</option>
               <option v-for="cv in cvItems" :key="cv" :value="cv">{{ cv }}</option>
             </select>
           </div>
@@ -1280,7 +1276,7 @@ async function clearDemos() {
           <div class="p-3 rounded-lg bg-surface-container/60 border border-border-subtle flex items-start gap-2.5">
             <span class="material-symbols-outlined text-accent text-[17px] shrink-0 mt-0.5">info</span>
             <span class="text-[11px] text-on-surface-variant leading-relaxed">
-              Puedes abrir el navegador de Playwright para que complete el formulario automáticamente, o registrar la postulación directamente en tu lista.
+              {{ $t('search.subtitle') }}
             </span>
           </div>
 
@@ -1297,7 +1293,7 @@ async function clearDemos() {
               @click="launchForm"
             >
               <span class="material-symbols-outlined text-[15px]">{{ newFormOpened ? 'check' : 'open_in_browser' }}</span>
-              <span>{{ newFormOpened ? 'Formulario abierto' : 'Abrir formulario' }}</span>
+              <span>{{ newFormOpened ? $t('common.open') : $t('applications.table.openPlaywright') }}</span>
             </button>
 
             <div class="flex items-center gap-2">
@@ -1306,13 +1302,13 @@ async function clearDemos() {
                 type="button"
                 @click="newDialog.show = false"
               >
-                Cancelar
+                {{ $t('common.cancel') }}
               </button>
               <button
                 class="px-4 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium shadow-sm transition-colors"
                 type="submit"
               >
-                Guardar postulación
+                {{ $t('applications.dialogs.saveApp') }}
               </button>
             </div>
           </div>

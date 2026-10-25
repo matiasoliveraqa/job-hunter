@@ -51,7 +51,7 @@ class LeverScanner(BaseScanner):
                             f"{j.get('description') or ''} "
                             f"{lists_text}"
                         )
-                        if self.has_residency_restriction(desc):
+                        if self.has_residency_restriction(desc, location_keywords):
                             continue
                         if not self.matches_experience(desc, max_years_experience):
                             continue
