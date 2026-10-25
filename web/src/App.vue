@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { api } from './api.js'
 import { initTheme, isDark, toggleTheme } from './theme.js'
 import { appStats, refreshAppStats } from './stats.js'
 import { scanning, startScan, stopScan, lastScanTime } from './scanController.js'
@@ -9,6 +10,17 @@ const route = useRoute()
 const router = useRouter()
 
 const collapsed = ref(false)
+const profile = ref(null)
+
+const candidateName = computed(() => profile.value?.personal_info?.full_name || 'Candidato')
+const candidateRole = computed(() => profile.value?.search_criteria?.target_roles?.[0] || 'Mi perfil')
+const candidateInitials = computed(() => {
+  const name = candidateName.value
+  if (!name || name === 'Candidato') return 'C'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+})
 
 const navLinks = [
   { to: '/search', label: 'Buscar vacantes', icon: 'travel_explore' },
@@ -43,9 +55,16 @@ function handleSearchFocus() {
   }
 }
 
+async function loadProfileData() {
+  try {
+    profile.value = await api.getProfile()
+  } catch {}
+}
+
 onMounted(() => {
   initTheme()
   refreshAppStats()
+  loadProfileData()
 
   window.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -74,7 +93,6 @@ onMounted(() => {
             </div>
             <div v-if="!collapsed" class="flex flex-col leading-tight truncate">
               <span class="font-medium text-on-surface text-[13px]">Job Hunter</span>
-              <span class="text-[11px] font-mono text-outline">v2.4 • :5000</span>
             </div>
           </div>
           <button
@@ -93,12 +111,11 @@ onMounted(() => {
           <div class="relative flex items-center">
             <span class="material-symbols-outlined absolute left-2.5 text-[15px] text-outline">search</span>
             <input
-              class="w-full pl-8 pr-8 py-1.5 rounded-md bg-surface-container text-on-surface text-[12px] border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors"
+              class="w-full pl-8 pr-3 py-1.5 rounded-md bg-surface-container text-on-surface text-[12px] border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors"
               placeholder="Buscar..."
               type="text"
               @focus="handleSearchFocus"
             />
-            <kbd class="absolute right-2 px-1 py-0.2 rounded bg-surface-container-high text-[10px] font-mono text-outline border border-border-muted">⌘K</kbd>
           </div>
         </div>
 
@@ -155,15 +172,15 @@ onMounted(() => {
         </div>
         <div
           class="flex items-center gap-2.5 p-1.5 rounded-lg bg-surface-container border border-border-subtle hover:border-border-muted transition-colors cursor-pointer"
-          :title="collapsed ? 'Matías Olivera (QA Engineer / SDET)' : undefined"
+          :title="collapsed ? `${candidateName} (${candidateRole})` : undefined"
           @click="router.push('/profile')"
         >
           <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-slate-700 to-indigo-900 border border-border-subtle flex items-center justify-center text-white text-xs font-semibold shrink-0">
-            MO
+            {{ candidateInitials }}
           </div>
           <div v-if="!collapsed" class="flex flex-col min-w-0 flex-1">
-            <span class="font-medium text-[12px] text-on-surface truncate leading-snug">Matías Olivera</span>
-            <span class="text-[10px] text-outline truncate leading-none">QA Engineer / SDET</span>
+            <span class="font-medium text-[12px] text-on-surface truncate leading-snug">{{ candidateName }}</span>
+            <span class="text-[10px] text-outline truncate leading-none">{{ candidateRole }}</span>
           </div>
         </div>
       </div>

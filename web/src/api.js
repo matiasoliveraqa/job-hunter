@@ -29,6 +29,7 @@ export const api = {
   launchApply: (body) => request('/api/apply', { method: 'POST', body }),
   listLaunches: () => request('/api/apply'),
   stopScan: () => request('/api/scan/stop', { method: 'POST', body: {} }),
+  getScanResults: () => request('/api/scan/results'),
   tailorCv: (body) => request('/api/tailor-cv', { method: 'POST', body }),
 }
 

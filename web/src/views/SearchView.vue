@@ -13,6 +13,7 @@ import {
   progressPercent,
   startScan,
   stopScan,
+  loadPersistedResults,
 } from '../scanController.js'
 
 const profile = ref(null)
@@ -52,6 +53,7 @@ async function loadProfile() {
       form.maxYears = data.personal_info.years_of_experience
     }
     await loadExistingApps()
+    await loadPersistedResults(existingApps.value)
   } catch (e) {
     notify('No se pudo cargar el perfil: ' + e.message, 'warning')
   } finally {

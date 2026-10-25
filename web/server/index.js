@@ -383,6 +383,21 @@ app.get('/api/apply', (_req, res) => res.json([...launches.values()]))
 
 // ---- Structured Scanner (SSE) ----
 let activeScanChild = null
+let latestScanMatches = []
+
+app.get('/api/scan/results', async (_req, res) => {
+  const scanResultsPath = path.join(ROOT, 'output', 'scan_results.json')
+  if (latestScanMatches.length > 0) {
+    return res.json({ matches: latestScanMatches })
+  }
+  if (existsSync(scanResultsPath)) {
+    try {
+      const data = JSON.parse(await fs.readFile(scanResultsPath, 'utf-8'))
+      return res.json({ matches: Array.isArray(data) ? data : [] })
+    } catch {}
+  }
+  res.json({ matches: [] })
+})
 
 app.post('/api/scan/stream', (req, res) => {
   const { roles, platforms, locations, maxYears, concurrency, allowCaptcha } = req.body ?? {}
@@ -419,9 +434,14 @@ app.post('/api/scan/stream', (req, res) => {
   })
 
   const send = (evt) => {
-    res.write(`data: ${JSON.stringify(evt)}\n\n`)
+    try {
+      if (res.writable && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify(evt)}\n\n`)
+      }
+    } catch {}
   }
 
+  latestScanMatches = []
   send({ type: 'start' })
 
   const child = spawn(PYTHON_BIN, args, { cwd: ROOT, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -437,6 +457,9 @@ app.post('/api/scan/stream', (req, res) => {
       if (!line) continue
       try {
         const parsed = JSON.parse(line)
+        if (parsed.type === 'match' && parsed.posting) {
+          latestScanMatches.push(parsed.posting)
+        }
         send(parsed)
       } catch {
         send({ type: 'raw', text: line })
@@ -452,20 +475,22 @@ app.post('/api/scan/stream', (req, res) => {
   child.on('close', (code) => {
     if (activeScanChild === child) activeScanChild = null
     send({ type: 'exit', code })
-    res.end()
+    try {
+      if (!res.writableEnded) res.end()
+    } catch {}
   })
 
   child.on('error', (err) => {
     if (activeScanChild === child) activeScanChild = null
     send({ type: 'error', error: err.message })
-    res.end()
+    try {
+      if (!res.writableEnded) res.end()
+    } catch {}
   })
 
   res.on('close', () => {
-    if (activeScanChild === child) {
-      try { child.kill('SIGTERM') } catch {}
-      activeScanChild = null
-    }
+    // If client disconnects on reload, do not abort activeScanChild;
+    // user stops scan explicitly via POST /api/scan/stop.
   })
 })
 
@@ -486,10 +511,12 @@ export function sanitizeCvHtml(rawHtml) {
   if (!rawHtml || typeof rawHtml !== 'string') return ''
   const sanitized = DOMPurify.sanitize(rawHtml, {
     WHOLE_DOCUMENT: true,
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'applet', 'base', 'meta', 'link'],
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'applet', 'base', 'meta', 'link'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
   })
-  return sanitized.replace(/<img\b([^>]*?)\bsrc=["']https?:\/\/[^"'>]+["']([^>]*?)>/gi, '<img$1src=""$2>')
+  return sanitized
+    .replace(/@import\s+[^;]+;/gi, '')
+    .replace(/<img\b([^>]*?)\bsrc=["']https?:\/\/[^"'>]+["']([^>]*?)>/gi, '<img$1src=""$2>')
 }
 
 app.post('/api/tailor-cv', async (req, res) => {

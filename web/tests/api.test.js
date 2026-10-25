@@ -26,7 +26,7 @@ function makeRequest({ port, path = '/', method = 'GET', headers = {}, body = nu
   })
 }
 
-test('sanitizeCvHtml neutralizes scripts, styles, event handlers, and remote tracker images', () => {
+test('sanitizeCvHtml neutralizes scripts, event handlers, and remote tracker images while preserving styles', () => {
   const dirty = `
     <h1>Senior QA Engineer</h1>
     <script>alert("xss")</script>
@@ -40,7 +40,7 @@ test('sanitizeCvHtml neutralizes scripts, styles, event handlers, and remote tra
   `
   const cleaned = sanitizeCvHtml(dirty)
   assert.ok(!cleaned.includes('<script'), 'Should strip script tags')
-  assert.ok(!cleaned.includes('<style'), 'Should strip style tags')
+  assert.ok(cleaned.includes('<style'), 'Should preserve style tags')
   assert.ok(!cleaned.includes('@import'), 'Should strip @import')
   assert.ok(!cleaned.includes('alert('), 'Should strip script contents')
   assert.ok(!cleaned.includes('<iframe'), 'Should strip iframe tags')
@@ -52,6 +52,7 @@ test('sanitizeCvHtml neutralizes scripts, styles, event handlers, and remote tra
   assert.ok(!cleaned.includes('javascript:'), 'Should strip javascript: URLs')
   assert.ok(!cleaned.includes('https://attacker.com/leak'), 'Should neutralize remote image tracker src')
   assert.ok(cleaned.includes('<h1>Senior QA Engineer</h1>'), 'Should preserve safe tags')
+  assert.ok(cleaned.includes('color: red;'), 'Should preserve safe CSS')
 })
 
 test('isAllowedAtsHost strictly validates ATS domains and prevents query parameter escapes', () => {

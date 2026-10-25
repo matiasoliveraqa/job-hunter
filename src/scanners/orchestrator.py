@@ -116,12 +116,21 @@ class ScannerOrchestrator:
                             on_progress(checked_count, total_tasks, plat_key, slug)
                         except Exception:
                             pass
-                    if postings and on_match:
-                        for p in postings:
-                            try:
-                                on_match(p)
-                            except Exception:
-                                pass
+                    if postings:
+                        all_postings.extend(postings)
+                        try:
+                            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+                            out_file = OUTPUT_DIR / "scan_results.json"
+                            with open(out_file, "w", encoding="utf-8") as f:
+                                json.dump([p.model_dump() for p in all_postings], f, indent=2, ensure_ascii=False)
+                        except Exception:
+                            pass
+                        if on_match:
+                            for p in postings:
+                                try:
+                                    on_match(p)
+                                except Exception:
+                                    pass
                     return postings
             except Exception as e:
                 checked_count += 1
@@ -134,10 +143,7 @@ class ScannerOrchestrator:
 
         async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
             tasks = [_bounded_scan(sc, session, pk, sl) for sc, pk, sl in items]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for res in results:
-                if isinstance(res, list):
-                    all_postings.extend(res)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         # Allow underlying SSL transports to close cleanly on Windows ProactorEventLoop
         await asyncio.sleep(0.1)

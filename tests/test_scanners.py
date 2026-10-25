@@ -9,6 +9,9 @@ def test_keyword_matching():
     assert scanner.matches_keywords("Senior Software Engineer", ["software", "python"]) is True
     assert scanner.matches_keywords("Data Analyst", ["software", "python"]) is False
     assert scanner.matches_keywords("QA Automation Lead", ["qa automation"]) is True
+    assert scanner.matches_keywords("Senior Automation QA Engineer", ["QA Automation Engineer"]) is True
+    assert scanner.matches_keywords("Lead QA", ["QA"]) is True
+    assert scanner.matches_keywords("Software Quality Assurance Engineer", ["Quality Engineer"]) is True
 
 def test_location_matching():
     scanner = AshbyScanner()

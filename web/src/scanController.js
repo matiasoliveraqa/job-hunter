@@ -47,10 +47,44 @@ export const PRESETS = [
 
 export const scanning = ref(false)
 export const progress = reactive({ checked: 0, total: 0, platform: '', company: '' })
-export const matches = ref([])
+const storedMatches = (() => {
+  try {
+    const raw = localStorage.getItem('job_hunter_matches')
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+})()
+
+export const matches = ref(storedMatches)
 export const errorCount = ref(0)
 export const logs = ref([])
-export const lastScanTime = ref(null)
+export const lastScanTime = ref(localStorage.getItem('job_hunter_last_scan_time') || null)
+
+function saveMatches() {
+  try {
+    localStorage.setItem('job_hunter_matches', JSON.stringify(matches.value))
+  } catch {}
+}
+
+export async function loadPersistedResults(existingApps = []) {
+  if (matches.value.length === 0) {
+    try {
+      const res = await api.getScanResults()
+      if (res?.matches?.length) {
+        matches.value = res.matches.map((p) => {
+          if (!p.matchScore) p.matchScore = calculateMatchScore(p)
+          const matchedApp = existingApps.find(
+            (a) => a.url === p.url || (a.company?.toLowerCase() === p.company?.toLowerCase() && a.role?.toLowerCase() === p.title?.toLowerCase())
+          )
+          if (matchedApp?.cv) p.cv = matchedApp.cv
+          return p
+        })
+        saveMatches()
+      }
+    } catch {}
+  }
+}
 
 export const form = reactive({
   roles: ['QA Automation Engineer', 'Senior QA Engineer', 'SDET', 'Quality Engineer', 'Software Engineer in Test', 'QA Engineer'],
@@ -117,6 +151,7 @@ export function handleEvent(evt, existingApps = []) {
         p.cv = matchedApp.cv
       }
       matches.value.unshift(p)
+      saveMatches()
     }
   } else if (evt.type === 'board_error') {
     errorCount.value++
@@ -124,7 +159,11 @@ export function handleEvent(evt, existingApps = []) {
     if (logs.value.length > 100) logs.value.pop()
   } else if (evt.type === 'done') {
     scanning.value = false
-    lastScanTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    lastScanTime.value = timeStr
+    try {
+      localStorage.setItem('job_hunter_last_scan_time', timeStr)
+    } catch {}
   } else if (evt.type === 'exit') {
     scanning.value = false
   }
@@ -140,6 +179,7 @@ export async function startScan(existingApps = []) {
 
   scanning.value = true
   matches.value = []
+  saveMatches()
   logs.value = []
   errorCount.value = 0
   Object.assign(progress, { checked: 0, total: 0, platform: '', company: '' })

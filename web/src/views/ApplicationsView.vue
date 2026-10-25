@@ -132,6 +132,30 @@ async function launchItemForm(item) {
   }
 }
 
+const tailoringMap = reactive({})
+
+async function tailorAppCv(item) {
+  tailoringMap[item.id] = true
+  try {
+    const res = await api.tailorCv({
+      company: item.company,
+      role: item.role,
+      url: item.url || undefined,
+      description: item.role,
+    })
+    if (res?.cv) {
+      item.cv = res.cv
+      await api.updateApplication(item.id, { cv: res.cv })
+      notify(`CV adaptado generado para ${item.company} (${res.cv})`)
+      await load()
+    }
+  } catch (err) {
+    notify('Error al adaptar CV: ' + err.message, 'error')
+  } finally {
+    tailoringMap[item.id] = false
+  }
+}
+
 async function confirmSent(item) {
   if (!item.cv) {
     const ok = window.confirm(`Atención: "${item.company}" no tiene un CV adaptado generado.\n¿Deseas registrarla como enviada de todas formas?`)
@@ -251,8 +275,14 @@ async function remove(item) {
           items-per-page="25"
         >
           <template #item.company="{ item }">
-            {{ item.company }}
-            <v-chip v-if="item.demo" size="x-small" color="warning" class="ml-1" prepend-icon="mdi-flask-outline">Demo</v-chip>
+            <div>
+              <span class="font-weight-medium">{{ item.company }}</span>
+              <v-chip v-if="item.demo" size="x-small" color="warning" class="ml-1" prepend-icon="mdi-flask-outline">Demo</v-chip>
+              <div v-if="item.cv" class="text-caption text-success mt-0.5 d-flex align-center">
+                <v-icon icon="mdi-file-pdf-box" size="x-small" class="mr-1" />
+                <span>{{ item.cv.split('/').pop() }}</span>
+              </div>
+            </div>
           </template>
           <template #item.appliedAt="{ item }">{{ item.appliedAt || '—' }}</template>
           <template #item.status="{ item }">
@@ -283,6 +313,19 @@ async function remove(item) {
           </template>
           <template #item.actions="{ item }">
             <div class="actions">
+              <v-btn
+                v-if="item.status === 'pending'"
+                :color="item.cv ? 'success' : 'info'"
+                variant="tonal"
+                size="small"
+                :prepend-icon="item.cv ? 'mdi-check-circle' : 'mdi-file-document-edit'"
+                :loading="tailoringMap[item.id]"
+                class="mr-1"
+                :title="item.cv ? `CV generado: ${item.cv}` : 'Generar CV adaptado a medida para esta vacante'"
+                @click="tailorAppCv(item)"
+              >
+                {{ item.cv ? 'CV Adaptado' : 'Adaptar CV' }}
+              </v-btn>
               <v-btn
                 v-if="item.url"
                 :color="isAppOpened(item) ? 'success' : 'primary'"

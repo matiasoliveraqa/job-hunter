@@ -96,8 +96,19 @@ class BaseScanner(ABC):
         """Check if job title matches any of the target keywords."""
         if not keywords:
             return True
-        t_lower = title.lower()
-        return any(k.lower() in t_lower for k in keywords)
+        t_lower = (title or "").lower()
+        for k in keywords:
+            k_lower = (k or "").lower().strip()
+            if not k_lower:
+                continue
+            if k_lower in t_lower:
+                return True
+            k_words = [w for w in re.split(r"[\s/_\-]+", k_lower) if w]
+            if len(k_words) > 1 and all(w in t_lower for w in k_words):
+                return True
+            if len(k_words) == 1 and re.search(r"\b" + re.escape(k_words[0]) + r"\b", t_lower):
+                return True
+        return False
 
     def matches_location(self, title: str, location: str, loc_keywords: List[str]) -> bool:
         """
