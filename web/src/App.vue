@@ -49,11 +49,6 @@ async function handleScanAction() {
   }
 }
 
-function handleSearchFocus() {
-  if (route.path !== '/search') {
-    router.push('/search')
-  }
-}
 
 async function loadProfileData() {
   try {
@@ -85,13 +80,6 @@ onMounted(() => {
   loadProfileData()
   checkAgent()
   initScanSync()
-
-  window.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault()
-      handleSearchFocus()
-    }
-  })
 })
 </script>
 
@@ -158,18 +146,6 @@ onMounted(() => {
           </button>
         </div>
 
-        <!-- Quick Search shortcut -->
-        <div v-if="!collapsed" class="px-3 pt-3 pb-2 shrink-0">
-          <div class="relative flex items-center">
-            <span class="material-symbols-outlined absolute left-2.5 text-[15px] text-outline">search</span>
-            <input
-              class="w-full pl-8 pr-3 py-1.5 rounded-md bg-surface-container text-on-surface text-[12px] border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors"
-              placeholder="Buscar..."
-              type="text"
-              @focus="handleSearchFocus"
-            />
-          </div>
-        </div>
 
         <!-- Navigation links -->
         <nav class="px-3 py-1 flex flex-col gap-0.5">
