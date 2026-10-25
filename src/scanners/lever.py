@@ -4,7 +4,7 @@ Lever ATS Job Board Scanner.
 
 from typing import List, Optional
 import aiohttp
-from src.scanners.base import BaseScanner
+from src.scanners.base import BaseScanner, format_company_name
 from src.core.models import JobPosting, ATSPlatform
 
 class LeverScanner(BaseScanner):
@@ -59,7 +59,7 @@ class LeverScanner(BaseScanner):
                         req_years = self.extract_required_years(desc)
                         postings.append(JobPosting(
                             ats=self.platform,
-                            company=company_slug,
+                            company=format_company_name(company_slug),
                             title=title,
                             location=loc.strip(),
                             url=j.get("hostedUrl") or f"https://jobs.lever.co/{company_slug}/{j.get('id')}",

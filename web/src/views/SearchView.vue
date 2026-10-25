@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { api } from '../api.js'
+import { api, formatCompanyName } from '../api.js'
 import { refreshAppStats } from '../stats.js'
 import {
   PRESETS,
@@ -184,13 +184,14 @@ function isJobOpened(job) {
 }
 
 async function prepareApplication(posting) {
+  const compName = formatCompanyName(posting.company)
   if (isJobPrepared(posting)) {
-    return notify(`"${posting.company}" ya está en tu lista de postulaciones`, 'info')
+    return notify(`"${compName}" ya está en tu lista de postulaciones`, 'info')
   }
   preparingMap[posting.url] = true
   try {
     const created = await api.createApplication({
-      company: posting.company,
+      company: compName,
       role: posting.title,
       url: posting.url,
       cv: posting.cv || undefined,
@@ -200,7 +201,7 @@ async function prepareApplication(posting) {
     preparedMap[posting.url] = true
     existingApps.value.unshift(created)
     await refreshAppStats()
-    notify(`Postulación agregada a "Pendiente de envío" para ${posting.company}`)
+    notify(`Postulación agregada a "Pendiente de envío" para ${compName}`)
   } catch (err) {
     notify('No se pudo guardar la postulación: ' + err.message, 'error')
   } finally {
@@ -209,10 +210,11 @@ async function prepareApplication(posting) {
 }
 
 async function tailorApplication(posting) {
+  const compName = formatCompanyName(posting.company)
   tailoringMap[posting.url] = true
   try {
     const res = await api.tailorCv({
-      company: posting.company,
+      company: compName,
       role: posting.title,
       url: posting.url,
       description: posting.title,
@@ -223,7 +225,7 @@ async function tailorApplication(posting) {
     }
     await loadExistingApps()
     await refreshAppStats()
-    notify(`CV adaptado generado para ${posting.company} (${res.cv})`)
+    notify(`CV adaptado generado para ${compName} (${res.cv})`)
   } catch (err) {
     notify('Error al adaptar CV con agente: ' + err.message, 'error')
   } finally {
@@ -232,16 +234,17 @@ async function tailorApplication(posting) {
 }
 
 async function openInBrowser(posting) {
+  const compName = formatCompanyName(posting.company)
   launchingMap[posting.url] = true
   try {
     await api.launchApply({
       url: posting.url,
-      company: posting.company,
+      company: compName,
       role: posting.title,
       cv: posting.cv || undefined,
     })
     openedMap[posting.url] = true
-    notify(`Navegador lanzado con Playwright para ${posting.company}`)
+    notify(`Navegador lanzado con Playwright para ${compName}`)
   } catch (err) {
     notify('Error al abrir navegador: ' + err.message, 'error')
   } finally {
@@ -632,7 +635,7 @@ function getPlatformBadgeClass(ats) {
           <span class="w-2.5 h-2.5 rounded-full bg-accent animate-ping"></span>
           <span class="text-xs font-semibold text-on-surface">Escaneando bolsas ATS en tiempo real...</span>
           <span v-if="progress.company" class="text-xs font-mono text-outline">
-            [{{ progress.platform.toUpperCase() }}] {{ progress.company }}
+            [{{ progress.platform.toUpperCase() }}] {{ formatCompanyName(progress.company) }}
           </span>
         </div>
         <div class="text-xs font-mono text-on-surface-variant">
@@ -722,7 +725,7 @@ function getPlatformBadgeClass(ats) {
               <!-- Empresa -->
               <td class="py-3 px-3 font-medium text-on-surface">
                 <div class="flex items-center gap-1.5">
-                  <span>{{ job.company }}</span>
+                  <span>{{ formatCompanyName(job.company) }}</span>
                   <span
                     v-if="job.has_captcha"
                     class="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 font-mono text-[9px] border border-amber-500/20"

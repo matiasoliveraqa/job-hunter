@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { api, STATUS_META } from '../api.js'
+import { api, formatCompanyName, STATUS_META } from '../api.js'
 import { refreshAppStats } from '../stats.js'
 
 const items = ref([])
@@ -91,31 +91,6 @@ function getAppAts(item) {
   if (u.includes('lever.co')) return { key: 'lever', label: 'Lever ATS' }
   if (u.includes('ashbyhq.com')) return { key: 'ashby', label: 'Ashby ATS' }
   return { key: 'direct', label: 'Postulación directa' }
-}
-
-function getCompanyInitials(name) {
-  if (!name) return '??'
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[1][0]).toUpperCase()
-}
-
-function getCompanyBadgeColor(name) {
-  const colors = [
-    'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    'bg-sky-500/10 text-sky-400 border-sky-500/20',
-    'bg-rose-500/10 text-rose-400 border-rose-500/20',
-    'bg-teal-500/10 text-teal-400 border-teal-500/20',
-    'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-  ]
-  let hash = 0
-  for (let i = 0; i < (name || '').length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return colors[Math.abs(hash) % colors.length]
 }
 
 async function load() {
@@ -528,8 +503,9 @@ async function assignBaseCv(item) {
 }
 
 async function confirmSent(item) {
+  const compName = formatCompanyName(item.company)
   if (!item.cv) {
-    const ok = window.confirm(`"${item.company}" no tiene un CV adaptado. Se registrará utilizando tu CV base estándar.\n¿Deseas confirmar el envío?`)
+    const ok = window.confirm(`"${compName}" no tiene un CV adaptado. Se registrará utilizando tu CV base estándar.\n¿Deseas confirmar el envío?`)
     if (!ok) return
   }
   const today = new Date().toISOString().slice(0, 10)
@@ -548,7 +524,7 @@ async function confirmSent(item) {
     if (item.company && !item.demo) {
       await api.addExclusion({ company: item.company, reason: `Ya postulado (${today})` }).catch(() => {})
     }
-    notify(`Postulación a ${item.company} confirmada y agregada a exclusiones`)
+    notify(`Postulación a ${compName} confirmada y agregada a exclusiones`)
     await refreshAppStats()
   } catch (e) {
     notify(e.message, 'error')
@@ -556,12 +532,13 @@ async function confirmSent(item) {
 }
 
 async function remove(item) {
-  if (!confirm(`¿Eliminar la postulación a ${item.company}?`)) return
+  const compName = formatCompanyName(item.company)
+  if (!confirm(`¿Eliminar la postulación a ${compName}?`)) return
   await api.deleteApplication(item.id)
   items.value = items.value.filter((a) => a.id !== item.id)
   selectedIds.value.delete(item.id)
   expandedRows.value.delete(item.id)
-  notify(`Postulación a ${item.company} eliminada`)
+  notify(`Postulación a ${compName} eliminada`)
   await refreshAppStats()
 }
 
@@ -893,19 +870,11 @@ async function clearDemos() {
 
                 <!-- Empresa -->
                 <td class="px-4 py-3">
-                  <div class="flex items-center gap-2.5 min-w-0">
-                    <div
-                      :class="[
-                        'w-7 h-7 rounded-md border flex items-center justify-center font-bold text-[11px] shrink-0',
-                        getCompanyBadgeColor(item.company)
-                      ]"
-                    >
-                      {{ getCompanyInitials(item.company) }}
-                    </div>
-                    <div class="flex flex-col min-w-0">
-                      <span class="font-medium text-on-surface truncate" :title="item.company">{{ item.company }}</span>
-                      <span class="text-[11px] font-mono text-outline">{{ getAppAts(item).label }}</span>
-                    </div>
+                  <div class="flex flex-col min-w-0">
+                    <span class="font-medium text-on-surface truncate" :title="formatCompanyName(item.company)">
+                      {{ formatCompanyName(item.company) }}
+                    </span>
+                    <span class="text-[11px] font-mono text-outline">{{ getAppAts(item).label }}</span>
                   </div>
                 </td>
 

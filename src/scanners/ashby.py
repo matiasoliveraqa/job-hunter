@@ -4,7 +4,7 @@ Ashby ATS Job Board Scanner.
 
 from typing import List, Optional
 import aiohttp
-from src.scanners.base import BaseScanner
+from src.scanners.base import BaseScanner, format_company_name
 from src.core.models import JobPosting, ATSPlatform
 
 class AshbyScanner(BaseScanner):
@@ -55,7 +55,7 @@ class AshbyScanner(BaseScanner):
                         job_url = j.get("jobUrl") or f"https://jobs.ashbyhq.com/{company_slug}/{j.get('id')}"
                         postings.append(JobPosting(
                             ats=self.platform,
-                            company=company_slug,
+                            company=format_company_name(company_slug),
                             title=title,
                             location=loc,
                             url=job_url,

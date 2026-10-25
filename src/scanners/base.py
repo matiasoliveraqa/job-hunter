@@ -192,3 +192,11 @@ class BaseScanner(ABC):
         if req_years is not None and req_years > max_years:
             return False
         return True
+
+
+def format_company_name(name: str) -> str:
+    """Format company slug or raw name so each word starts with a capital letter."""
+    if not name:
+        return ""
+    return re.sub(r"(^|[\s\-_]+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), name)
+

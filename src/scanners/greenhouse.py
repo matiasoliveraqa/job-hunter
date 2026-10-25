@@ -4,7 +4,7 @@ Greenhouse ATS Job Board Scanner.
 
 from typing import List, Optional
 import aiohttp
-from src.scanners.base import BaseScanner
+from src.scanners.base import BaseScanner, format_company_name
 from src.core.models import JobPosting, ATSPlatform
 
 class GreenhouseScanner(BaseScanner):
@@ -60,7 +60,7 @@ class GreenhouseScanner(BaseScanner):
 
                         postings.append(JobPosting(
                             ats=self.platform,
-                            company=company_slug,
+                            company=format_company_name(company_slug),
                             title=title,
                             location=loc_name,
                             url=job_url,

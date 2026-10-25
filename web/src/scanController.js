@@ -1,5 +1,5 @@
 import { computed, reactive, ref } from 'vue'
-import { api } from './api.js'
+import { api, formatCompanyName } from './api.js'
 
 export const PRESETS = [
   {
@@ -73,6 +73,7 @@ export async function loadPersistedResults(existingApps = []) {
       const res = await api.getScanResults()
       if (res?.matches?.length) {
         matches.value = res.matches.map((p) => {
+          p.company = formatCompanyName(p.company)
           if (!p.matchScore) p.matchScore = calculateMatchScore(p)
           const matchedApp = existingApps.find(
             (a) => a.url === p.url || (a.company?.toLowerCase() === p.company?.toLowerCase() && a.role?.toLowerCase() === p.title?.toLowerCase())
@@ -143,11 +144,12 @@ export async function initScanSync(existingApps = []) {
       if (typeof status.checked === 'number') progress.checked = status.checked
       if (typeof status.total === 'number') progress.total = status.total
       if (status.platform) progress.platform = status.platform
-      if (status.company) progress.company = status.company
+      if (status.company) progress.company = formatCompanyName(status.company)
       if (typeof status.errorCount === 'number') errorCount.value = status.errorCount
 
       if (Array.isArray(status.matches) && status.matches.length > 0) {
         for (const p of status.matches) {
+          p.company = formatCompanyName(p.company)
           if (!matches.value.some((m) => m.url === p.url)) {
             p.matchScore = calculateMatchScore(p)
             const matchedApp = currentExistingApps.find(
@@ -238,9 +240,10 @@ export function handleEvent(evt, existingApps = []) {
     progress.checked = evt.checked
     progress.total = evt.total
     progress.platform = evt.platform
-    progress.company = evt.company
+    progress.company = formatCompanyName(evt.company)
   } else if (evt.type === 'match') {
     const p = evt.posting
+    p.company = formatCompanyName(p.company)
     if (!matches.value.some((m) => m.url === p.url)) {
       p.matchScore = calculateMatchScore(p)
       const matchedApp = existingApps.find(

@@ -51,3 +51,8 @@ export const STATUS_META = {
   withdrawn: { title: 'Retirada', color: 'grey', icon: 'mdi-undo' },
   not_sent: { title: 'No enviada', color: 'grey', icon: 'mdi-cancel' },
 }
+
+export function formatCompanyName(name) {
+  if (!name || typeof name !== 'string') return ''
+  return name.replace(/(^|[\s\-_]+)([a-z])/g, (_, boundary, c) => boundary + c.toUpperCase())
+}

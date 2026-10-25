@@ -1272,7 +1272,7 @@ class BaseApplicator(ABC):
                         if (!node.offsetParent && node.type !== 'file') return;
 
                         let isReq = node.hasAttribute('required') || node.getAttribute('aria-required') === 'true';
-                        const lbl = node.id ? document.querySelector(`label[for="${CSS.escape(node.id)}"]`);
+                        const lbl = node.id ? document.querySelector(`label[for="${CSS.escape(node.id)}"]`) : null;
                         const parentLbl = node.closest('label');
                         const wrapper = node.closest('.application-question, [class*="field"], [class*="question"], fieldset');
                         const combinedText = ((lbl ? lbl.innerText : '') + ' ' + (parentLbl ? parentLbl.innerText : '') + ' ' + (wrapper ? wrapper.innerText : '')).slice(0, 320);

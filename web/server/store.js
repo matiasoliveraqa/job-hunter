@@ -4,6 +4,11 @@ import { randomUUID } from 'node:crypto'
 
 export const STATUSES = ['pending', 'applied', 'interview', 'offer', 'rejected', 'withdrawn', 'not_sent']
 
+export function formatCompanyName(name) {
+  if (!name || typeof name !== 'string') return ''
+  return name.replace(/(^|[\s\-_]+)([a-z])/g, (_, boundary, c) => boundary + c.toUpperCase())
+}
+
 export function createStore(file) {
   let queue = Promise.resolve()
 
@@ -48,7 +53,7 @@ export function createStore(file) {
         const now = new Date().toISOString()
         const item = {
           id: randomUUID(),
-          company: input.company,
+          company: formatCompanyName(input.company),
           role: input.role,
           url: input.url || '',
           appliedAt: status === 'applied' ? input.appliedAt || today : '',
