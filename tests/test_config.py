@@ -11,9 +11,9 @@ def test_load_candidate_profile(monkeypatch):
     monkeypatch.setenv("JOBHUNTER_PROFILE", str(CONFIG_DIR / "profile.example.json"))
     profile = load_candidate_profile()
     assert isinstance(profile, CandidateProfile)
-    assert profile.personal_info.full_name != ""
-    assert profile.personal_info.email != ""
-    assert profile.effective_max_years == 6
+    assert profile.personal_info.full_name == ""
+    assert profile.personal_info.email == ""
+    assert profile.effective_max_years is None
 
 def test_default_exclusions_are_empty():
     import importlib.util

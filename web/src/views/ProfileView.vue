@@ -27,10 +27,15 @@ function notify(text, color = 'success') {
 
 function adopt(data) {
   data.personal_info ??= {}
+  data.personal_info.full_name ??= ''
+  data.personal_info.email ??= ''
+  data.personal_info.phone ??= ''
+  data.personal_info.location ??= ''
+  data.personal_info.linkedin_url ??= ''
   data.personal_info.github_url ??= ''
   data.personal_info.portfolio_url ??= ''
   data.personal_info.current_company ??= ''
-  data.personal_info.years_of_experience ??= 7
+  data.personal_info.years_of_experience ??= null
   data.personal_info.requires_us_visa_sponsorship ??= 'No'
 
   const normalizeCanonical = (val, map) => {
@@ -63,8 +68,8 @@ function adopt(data) {
     'yes, i have a disability (or previously had one)': 'yes', 'yes, i have a disability': 'yes', 'sí tengo o tuve una discapacidad': 'yes', 'sí, tengo una discapacidad': 'yes', yes: 'yes',
     'i do not wish to answer': 'decline', 'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
   }
-  data.personal_info.gender = normalizeCanonical(data.personal_info.gender, genderMap) || 'male'
-  data.personal_info.race = normalizeCanonical(data.personal_info.race, raceMap) || 'hispanic_latino'
+  data.personal_info.gender = normalizeCanonical(data.personal_info.gender, genderMap) || 'decline'
+  data.personal_info.race = normalizeCanonical(data.personal_info.race, raceMap) || 'decline'
   data.personal_info.veteran_status = normalizeCanonical(data.personal_info.veteran_status, veteranMap) || 'not_veteran'
   data.personal_info.disability_status = normalizeCanonical(data.personal_info.disability_status, disabilityMap) || 'no'
 
@@ -72,14 +77,14 @@ function adopt(data) {
   data.search_criteria.target_roles ??= []
   data.search_criteria.keywords ??= []
   data.search_criteria.location_keywords ??= []
-  data.search_criteria.max_years_of_experience ??= 7
-  data.search_criteria.min_salary_usd ??= 3000
+  data.search_criteria.max_years_of_experience ??= null
+  data.search_criteria.min_salary_usd ??= null
 
   data.preferences ??= {}
   data.preferences.dependent_salary_usd ??= data.preferences.desired_salary_usd ?? null
   data.preferences.contractor_salary_usd ??= null
   data.preferences.salary_period ??= 'monthly'
-  data.preferences.notice_period ??= '2 weeks'
+  data.preferences.notice_period ??= ''
   data.preferences.english_level ??= ''
   data.preferences.native_language ??= ''
   data.preferences.legally_authorized_to_work ??= 'Yes'
@@ -565,6 +570,7 @@ onMounted(async () => {
                 <input
                   v-model="profile.personal_info.full_name"
                   class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  :placeholder="$t('profile.placeholders.fullName')"
                   type="text"
                 />
               </div>
@@ -575,6 +581,7 @@ onMounted(async () => {
                 <input
                   v-model="profile.personal_info.email"
                   class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  :placeholder="$t('profile.placeholders.email')"
                   type="email"
                 />
               </div>
@@ -591,6 +598,7 @@ onMounted(async () => {
                   <input
                     v-model="profile.personal_info.phone"
                     class="h-9 pl-8 pr-3 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    :placeholder="$t('profile.placeholders.phone')"
                     type="text"
                   />
                 </div>
@@ -604,6 +612,7 @@ onMounted(async () => {
                   <input
                     v-model="profile.personal_info.location"
                     class="h-9 pl-8 pr-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    :placeholder="$t('profile.placeholders.location')"
                     type="text"
                   />
                 </div>
@@ -619,6 +628,7 @@ onMounted(async () => {
                 <input
                   v-model="profile.personal_info.linkedin_url"
                   class="h-9 px-3 pr-9 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  :placeholder="$t('profile.placeholders.linkedin')"
                   type="text"
                 />
                 <a
@@ -643,6 +653,7 @@ onMounted(async () => {
                   <input
                     v-model="profile.personal_info.github_url"
                     class="h-9 pl-8 pr-8 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    :placeholder="$t('profile.placeholders.github')"
                     type="text"
                   />
                   <a
@@ -665,6 +676,7 @@ onMounted(async () => {
                   <input
                     v-model="profile.personal_info.portfolio_url"
                     class="h-9 pl-8 pr-8 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    :placeholder="$t('profile.placeholders.portfolio')"
                     type="text"
                   />
                   <a
@@ -688,6 +700,7 @@ onMounted(async () => {
                 <input
                   v-model="profile.personal_info.current_company"
                   class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  :placeholder="$t('profile.placeholders.currentCompany')"
                   type="text"
                 />
               </div>
@@ -700,6 +713,7 @@ onMounted(async () => {
                   <input
                     :value="profile.personal_info.years_of_experience"
                     class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    :placeholder="$t('profile.placeholders.yearsOfExperience')"
                     type="number"
                     min="0"
                     @input="profile.personal_info.years_of_experience = toNumber($event.target.value)"
@@ -949,6 +963,7 @@ onMounted(async () => {
                 <input
                   :value="profile.search_criteria.min_salary_usd"
                   class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  :placeholder="$t('profile.placeholders.minSalary')"
                   type="number"
                   min="0"
                   @input="profile.search_criteria.min_salary_usd = toNumber($event.target.value)"
@@ -977,6 +992,7 @@ onMounted(async () => {
                 <input
                   :value="profile.preferences.dependent_salary_usd"
                   class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  :placeholder="$t('profile.placeholders.dependentSalary')"
                   type="number"
                   min="0"
                   @input="profile.preferences.dependent_salary_usd = toNumber($event.target.value)"
@@ -994,6 +1010,7 @@ onMounted(async () => {
                 <input
                   :value="profile.preferences.contractor_salary_usd"
                   class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  :placeholder="$t('profile.placeholders.contractorSalary')"
                   type="number"
                   min="0"
                   @input="profile.preferences.contractor_salary_usd = toNumber($event.target.value)"
@@ -1011,6 +1028,7 @@ onMounted(async () => {
               <input
                 v-model="profile.preferences.notice_period"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                :placeholder="$t('profile.placeholders.noticePeriod')"
                 type="text"
               />
             </div>
@@ -1033,6 +1051,7 @@ onMounted(async () => {
               <input
                 v-model="profile.preferences.english_level"
                 class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                :placeholder="$t('profile.placeholders.englishLevel')"
                 type="text"
               />
             </div>
@@ -1043,6 +1062,7 @@ onMounted(async () => {
             <input
               v-model="profile.preferences.native_language"
               class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              :placeholder="$t('profile.placeholders.nativeLanguage')"
               type="text"
             />
           </div>
@@ -1129,6 +1149,7 @@ onMounted(async () => {
             v-model="profile.open_questions.motivation"
             rows="5"
             class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+            :placeholder="$t('profile.placeholders.motivation')"
           ></textarea>
         </div>
 
@@ -1140,6 +1161,7 @@ onMounted(async () => {
             v-model="profile.open_questions.experience_summary"
             rows="5"
             class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+            :placeholder="$t('profile.placeholders.experienceSummary')"
           ></textarea>
         </div>
 
@@ -1151,6 +1173,7 @@ onMounted(async () => {
             v-model="profile.open_questions.key_project"
             rows="5"
             class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+            :placeholder="$t('profile.placeholders.keyProject')"
           ></textarea>
         </div>
 
@@ -1162,6 +1185,7 @@ onMounted(async () => {
             v-model="profile.open_questions.additional_info"
             rows="5"
             class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+            :placeholder="$t('profile.placeholders.additionalInfo')"
           ></textarea>
         </div>
 
@@ -1173,6 +1197,7 @@ onMounted(async () => {
             v-model="profile.open_questions.education_level"
             type="text"
             class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+            :placeholder="$t('profile.placeholders.educationLevel')"
           />
 
           <label class="text-xs font-semibold text-on-surface pt-2">{{ $t('profile.sections.educationInstitution') }}</label>
@@ -1181,6 +1206,7 @@ onMounted(async () => {
             v-model="profile.open_questions.education_institution"
             type="text"
             class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+            :placeholder="$t('profile.placeholders.educationInstitution')"
           />
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
@@ -1190,7 +1216,7 @@ onMounted(async () => {
               <input
                 v-model.number="profile.open_questions.education_start_year"
                 type="number"
-                placeholder="2018"
+                :placeholder="$t('profile.placeholders.educationStartYear')"
                 class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
               />
             </div>
@@ -1200,7 +1226,7 @@ onMounted(async () => {
               <input
                 v-model.number="profile.open_questions.education_end_year"
                 type="number"
-                placeholder="2022"
+                :placeholder="$t('profile.placeholders.educationEndYear')"
                 class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
               />
             </div>
@@ -1215,6 +1241,7 @@ onMounted(async () => {
             v-model="profile.open_questions.timezone_overlap"
             type="text"
             class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+            :placeholder="$t('profile.placeholders.timezoneOverlap')"
           />
         </div>
       </div>

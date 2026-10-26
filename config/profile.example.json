@@ -1,14 +1,14 @@
 {
   "personal_info": {
-    "full_name": "Alex Mercer",
-    "email": "alex.mercer.dev@example.com",
-    "phone": "+1 (555) 019-2834",
-    "location": "Buenos Aires, Argentina",
-    "linkedin_url": "https://www.linkedin.com/in/alexmercer-example/",
-    "github_url": "https://github.com/alexmercer-dev",
-    "portfolio_url": "https://alexmercer.dev",
-    "current_company": "Acme Cloud Corp",
-    "years_of_experience": 6,
+    "full_name": "",
+    "email": "",
+    "phone": "",
+    "location": "",
+    "linkedin_url": "",
+    "github_url": "",
+    "portfolio_url": "",
+    "current_company": "",
+    "years_of_experience": null,
     "requires_us_visa_sponsorship": "No",
     "gender": "decline",
     "race": "decline",
@@ -16,43 +16,26 @@
     "disability_status": "no"
   },
   "search_criteria": {
-    "target_roles": [
-      "Senior Software Engineer",
-      "Full Stack Engineer",
-      "Backend Engineer",
-      "Frontend Engineer",
-      "QA Automation Engineer",
-      "SDET"
-    ],
-    "keywords": [
-      "TypeScript",
-      "Python",
-      "React",
-      "Node.js",
-      "PostgreSQL",
-      "AWS",
-      "Docker"
-    ],
+    "target_roles": [],
+    "keywords": [],
     "location_keywords": [
       "remote",
       "latam",
-      "latin america",
       "worldwide",
       "global",
-      "anywhere",
-      "americas"
+      "anywhere"
     ],
-    "max_years_of_experience": 6,
-    "min_salary_usd": 3000
+    "max_years_of_experience": null,
+    "min_salary_usd": null
   },
   "preferences": {
-    "dependent_salary_usd": 3000,
-    "contractor_salary_usd": 4000,
-    "desired_salary_usd": 3000,
+    "dependent_salary_usd": null,
+    "contractor_salary_usd": null,
+    "desired_salary_usd": null,
     "salary_period": "monthly",
-    "notice_period": "2 weeks",
-    "english_level": "Professional / B2",
-    "native_language": "Spanish",
+    "notice_period": "",
+    "english_level": "",
+    "native_language": "",
     "legally_authorized_to_work": "Yes"
   },
   "ats_settings": {
@@ -65,14 +48,15 @@
     "stealth_mode": true
   },
   "open_questions": {
-    "motivation": "I have extensive experience building scalable software and test suites, and I want to contribute to high-impact products with strong engineering standards.",
-    "fintech_motivation": "I have experience working on financial and transactional systems where correctness, data integrity, and compliance are paramount.",
-    "experience_summary": "I work across backend systems, test automation, and CI/CD pipelines to ensure software reliability and test coverage.",
-    "metrics_and_kpis": "My goals focus on test coverage, release stability, and automated regression pass rates.",
-    "education_level": "Bachelor's Degree in Computer Science (or equivalent practical experience)",
-    "education_institution": "Example State University",
-    "education_start_year": 2018,
-    "education_end_year": 2022,
-    "timezone_overlap": "UTC-3 with full overlap during US and Americas business hours."
+    "motivation": "",
+    "experience_summary": "",
+    "key_project": "",
+    "timezone_overlap": "",
+    "education_level": "",
+    "education_institution": "",
+    "education_start_year": null,
+    "education_end_year": null,
+    "additional_info": "",
+    "custom_qa": {}
   }
 }

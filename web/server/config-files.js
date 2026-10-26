@@ -79,6 +79,7 @@ export function createConfigFiles({ root }) {
     const s = input?.search_criteria ?? {}
     const pr = input?.preferences ?? {}
     const a = input?.ats_settings ?? {}
+    const oq = input?.open_questions ?? {}
     const platforms = list(a.enabled_platforms ?? [], 'ats_settings.enabled_platforms')
     for (const pl of platforms) oneOf(pl, PLATFORMS, 'ats_settings.enabled_platforms')
 
@@ -88,16 +89,20 @@ export function createConfigFiles({ root }) {
 
     return {
       personal_info: {
-        full_name: str(p.full_name, 'Nombre completo', { required: true }),
-        email: str(p.email, 'Email', { required: true }),
-        phone: str(p.phone, 'Teléfono', { required: true }),
-        location: str(p.location, 'Ubicación', { required: true }),
-        linkedin_url: str(p.linkedin_url, 'LinkedIn', { required: true }),
+        full_name: str(p.full_name, 'Nombre completo'),
+        email: str(p.email, 'Email'),
+        phone: str(p.phone, 'Teléfono'),
+        location: str(p.location, 'Ubicación'),
+        linkedin_url: str(p.linkedin_url, 'LinkedIn'),
         github_url: str(p.github_url, 'GitHub'),
         portfolio_url: str(p.portfolio_url, 'Portfolio'),
         current_company: str(p.current_company, 'Empresa actual'),
         years_of_experience: intOrNull(p.years_of_experience, 'Años de experiencia'),
         requires_us_visa_sponsorship: oneOf(p.requires_us_visa_sponsorship ?? 'No', YES_NO, 'requires_us_visa_sponsorship'),
+        gender: str(p.gender, 'Género'),
+        race: str(p.race, 'Etnia / Raza'),
+        veteran_status: str(p.veteran_status, 'Condición de veterano'),
+        disability_status: str(p.disability_status, 'Situación de discapacidad'),
       },
       search_criteria: {
         target_roles: list(s.target_roles ?? [], 'Roles objetivo'),
@@ -111,14 +116,27 @@ export function createConfigFiles({ root }) {
         contractor_salary_usd: contractorSalary,
         desired_salary_usd: desiredSalary,
         salary_period: oneOf(pr.salary_period ?? 'monthly', PERIODS, 'salary_period'),
-        notice_period: str(pr.notice_period, 'Disponibilidad', { required: true }),
+        notice_period: str(pr.notice_period, 'Disponibilidad'),
         english_level: str(pr.english_level, 'Nivel de inglés'),
+        native_language: str(pr.native_language, 'Idioma nativo'),
         legally_authorized_to_work: oneOf(pr.legally_authorized_to_work ?? 'Yes', YES_NO, 'legally_authorized_to_work'),
       },
       ats_settings: {
         enabled_platforms: platforms,
         auto_upload_resume: Boolean(a.auto_upload_resume),
         stealth_mode: Boolean(a.stealth_mode),
+      },
+      open_questions: {
+        motivation: str(oq.motivation, 'Motivación', { max: 3000 }),
+        experience_summary: str(oq.experience_summary, 'Resumen de trayectoria', { max: 3000 }),
+        key_project: str(oq.key_project, 'Proyecto destacado', { max: 3000 }),
+        timezone_overlap: str(oq.timezone_overlap, 'Disponibilidad horaria', { max: 500 }),
+        education_level: str(oq.education_level, 'Nivel de educación', { max: 300 }),
+        education_institution: str(oq.education_institution, 'Institución educativa', { max: 300 }),
+        education_start_year: intOrNull(oq.education_start_year, 'Año de inicio'),
+        education_end_year: intOrNull(oq.education_end_year, 'Año de finalización'),
+        additional_info: str(oq.additional_info, 'Información adicional', { max: 3000 }),
+        custom_qa: typeof oq.custom_qa === 'object' && oq.custom_qa !== null ? oq.custom_qa : {},
       },
     }
   }

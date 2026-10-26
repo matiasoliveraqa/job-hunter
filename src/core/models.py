@@ -14,11 +14,11 @@ class ATSPlatform(str, Enum):
     OTHER = "other"
 
 class PersonalInfo(BaseModel):
-    full_name: str = Field(..., description="Candidate full name")
-    email: str = Field(..., description="Candidate email address")
-    phone: str = Field(..., description="Candidate phone number with country code")
-    location: str = Field(..., description="City and Country or Remote base")
-    linkedin_url: str = Field(..., description="LinkedIn profile URL")
+    full_name: str = Field("", description="Candidate full name")
+    email: str = Field("", description="Candidate email address")
+    phone: str = Field("", description="Candidate phone number with country code")
+    location: str = Field("", description="City and Country or Remote base")
+    linkedin_url: str = Field("", description="LinkedIn profile URL")
     github_url: Optional[str] = Field(None, description="GitHub profile URL")
     portfolio_url: Optional[str] = Field(None, description="Personal portfolio or website URL")
     current_company: Optional[str] = Field(None, description="Current employer or 'Freelance'")
