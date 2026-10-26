@@ -278,6 +278,14 @@ def apply_command(args):
         existing_pdfs = [f for f in app_dir.glob("*.pdf") if f.is_file() and f.stat().st_size > 1000]
         if existing_pdfs:
             cv_path = existing_pdfs[0]
+        else:
+            # Fallback to master base CV from my_cv/ if no tailored CV was compiled
+            my_cv_dir = PROJECT_ROOT / "my_cv"
+            base_pdfs = [f for f in my_cv_dir.glob("*.pdf") if f.is_file() and f.stat().st_size > 1000 and not f.name.startswith("skills_inventory")]
+            if base_pdfs:
+                dest_cv = app_dir / build_cv_filename(profile.personal_info.full_name, role, company)
+                shutil.copy2(base_pdfs[0], dest_cv)
+                cv_path = dest_cv
 
     console.print(Panel.fit(
         f"[bold]Company:[/bold] {company}\n"
@@ -310,14 +318,22 @@ def apply_command(args):
 
             await applicator.fill_form(cv_path)
 
+            # Audit and highlight any required fields (* or required attribute)
+            missing_required = await applicator.audit_and_highlight_required_fields()
+            if missing_required:
+                console.print(f"[yellow][REQUIRED][/yellow] Detected {len(missing_required)} missing required field(s) highlighted in yellow in the browser.")
+            else:
+                console.print("[green][OK][/green] All required fields (*) have been completed.")
+
             detected_captcha = await applicator.detect_captcha()
             if detected_captcha:
-                console.print(f"[yellow][CAPTCHA][/yellow] Formulario protegido con [bold]{detected_captcha}[/bold]. Modo de evasión stealth activo.")
+                console.print(f"[yellow][CAPTCHA][/yellow] Form protected by [bold]{detected_captcha}[/bold]. Stealth evasion mode active.")
 
             # Save execution script and metadata with URL + completed fields inside the company folder
+            target_url = page.url if page.url and not any(p in page.url for p in ["proxy.html", "about:blank", "googleapis.com"]) else url
             script_path = _save_application_artifacts(
                 app_dir=app_dir,
-                url=page.url,
+                url=target_url,
                 company=company,
                 role=role,
                 cv_path=cv_path,
@@ -328,8 +344,8 @@ def apply_command(args):
             console.print(f"[green][SAVED][/green] Application script & field log saved to: [cyan]{script_path}[/cyan]")
             console.print("Please review the details in the opened browser, complete any employer-specific questions, and click Submit.")
         except Exception as e:
-            console.print(f"[yellow][WARNING][/yellow] Error durante el autocompletado: {e}")
-            console.print("El navegador permanecerá abierto para que puedas completar o revisar los campos manualmente.")
+            console.print(f"[yellow][WARNING][/yellow] Error during auto-fill: {e}")
+            console.print("The browser will remain open so you can review or complete fields manually.")
 
         console.print("[dim]The session will close when you close the browser window.[/dim]\n")
 

@@ -268,5 +268,35 @@ def is_excluded_company(company_name: str) -> bool:
         entries.splice(idx, 1)
         return true
       }),
+
+    importExclusions: (items) =>
+      mutateExclusions((entries) => {
+        let added = 0
+        const list = Array.isArray(items)
+          ? items
+          : typeof items === 'object' && items
+            ? Object.entries(items).map(([company, reason]) => ({ company, reason }))
+            : []
+        for (const raw of list) {
+          if (!raw) continue
+          const company = raw.company || raw.slug || (typeof raw === 'string' ? raw : null)
+          if (!company) continue
+          try {
+            const slug = normalizeCompany(company)
+            if (!entries.some((e) => e.company === slug)) {
+              entries.push({ company: slug, reason: str(raw.reason || '', 'Motivo', { max: 300 }) })
+              added++
+            }
+          } catch {}
+        }
+        return { added, total: entries.length }
+      }),
+
+    clearExclusions: () =>
+      mutateExclusions((entries) => {
+        const cleared = entries.length
+        entries.length = 0
+        return { cleared }
+      }),
   }
 }

@@ -1,6 +1,6 @@
 import express from 'express'
 import fs from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -9,7 +9,15 @@ import { fileURLToPath } from 'node:url'
 import { createStore, STATUSES } from './store.js'
 import { createDemo } from './demo.js'
 import { createConfigFiles, ValidationError } from './config-files.js'
-import { tailorCvHtml, answerQuestion, extractProfileFromCv } from './agent-adapter.js'
+import {
+  tailorCvHtml,
+  answerQuestion,
+  extractProfileFromCv,
+  checkAgentStatus,
+  readAiSettings,
+  writeAiSettings,
+  checkBaseCv,
+} from './agent-adapter.js'
 import createDOMPurify from 'dompurify'
 import { JSDOM } from 'jsdom'
 
@@ -233,6 +241,13 @@ app.post('/api/profile/upload-cv', async (req, res) => {
 // ---- Exclusions (config/exclusions.py) ----
 app.get('/api/exclusions', async (_req, res) => res.json(await configFiles.readExclusions()))
 app.post('/api/exclusions', async (req, res) => res.status(201).json(await configFiles.addExclusion(req.body ?? {})))
+app.post('/api/exclusions/import', async (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : req.body?.items ?? []
+  res.json(await configFiles.importExclusions(items))
+})
+app.post('/api/exclusions/clear', async (_req, res) => {
+  res.json(await configFiles.clearExclusions())
+})
 app.put('/api/exclusions/:company', async (req, res) => {
   const entry = await configFiles.updateExclusion(req.params.company, req.body ?? {})
   entry ? res.json(entry) : res.status(404).json({ error: 'No encontrada' })
@@ -279,6 +294,45 @@ function sendPdfFile(req, res, dir, relName) {
 app.get('/files/:dir/:name', (req, res) => sendPdfFile(req, res, req.params.dir, req.params.name))
 app.get('/files/:dir/:sub/:name', (req, res) => sendPdfFile(req, res, req.params.dir, `${req.params.sub}/${req.params.name}`))
 
+// ---- Cross-platform folder opener (Linux, macOS, Windows) ----
+app.post('/api/open-folder', async (req, res) => {
+  const target = req.body?.folder || 'applications'
+  const allowed = {
+    applications: FILE_DIRS.applications,
+    cvs: FILE_DIRS.cvs,
+    output: FILE_DIRS.output,
+  }
+  const folderPath = allowed[target] || allowed.applications
+  if (!existsSync(folderPath)) {
+    await fs.mkdir(folderPath, { recursive: true })
+  }
+
+  const platform = process.platform
+  let cmd = ''
+  let args = []
+  if (platform === 'win32') {
+    cmd = 'explorer'
+    args = [folderPath]
+  } else if (platform === 'darwin') {
+    cmd = 'open'
+    args = [folderPath]
+  } else {
+    cmd = 'xdg-open'
+    args = [folderPath]
+  }
+
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
+    child.unref()
+    child.on('error', (err) => {
+      console.warn(`[open-folder] Error invoking ${cmd}:`, err.message)
+    })
+    res.json({ ok: true, path: folderPath, platform })
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo abrir la carpeta en el sistema', path: folderPath })
+  }
+})
+
 // ---- Application form launcher (headed browser, user submits manually) ----
 const launches = new Map()
 const ALLOWED_ATS_DOMAINS = [
@@ -321,7 +375,7 @@ app.post('/api/apply', async (req, res) => {
     return res.status(429).json({ error: 'Ya hay un navegador de postulación activo. Ciérralo antes de abrir uno nuevo.' })
   }
 
-  const cvPath = isDemoUrl ? demo.cvPath : resolveCv(cv)
+  let cvPath = isDemoUrl ? demo.cvPath : resolveCv(cv)
   if (cv && !cvPath) return res.status(400).json({ error: 'CV inválido' })
 
   let company = typeof bodyCompany === 'string' ? bodyCompany.trim() : ''
@@ -332,6 +386,14 @@ app.post('/api/apply', async (req, res) => {
     if (match) {
       company = company || match.company || ''
       role = role || match.role || ''
+    }
+  }
+
+  // Fallback to base CV in my_cv/ if no specific CV was provided or associated
+  if (!cvPath) {
+    const baseCv = await checkBaseCv()
+    if (baseCv.exists) {
+      cvPath = baseCv.relPath
     }
   }
 
@@ -381,12 +443,79 @@ app.post('/api/apply', async (req, res) => {
 
 app.get('/api/apply', (_req, res) => res.json([...launches.values()]))
 
-// ---- Structured Scanner (SSE) ----
+// ---- Structured Scanner (Background Service with SSE Broadcast) ----
 let activeScanChild = null
+let latestScanMatches = []
+const initialScanResultsPath = path.join(ROOT, 'output', 'scan_results.json')
+try {
+  if (existsSync(initialScanResultsPath)) {
+    const rawData = JSON.parse(readFileSync(initialScanResultsPath, 'utf-8'))
+    if (Array.isArray(rawData)) latestScanMatches = rawData
+  }
+} catch {}
+const scanState = {
+  isScanning: false,
+  checked: 0,
+  total: 0,
+  platform: '',
+  company: '',
+  errorCount: 0,
+  startedAt: null,
+}
+const scanSubscribers = new Set()
 
-app.post('/api/scan/stream', (req, res) => {
-  const { roles, platforms, locations, maxYears, concurrency, allowCaptcha } = req.body ?? {}
+function broadcastScanEvent(evt) {
+  const line = `data: ${JSON.stringify(evt)}\n\n`
+  for (const res of scanSubscribers) {
+    try {
+      if (res.writable && !res.writableEnded) {
+        res.write(line)
+      } else {
+        scanSubscribers.delete(res)
+      }
+    } catch {
+      scanSubscribers.delete(res)
+    }
+  }
+}
 
+app.get('/api/scan/status', (_req, res) => {
+  res.json({
+    ...scanState,
+    matches: latestScanMatches,
+  })
+})
+
+app.get('/api/scan/results', async (_req, res) => {
+  const scanResultsPath = path.join(ROOT, 'output', 'scan_results.json')
+  if (latestScanMatches.length > 0) {
+    return res.json({ matches: latestScanMatches })
+  }
+  if (existsSync(scanResultsPath)) {
+    try {
+      const data = JSON.parse(await fs.readFile(scanResultsPath, 'utf-8'))
+      return res.json({ matches: Array.isArray(data) ? data : [] })
+    } catch {}
+  }
+  res.json({ matches: [] })
+})
+
+app.get('/api/scan/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  })
+
+  scanSubscribers.add(res)
+  res.write(`data: ${JSON.stringify({ type: 'sync', scanState, matches: latestScanMatches })}\n\n`)
+
+  req.on('close', () => {
+    scanSubscribers.delete(res)
+  })
+})
+
+function launchScanProcess({ roles, platforms, locations, maxYears, concurrency, allowCaptcha }) {
   if (activeScanChild) {
     try { activeScanChild.kill('SIGTERM') } catch {}
     activeScanChild = null
@@ -412,17 +541,18 @@ app.post('/api/scan/stream', (req, res) => {
     args.push('--allow-captcha')
   }
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+  latestScanMatches = []
+  Object.assign(scanState, {
+    isScanning: true,
+    checked: 0,
+    total: 0,
+    platform: '',
+    company: '',
+    errorCount: 0,
+    startedAt: new Date().toISOString(),
   })
 
-  const send = (evt) => {
-    res.write(`data: ${JSON.stringify(evt)}\n\n`)
-  }
-
-  send({ type: 'start' })
+  broadcastScanEvent({ type: 'start' })
 
   const child = spawn(PYTHON_BIN, args, { cwd: ROOT, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
   activeScanChild = child
@@ -437,35 +567,66 @@ app.post('/api/scan/stream', (req, res) => {
       if (!line) continue
       try {
         const parsed = JSON.parse(line)
-        send(parsed)
+        if (parsed.type === 'progress') {
+          scanState.checked = parsed.checked
+          scanState.total = parsed.total
+          scanState.platform = parsed.platform
+          scanState.company = parsed.company
+        } else if (parsed.type === 'match' && parsed.posting) {
+          latestScanMatches.push(parsed.posting)
+        } else if (parsed.type === 'board_error') {
+          scanState.errorCount++
+        } else if (parsed.type === 'done') {
+          scanState.isScanning = false
+        }
+        broadcastScanEvent(parsed)
       } catch {
-        send({ type: 'raw', text: line })
+        broadcastScanEvent({ type: 'raw', text: line })
       }
     }
   })
 
   child.stderr.on('data', (chunk) => {
     const errText = chunk.toString('utf-8').trim()
-    if (errText) send({ type: 'log', message: errText })
+    if (errText) broadcastScanEvent({ type: 'log', message: errText })
   })
 
   child.on('close', (code) => {
-    if (activeScanChild === child) activeScanChild = null
-    send({ type: 'exit', code })
-    res.end()
+    if (activeScanChild === child) {
+      activeScanChild = null
+      scanState.isScanning = false
+    }
+    broadcastScanEvent({ type: 'exit', code })
   })
 
   child.on('error', (err) => {
-    if (activeScanChild === child) activeScanChild = null
-    send({ type: 'error', error: err.message })
-    res.end()
+    if (activeScanChild === child) {
+      activeScanChild = null
+      scanState.isScanning = false
+    }
+    broadcastScanEvent({ type: 'error', error: err.message })
   })
 
-  res.on('close', () => {
-    if (activeScanChild === child) {
-      try { child.kill('SIGTERM') } catch {}
-      activeScanChild = null
-    }
+  return child
+}
+
+app.post('/api/scan/start', (req, res) => {
+  launchScanProcess(req.body ?? {})
+  res.json({ started: true })
+})
+
+app.post('/api/scan/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  })
+
+  scanSubscribers.add(res)
+  launchScanProcess(req.body ?? {})
+
+  req.on('close', () => {
+    scanSubscribers.delete(res)
   })
 })
 
@@ -473,8 +634,11 @@ app.post('/api/scan/stop', (_req, res) => {
   if (activeScanChild) {
     try { activeScanChild.kill('SIGTERM') } catch {}
     activeScanChild = null
+    scanState.isScanning = false
+    broadcastScanEvent({ type: 'exit', code: 0 })
     return res.json({ stopped: true })
   }
+  scanState.isScanning = false
   res.json({ stopped: false })
 })
 
@@ -486,10 +650,12 @@ export function sanitizeCvHtml(rawHtml) {
   if (!rawHtml || typeof rawHtml !== 'string') return ''
   const sanitized = DOMPurify.sanitize(rawHtml, {
     WHOLE_DOCUMENT: true,
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'applet', 'base', 'meta', 'link'],
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'applet', 'base', 'meta', 'link'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
   })
-  return sanitized.replace(/<img\b([^>]*?)\bsrc=["']https?:\/\/[^"'>]+["']([^>]*?)>/gi, '<img$1src=""$2>')
+  return sanitized
+    .replace(/@import\s+[^;]+;/gi, '')
+    .replace(/<img\b([^>]*?)\bsrc=["']https?:\/\/[^"'>]+["']([^>]*?)>/gi, '<img$1src=""$2>')
 }
 
 app.post('/api/tailor-cv', async (req, res) => {
@@ -619,6 +785,86 @@ app.post('/api/tailor-cv', async (req, res) => {
   }
 })
 
+// ---- Agent Status, Settings & Base CV Fallback Endpoints ----
+app.get('/api/agent/status', async (_req, res) => {
+  try {
+    const status = await checkAgentStatus()
+    res.json(status)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/agent/config', async (_req, res) => {
+  try {
+    const settings = await readAiSettings()
+    res.json({
+      provider: settings.provider || 'auto',
+      hasAnthropicKey: Boolean(settings.anthropicApiKey),
+      hasOpenAiKey: Boolean(settings.openaiApiKey),
+      hasGeminiKey: Boolean(settings.geminiApiKey),
+      hasDeepSeekKey: Boolean(settings.deepseekApiKey),
+      hasKimiKey: Boolean(settings.kimiApiKey),
+      hasCustomKey: Boolean(settings.customOpenAiApiKey),
+      anthropicApiKey: settings.anthropicApiKey ? `${settings.anthropicApiKey.slice(0, 7)}...${settings.anthropicApiKey.slice(-4)}` : '',
+      openaiApiKey: settings.openaiApiKey ? `${settings.openaiApiKey.slice(0, 5)}...${settings.openaiApiKey.slice(-4)}` : '',
+      geminiApiKey: settings.geminiApiKey ? `${settings.geminiApiKey.slice(0, 6)}...${settings.geminiApiKey.slice(-4)}` : '',
+      deepseekApiKey: settings.deepseekApiKey ? `${settings.deepseekApiKey.slice(0, 5)}...${settings.deepseekApiKey.slice(-4)}` : '',
+      kimiApiKey: settings.kimiApiKey ? `${settings.kimiApiKey.slice(0, 5)}...${settings.kimiApiKey.slice(-4)}` : '',
+      customOpenAiApiKey: settings.customOpenAiApiKey ? `${settings.customOpenAiApiKey.slice(0, 5)}...${settings.customOpenAiApiKey.slice(-4)}` : '',
+      customOpenAiBaseUrl: settings.customOpenAiBaseUrl || '',
+      customOpenAiModel: settings.customOpenAiModel || '',
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/agent/config', async (req, res) => {
+  try {
+    const body = req.body || {}
+    const current = await readAiSettings()
+    const payload = {
+      provider: body.provider || current.provider,
+      anthropicApiKey: body.anthropicApiKey && !body.anthropicApiKey.includes('...') ? body.anthropicApiKey : current.anthropicApiKey,
+      openaiApiKey: body.openaiApiKey && !body.openaiApiKey.includes('...') ? body.openaiApiKey : current.openaiApiKey,
+      geminiApiKey: body.geminiApiKey && !body.geminiApiKey.includes('...') ? body.geminiApiKey : current.geminiApiKey,
+      deepseekApiKey: body.deepseekApiKey && !body.deepseekApiKey.includes('...') ? body.deepseekApiKey : current.deepseekApiKey,
+      kimiApiKey: body.kimiApiKey && !body.kimiApiKey.includes('...') ? body.kimiApiKey : current.kimiApiKey,
+      customOpenAiApiKey: body.customOpenAiApiKey && !body.customOpenAiApiKey.includes('...') ? body.customOpenAiApiKey : current.customOpenAiApiKey,
+      customOpenAiBaseUrl: body.customOpenAiBaseUrl !== undefined ? body.customOpenAiBaseUrl : current.customOpenAiBaseUrl,
+      customOpenAiModel: body.customOpenAiModel !== undefined ? body.customOpenAiModel : current.customOpenAiModel,
+    }
+    await writeAiSettings(payload)
+    const status = await checkAgentStatus()
+    res.json({ ok: true, status })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/applications/:id/use-base-cv', async (req, res) => {
+  try {
+    const { id } = req.params
+    const targetApp = await store.get(id)
+    if (!targetApp) return res.status(404).json({ error: 'Postulación no encontrada' })
+
+    const status = await checkAgentStatus()
+    if (!status.baseCv?.exists) {
+      return res.status(400).json({ error: 'No se encontró un CV base en my_cv/' })
+    }
+
+    const relCvPath = status.baseCv.relPath
+    const updated = await store.update(id, {
+      cv: relCvPath,
+      event: `Asignado CV base estándar (${status.baseCv.filename})`,
+    })
+    res.json({ ok: true, cv: relCvPath, application: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ---- Static client (production) ----
 if (existsSync(DIST)) {
   app.use(express.static(DIST))
@@ -644,10 +890,10 @@ function startServer(port = PORT, attemptsLeft = 10) {
       })
       server.on('error', (err) => {
         if (err.code === 'EADDRINUSE' && attempts > 0) {
-          console.warn(`Puerto ${p} ocupado. Probando puerto ${p + 1}...`)
+          console.warn(`Port ${p} in use. Trying port ${p + 1}...`)
           tryPort(p + 1, attempts - 1)
         } else {
-          console.error(`No se pudo iniciar el servidor web: ${err.message}`)
+          console.error(`Failed to start web server: ${err.message}`)
           if (process.env.NODE_ENV === 'test') {
             reject(err)
           } else {

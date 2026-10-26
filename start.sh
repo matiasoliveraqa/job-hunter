@@ -6,48 +6,48 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "=========================================="
-echo "        Iniciando Job Hunter Local        "
+echo "        Starting Job Hunter Local         "
 echo "=========================================="
 
-# 1. Configurar entorno virtual de Python
+# 1. Configure Python virtual environment
 if [ ! -d "venv" ] && [ ! -L "venv" ]; then
-    echo "[*] Creando entorno virtual de Python (venv)..."
+    echo "[*] Creating Python virtual environment (venv)..."
     python3 -m venv venv
 fi
 
-# Activar venv
+# Activate venv
 if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 elif [ -f "venv/Scripts/activate" ]; then
     source venv/Scripts/activate
 fi
 
-# 2. Instalar dependencias de Python si faltan
+# 2. Install Python dependencies if missing
 if ! python3 -c "import aiohttp, rich, playwright, jinja2" 2>/dev/null; then
-    echo "[*] Instalando dependencias de Python desde requirements.txt..."
+    echo "[*] Installing Python dependencies from requirements.txt..."
     pip install -r requirements.txt
     playwright install chromium
 fi
 
-# 3. Inicializar configuración si no existe
+# 3. Initialize configuration if missing
 if [ ! -f "config/profile.json" ]; then
-    echo "[*] Inicializando configuración base..."
+    echo "[*] Initializing base configuration..."
     python3 -m src.cli init
 fi
 
-# 4. Configurar e inicializar frontend web
+# 4. Configure and initialize web frontend
 cd "$SCRIPT_DIR/web"
 if [ ! -d "node_modules" ]; then
-    echo "[*] Instalando dependencias web (npm install)..."
+    echo "[*] Installing web dependencies (npm install)..."
     npm install
 fi
 
 if [ ! -d "dist" ]; then
-    echo "[*] Compilando interfaz web (npm run build)..."
+    echo "[*] Building web interface (npm run build)..."
     npm run build
 fi
 
-echo "[*] Arrancando servidor web local..."
-# Iniciar servidor Express
+echo "[*] Starting local web server..."
+# Start Express server
 cd "$SCRIPT_DIR"
 node web/server/index.js

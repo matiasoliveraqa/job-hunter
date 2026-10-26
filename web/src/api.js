@@ -25,11 +25,21 @@ export const api = {
   addExclusion: (body) => request('/api/exclusions', { method: 'POST', body }),
   updateExclusion: (company, body) => request(`/api/exclusions/${encodeURIComponent(company)}`, { method: 'PUT', body }),
   removeExclusion: (company) => request(`/api/exclusions/${encodeURIComponent(company)}`, { method: 'DELETE' }),
+  importExclusions: (items) => request('/api/exclusions/import', { method: 'POST', body: items }),
+  clearExclusions: () => request('/api/exclusions/clear', { method: 'POST', body: {} }),
   listFiles: () => request('/api/files'),
+  openFolder: (folder = 'applications') => request('/api/open-folder', { method: 'POST', body: { folder } }),
   launchApply: (body) => request('/api/apply', { method: 'POST', body }),
   listLaunches: () => request('/api/apply'),
   stopScan: () => request('/api/scan/stop', { method: 'POST', body: {} }),
+  getScanStatus: () => request('/api/scan/status'),
+  startScan: (body) => request('/api/scan/start', { method: 'POST', body }),
+  getScanResults: () => request('/api/scan/results'),
   tailorCv: (body) => request('/api/tailor-cv', { method: 'POST', body }),
+  getAgentStatus: () => request('/api/agent/status'),
+  getAgentConfig: () => request('/api/agent/config'),
+  saveAgentConfig: (body) => request('/api/agent/config', { method: 'POST', body }),
+  useBaseCv: (id) => request(`/api/applications/${id}/use-base-cv`, { method: 'POST' }),
 }
 
 export const STATUS_META = {
@@ -40,4 +50,9 @@ export const STATUS_META = {
   rejected: { title: 'Rechazada', color: 'error', icon: 'mdi-close-circle' },
   withdrawn: { title: 'Retirada', color: 'grey', icon: 'mdi-undo' },
   not_sent: { title: 'No enviada', color: 'grey', icon: 'mdi-cancel' },
+}
+
+export function formatCompanyName(name) {
+  if (!name || typeof name !== 'string') return ''
+  return name.replace(/(^|[\s\-_]+)([a-z])/g, (_, boundary, c) => boundary + c.toUpperCase())
 }

@@ -4,7 +4,7 @@ Greenhouse ATS Job Board Scanner.
 
 from typing import List, Optional
 import aiohttp
-from src.scanners.base import BaseScanner
+from src.scanners.base import BaseScanner, format_company_name
 from src.core.models import JobPosting, ATSPlatform
 
 class GreenhouseScanner(BaseScanner):
@@ -18,8 +18,9 @@ class GreenhouseScanner(BaseScanner):
         role_keywords: List[str],
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
+        home_terms: Optional[List[str]] = None,
     ) -> List[JobPosting]:
-        url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs"
+        url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs?content=true"
         postings: List[JobPosting] = []
         timeout = aiohttp.ClientTimeout(total=12, sock_connect=5, sock_read=8)
         try:
@@ -40,11 +41,11 @@ class GreenhouseScanner(BaseScanner):
                     loc_obj = j.get("location", {})
                     loc_name = loc_obj.get("name") if isinstance(loc_obj, dict) else str(loc_obj) or ""
 
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc_name, location_keywords):
+                    desc_text = f"{title} {j.get('content') or ''}"
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc_name, location_keywords, description=desc_text, home_terms=home_terms):
                         job_id = j.get("id")
-                        desc_text = f"{title} {j.get('content') or ''}"
 
-                        if self.has_residency_restriction(desc_text):
+                        if self.has_residency_restriction(desc_text, location_keywords, home_terms=home_terms):
                             continue
                         if not self.matches_experience(desc_text, max_years_experience):
                             continue
@@ -60,7 +61,7 @@ class GreenhouseScanner(BaseScanner):
 
                         postings.append(JobPosting(
                             ats=self.platform,
-                            company=company_slug,
+                            company=format_company_name(company_slug),
                             title=title,
                             location=loc_name,
                             url=job_url,

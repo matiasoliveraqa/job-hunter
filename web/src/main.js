@@ -5,6 +5,7 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import 'vuetify/styles'
 import '@mdi/font/css/materialdesignicons.css'
+import './style.css'
 import App from './App.vue'
 import ApplicationsView from './views/ApplicationsView.vue'
 import CvsView from './views/CvsView.vue'
@@ -25,6 +26,14 @@ const router = createRouter({
   ],
 })
 
-const vuetify = createVuetify({ components, directives })
+const vuetify = createVuetify({
+  components,
+  directives,
+  theme: {
+    defaultTheme: 'dark',
+  },
+})
 
-createApp(App).use(router).use(vuetify).mount('#app')
+import { i18nPlugin } from './i18n/index.js'
+
+createApp(App).use(router).use(vuetify).use(i18nPlugin).mount('#app')

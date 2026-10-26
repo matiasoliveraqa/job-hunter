@@ -1,6 +1,10 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { t } from '../i18n/index.js'
+
+const route = useRoute()
 
 const profile = ref(null)
 const original = ref('')
@@ -8,36 +12,106 @@ const loading = ref(true)
 const saving = ref(false)
 const snack = reactive({ show: false, text: '', color: 'success' })
 
+const activeTab = ref('profile') // 'profile' | 'questions' | 'ai'
+
 const yesNo = ['Yes', 'No']
-const periods = [
-  { value: 'monthly', title: 'Mensual' },
-  { value: 'annual', title: 'Anual' },
-]
 const platforms = ['ashby', 'greenhouse', 'lever']
 
-const dirty = computed(() => profile.value && JSON.stringify(profile.value) !== original.value)
+const newRoleInput = ref('')
+const newKeywordInput = ref('')
+const newLocationInput = ref('')
 
 function notify(text, color = 'success') {
   Object.assign(snack, { show: true, text, color })
 }
 
 function adopt(data) {
-  // text fields that may be null in the file are edited as empty strings
+  data.personal_info ??= {}
   data.personal_info.github_url ??= ''
   data.personal_info.portfolio_url ??= ''
   data.personal_info.current_company ??= ''
-  data.personal_info.years_of_experience ??= null
-  data.personal_info.gender ??= ''
-  data.personal_info.race ??= ''
-  data.personal_info.veteran_status ??= ''
-  data.personal_info.disability_status ??= ''
-  data.search_criteria.max_years_of_experience ??= null
+  data.personal_info.years_of_experience ??= 7
+  data.personal_info.requires_us_visa_sponsorship ??= 'No'
+
+  const normalizeCanonical = (val, map) => {
+    if (!val) return null
+    const lower = String(val).trim().toLowerCase()
+    return map[lower] || val
+  }
+  const genderMap = {
+    male: 'male', hombre: 'male', masculino: 'male', man: 'male',
+    female: 'female', mujer: 'female', femenino: 'female', woman: 'female',
+    'non-binary': 'non_binary', 'non binary': 'non_binary', 'no binario': 'non_binary',
+    'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  const raceMap = {
+    'hispanic or latino': 'hispanic_latino', hispanic: 'hispanic_latino', latino: 'hispanic_latino',
+    'hispano o latino': 'hispanic_latino', hispano: 'hispanic_latino',
+    white: 'white', blanco: 'white', 'white (not hispanic or latino)': 'white',
+    'black or african american': 'black', black: 'black', negro: 'black', 'negro o afroamericano': 'black',
+    asian: 'asian', 'asiático': 'asian', asiatico: 'asian',
+    'two or more races': 'two_or_more', 'dos o más razas': 'two_or_more', 'dos o más etnias': 'two_or_more',
+    'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  const veteranMap = {
+    'i am not a veteran': 'not_veteran', 'not a veteran': 'not_veteran', 'no soy veterano': 'not_veteran', 'no soy un veterano': 'not_veteran', no: 'not_veteran', not_veteran: 'not_veteran',
+    'i identify as one or more of the classifications of protected veteran': 'veteran', 'protected veteran': 'veteran', veteran: 'veteran', veterano: 'veteran', 'soy veterano protegido': 'veteran', yes: 'veteran',
+    'i decline to self-identify': 'decline', 'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  const disabilityMap = {
+    'no, i do not have a disability': 'no', no: 'no', 'no tengo discapacidad': 'no', 'no tengo una discapacidad': 'no',
+    'yes, i have a disability (or previously had one)': 'yes', 'yes, i have a disability': 'yes', 'sí tengo o tuve una discapacidad': 'yes', 'sí, tengo una discapacidad': 'yes', yes: 'yes',
+    'i do not wish to answer': 'decline', 'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  data.personal_info.gender = normalizeCanonical(data.personal_info.gender, genderMap) || 'male'
+  data.personal_info.race = normalizeCanonical(data.personal_info.race, raceMap) || 'hispanic_latino'
+  data.personal_info.veteran_status = normalizeCanonical(data.personal_info.veteran_status, veteranMap) || 'not_veteran'
+  data.personal_info.disability_status = normalizeCanonical(data.personal_info.disability_status, disabilityMap) || 'no'
+
+  data.search_criteria ??= {}
+  data.search_criteria.target_roles ??= []
+  data.search_criteria.keywords ??= []
+  data.search_criteria.location_keywords ??= []
+  data.search_criteria.max_years_of_experience ??= 7
+  data.search_criteria.min_salary_usd ??= 3000
+
+  data.preferences ??= {}
   data.preferences.dependent_salary_usd ??= data.preferences.desired_salary_usd ?? null
   data.preferences.contractor_salary_usd ??= null
+  data.preferences.salary_period ??= 'monthly'
+  data.preferences.notice_period ??= '2 weeks'
   data.preferences.english_level ??= ''
+  data.preferences.native_language ??= ''
+  data.preferences.legally_authorized_to_work ??= 'Yes'
+
+  data.ats_settings ??= {}
+  data.ats_settings.enabled_platforms ??= ['ashby', 'greenhouse', 'lever']
+  data.ats_settings.auto_upload_resume ??= true
+  data.ats_settings.stealth_mode ??= true
+
+  data.open_questions ??= {}
+  data.open_questions.motivation ??= ''
+  data.open_questions.experience_summary ??= ''
+  data.open_questions.key_project ??= data.open_questions.metrics_and_kpis || ''
+  data.open_questions.timezone_overlap ??= ''
+  data.open_questions.education_level ??= ''
+  data.open_questions.education_institution ??= ''
+  data.open_questions.education_start_year ??= null
+  data.open_questions.education_end_year ??= null
+  data.open_questions.additional_info ??= ''
+  data.open_questions.custom_qa ??= {}
+  if (data.open_questions.fintech_motivation && !data.open_questions.custom_qa.fintech) {
+    data.open_questions.custom_qa.fintech = data.open_questions.fintech_motivation
+  }
+
   profile.value = data
   original.value = JSON.stringify(data)
 }
+
+const dirty = computed(() => {
+  if (!profile.value || !original.value) return false
+  return JSON.stringify(profile.value) !== original.value
+})
 
 const baseCv = ref(null)
 const uploadingCv = ref(false)
@@ -47,7 +121,7 @@ async function loadBaseCv() {
   try {
     baseCv.value = await api.getBaseCv()
   } catch {
-    // ignorar
+    // ignora
   }
 }
 
@@ -62,10 +136,79 @@ async function load() {
   }
 }
 
-onMounted(() => {
-  load()
-  loadBaseCv()
+const agentStatus = ref(null)
+const agentConfig = reactive({
+  provider: 'auto',
+  anthropicApiKey: '',
+  openaiApiKey: '',
+  geminiApiKey: '',
+  deepseekApiKey: '',
+  kimiApiKey: '',
+  customOpenAiApiKey: '',
+  customOpenAiBaseUrl: '',
+  customOpenAiModel: '',
+  hasAnthropicKey: false,
+  hasOpenAiKey: false,
+  hasGeminiKey: false,
+  hasDeepSeekKey: false,
+  hasKimiKey: false,
+  hasCustomKey: false,
 })
+const savingAgentConfig = ref(false)
+
+const providerOptions = computed(() => [
+  { value: 'auto', title: t('profile.providers.auto') },
+  { value: 'deepseek_api', title: t('profile.providers.deepseek') },
+  { value: 'kimi_api', title: t('profile.providers.kimi') },
+  { value: 'custom_openai_api', title: t('profile.providers.custom') },
+  { value: 'anthropic_api', title: t('profile.providers.anthropic') },
+  { value: 'openai_api', title: t('profile.providers.openai') },
+  { value: 'gemini_api', title: t('profile.providers.gemini') },
+  { value: 'claude', title: t('profile.providers.claude') },
+  { value: 'agy', title: t('profile.providers.agy') },
+  { value: 'codex', title: t('profile.providers.codex') },
+])
+
+async function loadAgentConfig() {
+  try {
+    const [status, cfg] = await Promise.all([api.getAgentStatus(), api.getAgentConfig()])
+    agentStatus.value = status
+    Object.assign(agentConfig, cfg)
+  } catch (e) {
+    console.warn('[ProfileView] No se pudo cargar config de IA:', e.message)
+  }
+}
+
+async function saveAgentConfigAction() {
+  savingAgentConfig.value = true
+  try {
+    const res = await api.saveAgentConfig({
+      provider: agentConfig.provider,
+      anthropicApiKey: agentConfig.anthropicApiKey,
+      openaiApiKey: agentConfig.openaiApiKey,
+      geminiApiKey: agentConfig.geminiApiKey,
+      deepseekApiKey: agentConfig.deepseekApiKey,
+      kimiApiKey: agentConfig.kimiApiKey,
+      customOpenAiApiKey: agentConfig.customOpenAiApiKey,
+      customOpenAiBaseUrl: agentConfig.customOpenAiBaseUrl,
+      customOpenAiModel: agentConfig.customOpenAiModel,
+    })
+    if (res?.status) {
+      agentStatus.value = res.status
+    }
+    notify(
+      agentStatus.value?.connected
+        ? t('profile.toasts.agentTestedSuccess', { name: agentStatus.value.activeProviderName })
+        : t('profile.toasts.agentNoAiWarn'),
+      agentStatus.value?.connected ? 'success' : 'warning',
+    )
+    await loadAgentConfig()
+  } catch (err) {
+    notify(t('profile.toasts.agentTestedError') + err.message, 'error')
+  } finally {
+    savingAgentConfig.value = false
+  }
+}
 
 async function onFileSelected(event) {
   const file = event.target?.files?.[0]
@@ -121,12 +264,12 @@ async function handleCvUpload(file) {
         profile.value.search_criteria.target_roles = Array.from(curRoles)
       }
 
-      notify('CV cargado con éxito. Se autocompletaron tus datos a partir del documento. Revisa los campos y pulsa Guardar.')
+      notify(t('profile.toasts.cvUploadedParsed'))
     } else {
-      notify('CV guardado en my_cv/ como documento base.')
+      notify(t('profile.toasts.cvUploaded'))
     }
   } catch (err) {
-    notify('Error al procesar el CV: ' + err.message, 'error')
+    notify(t('profile.toasts.cvUploadError') + err.message, 'error')
   } finally {
     uploadingCv.value = false
   }
@@ -136,9 +279,9 @@ async function save() {
   saving.value = true
   try {
     adopt(await api.saveProfile(profile.value))
-    notify('Perfil guardado en config/profile.json')
+    notify(t('profile.toasts.saved'))
   } catch (e) {
-    notify(e.message, 'error')
+    notify(t('profile.toasts.saveError') + e.message, 'error')
   } finally {
     saving.value = false
   }
@@ -146,263 +289,1220 @@ async function save() {
 
 const reset = () => adopt(JSON.parse(original.value))
 const toNumber = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
+const formatSalaryNumber = (v) => {
+  const n = Number(v)
+  if (isNaN(n) || n <= 0) return '0'
+  return n.toLocaleString('en-US')
+}
+
+function addTargetRole() {
+  const val = newRoleInput.value.trim()
+  if (!val || !profile.value?.search_criteria?.target_roles) return
+  if (!profile.value.search_criteria.target_roles.includes(val)) {
+    profile.value.search_criteria.target_roles.push(val)
+  }
+  newRoleInput.value = ''
+}
+
+function removeTargetRole(idx) {
+  profile.value?.search_criteria?.target_roles?.splice(idx, 1)
+}
+
+function addKeyword() {
+  const val = newKeywordInput.value.trim()
+  if (!val || !profile.value?.search_criteria?.keywords) return
+  if (!profile.value.search_criteria.keywords.includes(val)) {
+    profile.value.search_criteria.keywords.push(val)
+  }
+  newKeywordInput.value = ''
+}
+
+function removeKeyword(idx) {
+  profile.value?.search_criteria?.keywords?.splice(idx, 1)
+}
+
+function addLocation() {
+  const val = newLocationInput.value.trim()
+  if (!val || !profile.value?.search_criteria?.location_keywords) return
+  if (!profile.value.search_criteria.location_keywords.includes(val)) {
+    profile.value.search_criteria.location_keywords.push(val)
+  }
+  newLocationInput.value = ''
+}
+
+function removeLocation(idx) {
+  profile.value?.search_criteria?.location_keywords?.splice(idx, 1)
+}
+
+function togglePlatform(pl) {
+  const list = profile.value?.ats_settings?.enabled_platforms
+  if (!list) return
+  const idx = list.indexOf(pl)
+  if (idx > -1) {
+    list.splice(idx, 1)
+  } else {
+    list.push(pl)
+  }
+}
+
+const newCustomKey = ref('')
+const newCustomVal = ref('')
+
+function addCustomQa() {
+  const k = newCustomKey.value.trim().toLowerCase()
+  const v = newCustomVal.value.trim()
+  if (!k || !v) return
+  profile.value.open_questions.custom_qa ??= {}
+  profile.value.open_questions.custom_qa[k] = v
+  newCustomKey.value = ''
+  newCustomVal.value = ''
+}
+
+function removeCustomQa(key) {
+  if (profile.value?.open_questions?.custom_qa) {
+    delete profile.value.open_questions.custom_qa[key]
+  }
+}
+
+onMounted(async () => {
+  load()
+  loadBaseCv()
+  await loadAgentConfig()
+  if (route.query.tab === 'ai') {
+    activeTab.value = 'ai'
+  } else if (route.query.tab === 'questions') {
+    activeTab.value = 'questions'
+  }
+})
 </script>
 
 <template>
-  <v-container fluid class="pa-6">
-    <div class="d-flex align-center mb-4">
-      <h1 class="text-h5">Mi perfil</h1>
-      <v-spacer />
-      <v-btn variant="text" :disabled="!dirty || saving" @click="reset">Descartar cambios</v-btn>
-      <v-btn color="primary" prepend-icon="mdi-content-save" :disabled="!dirty" :loading="saving" class="ml-2" @click="save">
-        Guardar
-      </v-btn>
+  <div class="p-6 flex flex-col gap-6 max-w-[1680px] w-full mx-auto font-sans">
+    <!-- TOP ACTION & TITLE HEADER -->
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-border-subtle">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-semibold text-on-surface tracking-tight">{{ $t('profile.title') }}</h1>
+      </div>
+
+      <!-- Action Cluster -->
+      <div class="flex items-center gap-3 self-start md:self-auto flex-wrap">
+        <button
+          class="px-3.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface text-xs font-medium border border-border-subtle transition-colors flex items-center gap-1.5 disabled:opacity-50"
+          :disabled="!dirty || saving"
+          type="button"
+          @click="reset"
+        >
+          <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+          <span>{{ $t('profile.discardChanges') }}</span>
+        </button>
+
+        <button
+          class="px-4 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium shadow-sm transition-all active:scale-[0.98] flex items-center gap-1.5 disabled:opacity-50"
+          :disabled="!dirty || saving"
+          type="button"
+          @click="save"
+        >
+          <span :class="['material-symbols-outlined text-[16px]', saving ? 'animate-spin' : '']">
+            {{ saving ? 'sync' : 'save' }}
+          </span>
+          <span>{{ saving ? $t('profile.savingProfile') : $t('profile.saveProfile') }}</span>
+        </button>
+      </div>
     </div>
 
-    <v-progress-linear v-if="loading" indeterminate />
+    <!-- TABS DE NAVEGACIÓN EN CABECERA -->
+    <div class="flex items-center gap-2 border-b border-border-subtle pb-px flex-wrap">
+      <button
+        class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 transition-colors rounded-t-lg"
+        :class="[
+          activeTab === 'profile'
+            ? 'border-accent text-on-surface font-semibold bg-surface-container/50'
+            : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container/20'
+        ]"
+        type="button"
+        @click="activeTab = 'profile'"
+      >
+        <span class="material-symbols-outlined text-[17px] text-accent">badge</span>
+        <span>{{ $t('profile.tabs.profile') }}</span>
+      </button>
 
-    <v-form v-if="profile" @submit.prevent="save">
-      <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-        Estos datos son los que el aplicador usa para rellenar formularios y los que el agente usa para filtrar ofertas.
-        Se guardan en <code>config/profile.json</code> (fuera de git), con copia de seguridad en <code>output/backups/</code>.
-      </v-alert>
+      <button
+        class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 transition-colors rounded-t-lg"
+        :class="[
+          activeTab === 'questions'
+            ? 'border-accent text-on-surface font-semibold bg-surface-container/50'
+            : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container/20'
+        ]"
+        type="button"
+        @click="activeTab = 'questions'"
+      >
+        <span class="material-symbols-outlined text-[17px] text-sky-400">forum</span>
+        <span>{{ $t('profile.tabs.questions') }}</span>
+        <span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-surface-container-high text-outline">6</span>
+      </button>
 
-      <v-card class="mb-4" variant="outlined">
-        <v-card-item>
-          <template #prepend>
-            <v-avatar color="primary" variant="tonal" rounded>
-              <v-icon icon="mdi-file-pdf-box" size="26" />
-            </v-avatar>
-          </template>
-          <v-card-title class="text-subtitle-1 font-weight-bold">
-            CV Base del Candidato
-          </v-card-title>
-          <v-card-subtitle>
-            Documento maestro guardado en <code>my_cv/</code>. Se utiliza como base para adaptar cada postulación y para autocompletar tu perfil.
-          </v-card-subtitle>
-        </v-card-item>
+      <button
+        class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 transition-colors rounded-t-lg"
+        :class="[
+          activeTab === 'ai'
+            ? 'border-accent text-on-surface font-semibold bg-surface-container/50'
+            : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container/20'
+        ]"
+        type="button"
+        @click="activeTab = 'ai'"
+      >
+        <span class="material-symbols-outlined text-[17px] text-tertiary">smart_toy</span>
+        <span>{{ $t('profile.tabs.ai') }}</span>
+        <span
+          class="w-2 h-2 rounded-full"
+          :class="agentStatus?.connected ? 'bg-emerald-400' : 'bg-amber-400'"
+          :title="agentStatus?.connected ? `Conectado: ${agentStatus.activeProviderName}` : 'Modo CV base estándar'"
+        ></span>
+      </button>
+    </div>
 
-        <v-card-text class="pt-0">
-          <div v-if="baseCv?.exists" class="d-flex flex-wrap align-center ga-3 mb-3 pa-3 rounded bg-surface-variant">
-            <v-icon icon="mdi-file-check" color="success" />
-            <div>
-              <span class="font-weight-medium">{{ baseCv.filename }}</span>
-              <span class="text-caption text-medium-emphasis ml-2">({{ Math.round(baseCv.sizeBytes / 1024) }} KB)</span>
-            </div>
-            <v-spacer />
-            <v-btn
-              variant="text"
-              size="small"
-              prepend-icon="mdi-eye"
-              :href="baseCv.url"
-              target="_blank"
-            >
-              Ver CV actual
-            </v-btn>
-          </div>
-          <div v-else class="text-caption text-medium-emphasis mb-3">
-            No hay ningún CV base cargado aún en <code>my_cv/</code>.
-          </div>
+    <!-- Security & Purpose Info Banner -->
+    <div class="flex items-start gap-3 p-3.5 rounded-lg bg-surface-card border border-border-subtle border-l-4 border-l-accent text-on-surface-variant">
+      <span class="material-symbols-outlined text-accent text-[20px] shrink-0 mt-0.5">verified_user</span>
+      <div class="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <p class="text-xs text-on-surface-variant">
+          {{ $t('profile.banner.text') }}
+          <code class="font-mono text-outline px-1.5 py-0.5 bg-surface-container rounded text-[11px]">config/profile.json</code> (ignorado por git), {{ $t('profile.banner.backupText') }}
+          <code class="font-mono text-outline px-1.5 py-0.5 bg-surface-container rounded text-[11px]">output/backups/</code>.
+        </p>
+        <span class="shrink-0 font-mono text-outline text-[11px] self-end sm:self-auto">{{ $t('profile.banner.localStorageBadge') }}</span>
+      </div>
+    </div>
 
-          <div class="d-flex align-center ga-3">
-            <input
-              ref="fileInputRef"
-              type="file"
-              accept=".pdf,.html,.md,.txt"
-              style="display: none"
-              @change="onFileSelected"
-            />
-            <v-btn
-              color="primary"
-              variant="flat"
-              prepend-icon="mdi-upload"
-              :loading="uploadingCv"
-              @click="fileInputRef?.click()"
-            >
-              {{ baseCv?.exists ? 'Cargar nuevo CV y actualizar datos' : 'Cargar CV base' }}
-            </v-btn>
-            <span class="text-caption text-medium-emphasis">
-              Formatos aceptados: PDF, HTML o Markdown. El agente extraerá tu información automáticamente.
-            </span>
-          </div>
-        </v-card-text>
-      </v-card>
+    <!-- LOADING STATE -->
+    <div v-if="loading" class="p-12 text-center text-xs font-mono text-outline">
+      {{ $t('common.loading') }}
+    </div>
 
-      <v-row>
-        <v-col cols="12" lg="6">
-          <v-card title="Datos personales" class="mb-4">
-            <v-card-text>
-              <v-text-field v-model="profile.personal_info.full_name" label="Nombre completo *" />
-              <v-text-field v-model="profile.personal_info.email" label="Email *" type="email" />
-              <v-text-field v-model="profile.personal_info.phone" label="Teléfono (con código de país) *" />
-              <v-text-field v-model="profile.personal_info.location" label="Ubicación *" />
-              <v-text-field v-model="profile.personal_info.linkedin_url" label="LinkedIn *" />
-              <v-text-field v-model="profile.personal_info.github_url" label="GitHub" />
-              <v-text-field v-model="profile.personal_info.portfolio_url" label="Portfolio / sitio web" />
-              <v-text-field v-model="profile.personal_info.current_company" label="Empresa actual" />
-              <v-text-field
-                :model-value="profile.personal_info.years_of_experience"
-                label="Años de experiencia profesional (opcional)"
-                type="number"
-                min="0"
-                @update:model-value="profile.personal_info.years_of_experience = toNumber($event)"
-              />
-              <v-select
-                v-model="profile.personal_info.requires_us_visa_sponsorship"
-                :items="yesNo"
-                label="¿Requiere sponsorship de visa de EE. UU.?"
-              />
-              <v-divider class="my-3" />
-              <div class="text-caption text-medium-emphasis mb-2 font-weight-bold">
-                DATOS DEMOGRÁFICOS / EEO (OPCIONAL PARA FORMULARIOS ATS)
+    <!-- TAB 1: PERFIL Y CRITERIOS -->
+    <div v-else-if="activeTab === 'profile' && profile" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <!-- LEFT COLUMN: CV BASE, PERSONAL DATA & DEMOGRAPHICS (7 cols) -->
+      <div class="lg:col-span-7 flex flex-col gap-6">
+        <!-- 1. Card: CV Base del Candidato -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between pb-1">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">picture_as_pdf</span>
+              <div>
+                <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.baseCv') }}</h2>
+                <p class="font-mono text-[11px] text-outline">{{ $t('profile.sections.baseCvDesc') }}</p>
               </div>
-              <v-row density="compact">
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.gender" label="Género (Gender)" />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.race" label="Etnia / Raza (Race)" />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.veteran_status" label="Estatus de veterano (Veteran status)" />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field v-model="profile.personal_info.disability_status" label="Discapacidad (Disability status)" />
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-mono text-[11px]">{{ $t('profile.sections.masterDocBadge') }}</span>
+          </div>
 
-          <v-card title="Preferencias" subtitle="Se usan en las preguntas de salario y disponibilidad de los formularios">
-            <v-card-text>
-              <v-row>
-                <v-col cols="12" sm="4">
-                  <v-text-field
-                    :model-value="profile.preferences.dependent_salary_usd"
-                    label="Salario Dependiente (USD)"
-                    type="number"
-                    min="0"
-                    hint="Por defecto si no aclara modalidad"
-                    persistent-hint
-                    @update:model-value="profile.preferences.dependent_salary_usd = toNumber($event)"
-                  />
-                </v-col>
-                <v-col cols="12" sm="4">
-                  <v-text-field
-                    :model-value="profile.preferences.contractor_salary_usd"
-                    label="Salario Contractor (USD)"
-                    type="number"
-                    min="0"
-                    hint="Si la oferta dice Contractor / B2B"
-                    persistent-hint
-                    @update:model-value="profile.preferences.contractor_salary_usd = toNumber($event)"
-                  />
-                </v-col>
-                <v-col cols="12" sm="4">
-                  <v-select v-model="profile.preferences.salary_period" :items="periods" label="Período" />
-                </v-col>
-              </v-row>
-              <v-text-field
-                v-model="profile.preferences.notice_period"
-                label="Disponibilidad / preaviso *"
-                hint="Ej.: Immediately, 2 weeks, 1 month"
-                persistent-hint
-              />
-              <v-text-field v-model="profile.preferences.english_level" label="Nivel de inglés" class="mt-3" />
-              <v-select
-                v-model="profile.preferences.legally_authorized_to_work"
-                :items="yesNo"
-                label="¿Autorizado a trabajar legalmente?"
-              />
-            </v-card-text>
-          </v-card>
-        </v-col>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-surface-container/60 border border-border-subtle">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="material-symbols-outlined text-emerald-400 text-[18px]">verified</span>
+              <div class="flex flex-col min-w-0">
+                <span class="text-xs font-medium text-on-surface truncate">
+                  {{ baseCv?.filename || 'Matias_Olivera_QA_CV.pdf' }}
+                </span>
+                <span class="font-mono text-[10px] text-outline">
+                  {{ baseCv?.exists ? `${Math.round((baseCv.sizeBytes || 0) / 1024)} KB` : $t('profile.sections.notUploadedYet') }} • my_cv/
+                </span>
+              </div>
+            </div>
 
-        <v-col cols="12" lg="6">
-          <v-card title="Criterios de búsqueda" class="mb-4">
-            <v-card-text>
-              <v-combobox
-                v-model="profile.search_criteria.target_roles"
-                label="Roles objetivo"
-                multiple
-                chips
-                closable-chips
-                hint="Escribe un rol y pulsa Enter"
-                persistent-hint
-              />
-              <v-combobox
-                v-model="profile.search_criteria.keywords"
-                label="Keywords técnicas"
-                multiple
-                chips
-                closable-chips
-                class="mt-3"
-                hint="Solo tecnologías que figuran en tu CV"
-                persistent-hint
-              />
-              <v-combobox
-                v-model="profile.search_criteria.location_keywords"
-                label="Ubicaciones aceptadas"
-                multiple
-                chips
-                closable-chips
-                class="mt-3"
-              />
-              <v-row class="mt-1">
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    :model-value="profile.search_criteria.max_years_of_experience"
-                    label="Tope máx. años exp. (opcional)"
-                    type="number"
-                    min="0"
-                    hint="Vacío = sin límite de años"
-                    persistent-hint
-                    @update:model-value="profile.search_criteria.max_years_of_experience = toNumber($event)"
-                  />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    :model-value="profile.search_criteria.min_salary_usd"
-                    label="Salario mínimo (USD)"
-                    type="number"
-                    min="0"
-                    @update:model-value="profile.search_criteria.min_salary_usd = toNumber($event)"
-                  />
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
+            <div class="flex items-center gap-2 shrink-0">
+              <a
+                v-if="baseCv?.exists"
+                :href="baseCv.url"
+                target="_blank"
+                class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+              >
+                <span class="material-symbols-outlined text-[15px]">visibility</span>
+                <span>{{ $t('profile.sections.viewCvBtn') }}</span>
+              </a>
 
-          <v-card title="Plataformas y navegador">
-            <v-card-text>
-              <div class="text-subtitle-2 mb-1">Plataformas ATS a escanear</div>
-              <div class="d-flex flex-wrap">
-                <v-checkbox
-                  v-for="pl in platforms"
-                  :key="pl"
-                  v-model="profile.ats_settings.enabled_platforms"
-                  :label="pl"
-                  :value="pl"
-                  density="compact"
-                  hide-details
-                  class="mr-4"
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept=".pdf,.html,.md,.txt"
+                class="hidden"
+                @change="onFileSelected"
+              />
+
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium shadow-sm transition-all active:scale-[0.98]"
+                :disabled="uploadingCv"
+                @click="fileInputRef?.click()"
+              >
+                <span :class="['material-symbols-outlined text-[15px]', uploadingCv ? 'animate-spin' : '']">
+                  {{ uploadingCv ? 'sync' : 'upload' }}
+                </span>
+                <span>{{ uploadingCv ? $t('profile.sections.analyzingCv') : $t('profile.sections.loadNewCv') }}</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Card: Datos Personales -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between pb-1">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">badge</span>
+              <div>
+                <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.personalInfo') }}</h2>
+                <p class="font-mono text-[11px] text-outline">{{ $t('profile.sections.personalInfoDesc') }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4">
+            <!-- Nombre & Email -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.fullName') }} <span class="text-accent">*</span>
+                </label>
+                <input
+                  v-model="profile.personal_info.full_name"
+                  class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="text"
                 />
               </div>
-              <v-switch
-                v-model="profile.ats_settings.auto_upload_resume"
-                label="Adjuntar el CV automáticamente"
-                color="primary"
-                hide-details
-                density="compact"
-                class="mt-2"
-              />
-              <v-switch v-model="profile.ats_settings.stealth_mode" label="Modo sigiloso del navegador" color="primary" hide-details density="compact" />
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
-    </v-form>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.email') }} <span class="text-accent">*</span>
+                </label>
+                <input
+                  v-model="profile.personal_info.email"
+                  class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="email"
+                />
+              </div>
+            </div>
 
-    <v-snackbar v-model="snack.show" :color="snack.color" timeout="4000">{{ snack.text }}</v-snackbar>
-  </v-container>
+            <!-- Teléfono & Ubicación -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.phone') }} <span class="text-accent">*</span>
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">call</span>
+                  <input
+                    v-model="profile.personal_info.phone"
+                    class="h-9 pl-8 pr-3 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                </div>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.currentLocation') }} <span class="text-accent">*</span>
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">pin_drop</span>
+                  <input
+                    v-model="profile.personal_info.location"
+                    class="h-9 pl-8 pr-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- LinkedIn -->
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                {{ $t('profile.sections.linkedin') }} <span class="text-accent">*</span>
+              </label>
+              <div class="relative flex items-center">
+                <input
+                  v-model="profile.personal_info.linkedin_url"
+                  class="h-9 px-3 pr-9 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="text"
+                />
+                <a
+                  v-if="profile.personal_info.linkedin_url"
+                  :href="profile.personal_info.linkedin_url"
+                  target="_blank"
+                  class="absolute right-2 text-outline hover:text-on-surface p-1"
+                >
+                  <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- GitHub & Portfolio -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.github') }}
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">code</span>
+                  <input
+                    v-model="profile.personal_info.github_url"
+                    class="h-9 pl-8 pr-8 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                  <a
+                    v-if="profile.personal_info.github_url"
+                    :href="profile.personal_info.github_url"
+                    target="_blank"
+                    class="absolute right-2 text-outline hover:text-on-surface p-1"
+                  >
+                    <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </a>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.portfolio') }}
+                </label>
+                <div class="relative flex items-center">
+                  <span class="material-symbols-outlined text-[16px] text-outline absolute left-2.5 pointer-events-none">language</span>
+                  <input
+                    v-model="profile.personal_info.portfolio_url"
+                    class="h-9 pl-8 pr-8 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="text"
+                  />
+                  <a
+                    v-if="profile.personal_info.portfolio_url"
+                    :href="profile.personal_info.portfolio_url"
+                    target="_blank"
+                    class="absolute right-2 text-outline hover:text-on-surface p-1"
+                  >
+                    <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empresa actual, Años Exp & Sponsorship -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+              <div class="md:col-span-6 flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.currentCompany') }}
+                </label>
+                <input
+                  v-model="profile.personal_info.current_company"
+                  class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="text"
+                />
+              </div>
+
+              <div class="md:col-span-3 flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium">
+                  {{ $t('profile.sections.yearsOfExperience') }}
+                </label>
+                <div class="flex items-center gap-2">
+                  <input
+                    :value="profile.personal_info.years_of_experience"
+                    class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                    type="number"
+                    min="0"
+                    @input="profile.personal_info.years_of_experience = toNumber($event.target.value)"
+                  />
+                  <span class="px-2 py-1 rounded bg-surface-container-highest text-accent font-mono text-[10px] uppercase font-semibold">
+                    {{ (profile.personal_info.years_of_experience || 0) >= 5 ? 'Senior' : 'Mid' }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="md:col-span-3 flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant font-medium truncate">
+                  {{ $t('profile.sections.visaSponsorship') }}
+                </label>
+                <select
+                  v-model="profile.personal_info.requires_us_visa_sponsorship"
+                  class="h-9 px-2 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+                >
+                  <option value="No">{{ $t('common.no') }}</option>
+                  <option value="Yes">{{ $t('common.yes') }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Card: Datos Demográficos / EEO -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-outline text-[20px]">public</span>
+              <div>
+                <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.demographics') }}</h2>
+                <p class="text-xs text-outline">{{ $t('profile.sections.eeoSubtitle') }}</p>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-outline font-mono text-[10px]">{{ $t('profile.sections.optionalBadge') }}</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                {{ $t('profile.sections.gender') }}
+              </label>
+              <select
+                v-model="profile.personal_info.gender"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="male">{{ $t('profile.sections.genderOptions.male') }}</option>
+                <option value="female">{{ $t('profile.sections.genderOptions.female') }}</option>
+                <option value="non_binary">{{ $t('profile.sections.genderOptions.non_binary') }}</option>
+                <option value="decline">{{ $t('profile.sections.genderOptions.decline') }}</option>
+              </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                {{ $t('profile.sections.race') }}
+              </label>
+              <select
+                v-model="profile.personal_info.race"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="hispanic_latino">{{ $t('profile.sections.raceOptions.hispanic_latino') }}</option>
+                <option value="white">{{ $t('profile.sections.raceOptions.white') }}</option>
+                <option value="black">{{ $t('profile.sections.raceOptions.black') }}</option>
+                <option value="asian">{{ $t('profile.sections.raceOptions.asian') }}</option>
+                <option value="two_or_more">{{ $t('profile.sections.raceOptions.two_or_more') }}</option>
+                <option value="decline">{{ $t('profile.sections.raceOptions.decline') }}</option>
+              </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                {{ $t('profile.sections.veteran') }}
+              </label>
+              <select
+                v-model="profile.personal_info.veteran_status"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="not_veteran">{{ $t('profile.sections.veteranOptions.not_veteran') }}</option>
+                <option value="veteran">{{ $t('profile.sections.veteranOptions.veteran') }}</option>
+                <option value="decline">{{ $t('profile.sections.veteranOptions.decline') }}</option>
+              </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">
+                {{ $t('profile.sections.disability') }}
+              </label>
+              <select
+                v-model="profile.personal_info.disability_status"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="no">{{ $t('profile.sections.disabilityOptions.no') }}</option>
+                <option value="yes">{{ $t('profile.sections.disabilityOptions.yes') }}</option>
+                <option value="decline">{{ $t('profile.sections.disabilityOptions.decline') }}</option>
+              </select>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- RIGHT COLUMN: SEARCH CRITERIA, PREFERENCES & AUTOMATION (5 cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-6">
+        <!-- 4. Card: Criterios de Búsqueda -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">filter_alt</span>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.searchCriteria') }}</h2>
+            </div>
+          </div>
+
+          <!-- Roles Objetivo -->
+          <div class="flex flex-col gap-2">
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.targetRoles') }}</label>
+            <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle min-h-[44px]">
+              <span
+                v-for="(role, idx) in profile.search_criteria.target_roles"
+                :key="role"
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-high text-on-surface text-xs font-mono border border-border-subtle"
+              >
+                {{ role }}
+                <button
+                  class="text-outline hover:text-rose-400 transition-colors"
+                  type="button"
+                  @click="removeTargetRole(idx)"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                v-model="newRoleInput"
+                class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                :placeholder="$t('profile.sections.targetRolesPlaceholder')"
+                type="text"
+                @keyup.enter="addTargetRole"
+              />
+              <button
+                class="h-8 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+                type="button"
+                @click="addTargetRole"
+              >
+                {{ $t('profile.sections.addRoleBtn') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Keywords Técnicas -->
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.keywords') }}</label>
+              <span class="font-mono text-[10px] text-outline">{{ profile.search_criteria.keywords?.length || 0 }} tags</span>
+            </div>
+            <div class="flex flex-wrap gap-1 p-2 rounded-lg bg-surface-container border border-border-subtle max-h-36 overflow-y-auto">
+              <span
+                v-for="(kw, idx) in profile.search_criteria.keywords"
+                :key="kw"
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant text-[11px] font-mono border border-border-subtle"
+              >
+                {{ kw }}
+                <button
+                  class="text-outline hover:text-rose-400 text-[10px]"
+                  type="button"
+                  @click="removeKeyword(idx)"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                v-model="newKeywordInput"
+                class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors font-mono"
+                :placeholder="$t('profile.sections.keywordsPlaceholder')"
+                type="text"
+                @keyup.enter="addKeyword"
+              />
+              <button
+                class="h-8 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+                type="button"
+                @click="addKeyword"
+              >
+                {{ $t('profile.sections.addRoleBtn') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Ubicaciones Aceptadas -->
+          <div class="flex flex-col gap-2">
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.locationKeywords') }}</label>
+            <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle">
+              <span
+                v-for="(loc, idx) in profile.search_criteria.location_keywords"
+                :key="loc"
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface text-[10px] font-mono border border-border-subtle"
+              >
+                {{ loc }}
+                <button
+                  class="text-outline hover:text-rose-400"
+                  type="button"
+                  @click="removeLocation(idx)"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <input
+                v-model="newLocationInput"
+                class="h-8 px-2.5 flex-1 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors font-mono"
+                :placeholder="$t('profile.sections.locationKeywordsPlaceholder')"
+                type="text"
+                @keyup.enter="addLocation"
+              />
+              <button
+                class="h-8 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
+                type="button"
+                @click="addLocation"
+              >
+                {{ $t('profile.sections.addRoleBtn') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtros Numéricos -->
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant truncate">{{ $t('profile.sections.maxYears') }}</label>
+              <input
+                :value="profile.search_criteria.max_years_of_experience"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                :placeholder="$t('profile.sections.noLimitPlaceholder')"
+                type="number"
+                min="0"
+                @input="profile.search_criteria.max_years_of_experience = toNumber($event.target.value)"
+              />
+              <span class="font-mono text-[10px] text-outline">{{ $t('profile.sections.emptyNoLimit') }}</span>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant truncate">{{ $t('profile.sections.minSalary') }}</label>
+              <div class="relative flex items-center">
+                <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
+                <input
+                  :value="profile.search_criteria.min_salary_usd"
+                  class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="number"
+                  min="0"
+                  @input="profile.search_criteria.min_salary_usd = toNumber($event.target.value)"
+                />
+              </div>
+              <span class="font-mono text-[10px] text-outline">{{ $t('profile.sections.strictFilterNote') }}</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Card: Preferencias & Disponibilidad -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">payments</span>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.compensation') }}</h2>
+            </div>
+          </div>
+
+          <!-- Salarios en USD / mes con cálculo anual en tiempo real (Opción A) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.dependentSalary') }}</label>
+              <div class="relative flex items-center">
+                <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
+                <input
+                  :value="profile.preferences.dependent_salary_usd"
+                  class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="number"
+                  min="0"
+                  @input="profile.preferences.dependent_salary_usd = toNumber($event.target.value)"
+                />
+              </div>
+              <span class="font-mono text-[10px] text-outline">
+                {{ $t('profile.sections.payrollDirectAnnual', { amount: formatSalaryNumber((profile.preferences.dependent_salary_usd || 0) * 12) }) }}
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.contractorSalary') }}</label>
+              <div class="relative flex items-center">
+                <span class="font-mono text-xs text-outline absolute left-2.5">$</span>
+                <input
+                  :value="profile.preferences.contractor_salary_usd"
+                  class="h-9 pl-6 pr-3 w-full rounded-lg bg-surface-container text-on-surface font-mono text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                  type="number"
+                  min="0"
+                  @input="profile.preferences.contractor_salary_usd = toNumber($event.target.value)"
+                />
+              </div>
+              <span class="font-mono text-[10px] text-outline">
+                {{ $t('profile.sections.contractorAnnual', { amount: formatSalaryNumber((profile.preferences.contractor_salary_usd || 0) * 12) }) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.noticePeriod') }} <span class="text-accent">*</span></label>
+              <input
+                v-model="profile.preferences.notice_period"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                type="text"
+              />
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.legallyAuthorized') }}</label>
+              <select
+                v-model="profile.preferences.legally_authorized_to_work"
+                class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              >
+                <option value="Yes">{{ $t('common.yes') }}</option>
+                <option value="No">{{ $t('common.no') }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.englishLevel') }}</label>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="profile.preferences.english_level"
+                class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+                type="text"
+              />
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.nativeLanguage') }}</label>
+            <input
+              v-model="profile.preferences.native_language"
+              class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              type="text"
+            />
+          </div>
+        </section>
+
+        <!-- 6. Card: Automatización & ATS -->
+        <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-accent text-[20px]">smart_toy</span>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.atsSettings') }}</h2>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-surface-container-high text-accent font-mono text-[10px]">Headless Ready</span>
+          </div>
+
+          <!-- ATS Engine Checklist -->
+          <div class="flex flex-col gap-2">
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.enabledPlatforms') }}</label>
+            <div class="grid grid-cols-3 gap-2">
+              <label
+                v-for="pl in platforms"
+                :key="pl"
+                class="flex items-center gap-2 p-2 rounded-lg bg-surface-container hover:bg-surface-container-high border border-border-subtle cursor-pointer transition-colors"
+              >
+                <input
+                  :checked="profile.ats_settings.enabled_platforms.includes(pl)"
+                  class="rounded text-accent focus:ring-0 bg-surface-container-highest"
+                  type="checkbox"
+                  @change="togglePlatform(pl)"
+                />
+                <span class="font-mono text-xs text-on-surface capitalize">{{ pl }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Toggles -->
+          <div class="flex flex-col gap-3 pt-2">
+            <div class="flex items-center justify-between py-1">
+              <div class="flex flex-col">
+                <span class="text-xs font-medium text-on-surface">{{ $t('profile.sections.autoUploadResume') }}</span>
+                <span class="text-[11px] text-outline">{{ $t('profile.sections.autoUploadResumeDesc') }}</span>
+              </div>
+              <input
+                v-model="profile.ats_settings.auto_upload_resume"
+                class="w-4 h-4 rounded text-accent focus:ring-0 bg-surface-container-highest cursor-pointer"
+                type="checkbox"
+              />
+            </div>
+
+            <div class="flex items-center justify-between py-1">
+              <div class="flex flex-col">
+                <span class="text-xs font-medium text-on-surface">{{ $t('profile.sections.stealthMode') }}</span>
+                <span class="text-[11px] text-outline">{{ $t('profile.sections.stealthModeDesc') }}</span>
+              </div>
+              <input
+                v-model="profile.ats_settings.stealth_mode"
+                class="w-4 h-4 rounded text-accent focus:ring-0 bg-surface-container-highest cursor-pointer"
+                type="checkbox"
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- TAB 2: PREGUNTAS ABIERTAS ATS (Punto 3 implementado) -->
+    <div v-else-if="activeTab === 'questions' && profile" class="flex flex-col gap-6">
+      <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-sky-400 text-[20px]">forum</span>
+          <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.questionsTabTitle') }}</h2>
+        </div>
+        <p class="text-xs text-on-surface-variant">
+          {{ $t('profile.sections.questionsTabDesc') }}
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- 1. Motivación e interés por la empresa -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.motivation') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.motivationDesc') }}</span>
+          <textarea
+            v-model="profile.open_questions.motivation"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- 2. Resumen de trayectoria y experiencia relevante -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.experienceSummary') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.experienceSummaryDesc') }}</span>
+          <textarea
+            v-model="profile.open_questions.experience_summary"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- 3. Proyecto destacado o mayor desafío resuelto -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.keyProject') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.keyProjectDesc') }}</span>
+          <textarea
+            v-model="profile.open_questions.key_project"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- 4. Información adicional o notas para la postulación -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.additionalInfo') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.additionalInfoDesc') }}</span>
+          <textarea
+            v-model="profile.open_questions.additional_info"
+            rows="5"
+            class="w-full p-2.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans leading-relaxed"
+          ></textarea>
+        </div>
+
+        <!-- 5. Nivel de formación académica o certificaciones -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.educationLevel') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.educationLevelDesc') }}</span>
+          <input
+            v-model="profile.open_questions.education_level"
+            type="text"
+            class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+          />
+
+          <label class="text-xs font-semibold text-on-surface pt-2">{{ $t('profile.sections.educationInstitution') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.educationInstitutionDesc') }}</span>
+          <input
+            v-model="profile.open_questions.education_institution"
+            type="text"
+            class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+          />
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.educationStartYear') }}</label>
+              <span class="text-[11px] text-outline">{{ $t('profile.sections.educationStartYearDesc') }}</span>
+              <input
+                v-model.number="profile.open_questions.education_start_year"
+                type="number"
+                placeholder="2018"
+                class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+              />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.educationEndYear') }}</label>
+              <span class="text-[11px] text-outline">{{ $t('profile.sections.educationEndYearDesc') }}</span>
+              <input
+                v-model.number="profile.open_questions.education_end_year"
+                type="number"
+                placeholder="2022"
+                class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Disponibilidad horaria y huso horario -->
+        <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-2">
+          <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.timezoneOverlap') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.timezoneOverlapDesc') }}</span>
+          <input
+            v-model="profile.open_questions.timezone_overlap"
+            type="text"
+            class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+          />
+        </div>
+      </div>
+
+      <!-- SECCIÓN: PREGUNTAS PERSONALIZADAS POR PALABRA CLAVE (CUSTOM Q&A) -->
+      <div class="p-5 rounded-xl bg-surface-card border border-border-subtle flex flex-col gap-4">
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-amber-400 text-[18px]">tune</span>
+            <h3 class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.customQa') }}</h3>
+          </div>
+          <p class="text-[11px] text-on-surface-variant">
+            {{ $t('profile.sections.customQaDesc') }}
+          </p>
+        </div>
+
+        <!-- Lista de preguntas existentes -->
+        <div v-if="profile.open_questions.custom_qa && Object.keys(profile.open_questions.custom_qa).length" class="flex flex-col gap-2.5">
+          <div
+            v-for="(val, key) in profile.open_questions.custom_qa"
+            :key="key"
+            class="p-3 rounded-lg bg-surface-container border border-border-subtle flex flex-col sm:flex-row sm:items-start justify-between gap-3"
+          >
+            <div class="flex flex-col gap-1 min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-container-highest text-accent border border-border-subtle font-semibold">
+                  {{ key }}
+                </span>
+                <span class="text-[11px] text-outline">{{ $t('profile.sections.customKeywordBadge') }}</span>
+              </div>
+              <p class="text-xs text-on-surface font-sans leading-relaxed pt-0.5">
+                {{ val }}
+              </p>
+            </div>
+            <button
+              class="self-end sm:self-start p-1.5 rounded-lg text-outline hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+              :title="$t('profile.sections.customQa')"
+              type="button"
+              @click="removeCustomQa(key)"
+            >
+              <span class="material-symbols-outlined text-[16px] block">delete</span>
+            </button>
+          </div>
+        </div>
+        <div v-else class="text-xs text-outline italic py-2">
+          {{ $t('profile.sections.noCustomQuestions') }}
+        </div>
+
+        <!-- Formulario para agregar nueva clave/valor -->
+        <div class="pt-3 border-t border-border-subtle flex flex-col gap-2.5">
+          <span class="text-xs font-medium text-on-surface">{{ $t('profile.sections.addNewCustomResponse') }}</span>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-start gap-2.5">
+            <input
+              v-model="newCustomKey"
+              class="h-9 px-3 w-full sm:w-48 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              :placeholder="$t('profile.sections.customKeywordPlaceholder')"
+              type="text"
+            />
+            <input
+              v-model="newCustomVal"
+              class="h-9 px-3 flex-1 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              :placeholder="$t('profile.sections.customResponsePlaceholder')"
+              type="text"
+              @keydown.enter.prevent="addCustomQa"
+            />
+            <button
+              class="px-3.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
+              :disabled="!newCustomKey.trim() || !newCustomVal.trim()"
+              type="button"
+              @click="addCustomQa"
+            >
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span>{{ $t('profile.sections.addBtn') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: MOTOR DE IA Y LLM (Punto 2 implementado con Opción A) -->
+    <div v-else-if="activeTab === 'ai'" class="flex flex-col gap-6">
+      <section class="bg-surface-card border border-border-subtle rounded-xl p-5 flex flex-col gap-4">
+        <div class="flex items-center justify-between pb-1">
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-tertiary text-[20px]">smart_toy</span>
+            <div>
+              <h2 class="text-sm font-semibold text-on-surface">{{ $t('profile.sections.aiTitle') }}</h2>
+              <p class="font-mono text-[11px] text-outline">{{ $t('profile.sections.aiDesc') }}</p>
+            </div>
+          </div>
+          <span
+            class="px-2 py-0.5 rounded text-[10px] font-mono"
+            :class="agentStatus?.connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'"
+          >
+            {{ agentStatus?.connected ? $t('profile.sections.aiActiveBadge', { name: agentStatus.activeProviderName }) : $t('profile.sections.aiBaseCvActiveBadge') }}
+          </span>
+        </div>
+
+        <!-- Status Card -->
+        <div
+          class="p-4 rounded-lg border flex flex-col gap-2"
+          :class="agentStatus?.connected ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'"
+        >
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]" :class="agentStatus?.connected ? 'text-emerald-400' : 'text-amber-400'">
+                {{ agentStatus?.connected ? 'check_circle' : 'info' }}
+              </span>
+              <span class="text-xs font-semibold text-on-surface">
+                {{ agentStatus?.connected ? $t('profile.sections.aiConnectedTitle', { name: agentStatus.activeProviderName }) : $t('profile.sections.aiDisconnectedTitle') }}
+              </span>
+            </div>
+            <span class="font-mono text-[11px] text-outline">
+              {{ agentStatus?.connected ? $t('profile.sections.aiTailorAvailable') : $t('profile.sections.aiBaseCvStandard') }}
+            </span>
+          </div>
+          <p class="text-xs text-on-surface-variant">
+            {{ agentStatus?.connected ? $t('profile.sections.aiConnectedDesc') : $t('profile.sections.aiDisconnectedDesc') }}
+          </p>
+        </div>
+
+        <!-- Provider Select -->
+        <div class="flex flex-col gap-1.5 max-w-md">
+          <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.aiPreferredProvider') }}</label>
+          <select
+            v-model="agentConfig.provider"
+            class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
+          >
+            <option v-for="opt in providerOptions" :key="opt.value" :value="opt.value">{{ opt.title }}</option>
+          </select>
+        </div>
+
+        <div class="my-2 border-t border-border-subtle"></div>
+
+        <!-- Direct API Keys -->
+        <div class="flex flex-col gap-1">
+          <h3 class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.apiKeysDirectTitle') }}</h3>
+          <p class="text-xs text-outline">{{ $t('profile.sections.apiKeysDirectDesc') }}</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- DeepSeek -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>DeepSeek API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasDeepSeekKey ? $t('profile.sections.configured') : 'platform.deepseek.com' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.deepseekApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-..."
+              type="password"
+            />
+          </div>
+
+          <!-- Kimi -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>Kimi / Moonshot AI Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasKimiKey ? $t('profile.sections.configured') : 'platform.moonshot.cn' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.kimiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-..."
+              type="password"
+            />
+          </div>
+
+          <!-- Anthropic -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>Anthropic Claude API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasAnthropicKey ? $t('profile.sections.configured') : 'sk-ant-...' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.anthropicApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-ant-..."
+              type="password"
+            />
+          </div>
+
+          <!-- OpenAI -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>OpenAI API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasOpenAiKey ? $t('profile.sections.configured') : 'sk-...' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.openaiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="sk-..."
+              type="password"
+            />
+          </div>
+
+          <!-- Gemini -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>Google Gemini API Key</span>
+              <span class="font-mono text-[10px] text-outline">{{ agentConfig.hasGeminiKey ? $t('profile.sections.configured') : 'AI Studio' }}</span>
+            </label>
+            <input
+              v-model="agentConfig.geminiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="AIza..."
+              type="password"
+            />
+          </div>
+        </div>
+
+        <div class="my-2 border-t border-border-subtle"></div>
+
+        <!-- Custom endpoint -->
+        <div class="flex flex-col gap-1">
+          <h3 class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.customEndpointTitle') }}</h3>
+          <p class="text-xs text-outline">{{ $t('profile.sections.customEndpointDesc') }}</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div class="md:col-span-5 flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant">{{ $t('profile.sections.apiBaseUrlLabel') }}</label>
+            <input
+              v-model="agentConfig.customOpenAiBaseUrl"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="https://api.deepseek.com/v1 o http://localhost:11434/v1"
+              type="text"
+            />
+          </div>
+
+          <div class="md:col-span-3 flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant">{{ $t('profile.sections.modelNameLabel') }}</label>
+            <input
+              v-model="agentConfig.customOpenAiModel"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="deepseek-chat, llama3, etc."
+              type="text"
+            />
+          </div>
+
+          <div class="md:col-span-4 flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant flex items-center justify-between">
+              <span>{{ $t('profile.sections.customApiKeyLabel') }}</span>
+              <span class="font-mono text-[10px] text-outline">{{ $t('profile.sections.optionalOllama') }}</span>
+            </label>
+            <input
+              v-model="agentConfig.customOpenAiApiKey"
+              class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs font-mono border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              placeholder="Opcional"
+              type="password"
+            />
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-3">
+          <button
+            class="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium shadow-sm transition-all active:scale-[0.98] flex items-center gap-1.5 disabled:opacity-50"
+            :disabled="savingAgentConfig"
+            type="button"
+            @click="saveAgentConfigAction"
+          >
+            <span :class="['material-symbols-outlined text-[16px]', savingAgentConfig ? 'animate-spin' : '']">
+              {{ savingAgentConfig ? 'sync' : 'check_circle' }}
+            </span>
+            <span>{{ savingAgentConfig ? $t('profile.sections.testingConnection') : $t('profile.sections.saveAndTestConnection') }}</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- NOTIFICACIONES TOAST -->
+    <div
+      v-if="snack.show"
+      class="fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg shadow-xl text-xs font-medium flex items-center gap-2 border animate-in slide-in-from-bottom-2 duration-150"
+      :class="[
+        snack.color === 'error'
+          ? 'bg-rose-950/90 text-rose-200 border-rose-800'
+          : snack.color === 'warning'
+            ? 'bg-amber-950/90 text-amber-200 border-amber-800'
+            : 'bg-surface-card text-on-surface border-border-muted'
+      ]"
+    >
+      <span class="material-symbols-outlined text-[16px]">
+        {{ snack.color === 'error' ? 'error' : snack.color === 'warning' ? 'warning' : 'check_circle' }}
+      </span>
+      <span>{{ snack.text }}</span>
+      <button class="ml-2 text-outline hover:text-on-surface" type="button" @click="snack.show = false">✕</button>
+    </div>
+  </div>
 </template>

@@ -26,7 +26,7 @@ function makeRequest({ port, path = '/', method = 'GET', headers = {}, body = nu
   })
 }
 
-test('sanitizeCvHtml neutralizes scripts, styles, event handlers, and remote tracker images', () => {
+test('sanitizeCvHtml neutralizes scripts, event handlers, and remote tracker images while preserving styles', () => {
   const dirty = `
     <h1>Senior QA Engineer</h1>
     <script>alert("xss")</script>
@@ -40,7 +40,7 @@ test('sanitizeCvHtml neutralizes scripts, styles, event handlers, and remote tra
   `
   const cleaned = sanitizeCvHtml(dirty)
   assert.ok(!cleaned.includes('<script'), 'Should strip script tags')
-  assert.ok(!cleaned.includes('<style'), 'Should strip style tags')
+  assert.ok(cleaned.includes('<style'), 'Should preserve style tags')
   assert.ok(!cleaned.includes('@import'), 'Should strip @import')
   assert.ok(!cleaned.includes('alert('), 'Should strip script contents')
   assert.ok(!cleaned.includes('<iframe'), 'Should strip iframe tags')
@@ -52,6 +52,7 @@ test('sanitizeCvHtml neutralizes scripts, styles, event handlers, and remote tra
   assert.ok(!cleaned.includes('javascript:'), 'Should strip javascript: URLs')
   assert.ok(!cleaned.includes('https://attacker.com/leak'), 'Should neutralize remote image tracker src')
   assert.ok(cleaned.includes('<h1>Senior QA Engineer</h1>'), 'Should preserve safe tags')
+  assert.ok(cleaned.includes('color: red;'), 'Should preserve safe CSS')
 })
 
 test('isAllowedAtsHost strictly validates ATS domains and prevents query parameter escapes', () => {
@@ -265,6 +266,91 @@ test('Web server host authorization and API endpoints', async (t) => {
     })
     assert.strictEqual(res.status, 400)
     assert.ok(res.json?.error?.includes('Solo se permiten'))
+  })
+
+  await t.test('GET /api/scan/status returns scan state and matches array', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/scan/status',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(res.status, 200)
+    assert.strictEqual(typeof res.json?.isScanning, 'boolean')
+    assert.ok(Array.isArray(res.json?.matches))
+  })
+
+  await t.test('GET /api/scan/results returns matches array', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/scan/results',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(res.status, 200)
+    assert.ok(Array.isArray(res.json?.matches))
+  })
+
+  await t.test('POST /api/scan/stop safely terminates any active scan', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/scan/stop',
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: {},
+    })
+    assert.strictEqual(res.status, 200)
+    assert.strictEqual(typeof res.json?.stopped, 'boolean')
+  })
+
+  await t.test('POST /api/open-folder safely opens folder cross-platform', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/open-folder',
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: { folder: 'applications' },
+    })
+    assert.strictEqual(res.status, 200)
+    assert.strictEqual(res.json?.ok, true)
+    assert.ok(typeof res.json?.path === 'string')
+    assert.ok(typeof res.json?.platform === 'string')
+  })
+
+  await t.test('GET /api/exclusions and POST /api/exclusions/import work properly', async () => {
+    const listRes = await makeRequest({
+      port,
+      path: '/api/exclusions',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(listRes.status, 200)
+    assert.ok(Array.isArray(listRes.json))
+
+    const importRes = await makeRequest({
+      port,
+      path: '/api/exclusions/import',
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: [{ company: 'test_company_dummy_xyz', reason: 'Unit test exclusion' }],
+    })
+    assert.strictEqual(importRes.status, 200)
+    assert.ok(typeof importRes.json?.added === 'number')
+
+    // Clean up the dummy exclusion
+    const delRes = await makeRequest({
+      port,
+      path: '/api/exclusions/test_company_dummy_xyz',
+      method: 'DELETE',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(delRes.status, 204)
   })
 })
 

@@ -1,87 +1,48 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { api } from '../api.js'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { api, formatCompanyName } from '../api.js'
+import { refreshAppStats } from '../stats.js'
+import {
+  PRESETS,
+  scanning,
+  progress,
+  matches,
+  errorCount,
+  logs,
+  form,
+  progressPercent,
+  startScan,
+  stopScan,
+  initScanSync,
+} from '../scanController.js'
+import { t } from '../i18n/index.js'
 
 const profile = ref(null)
 const loadingProfile = ref(true)
-const scanning = ref(false)
-const progress = reactive({ checked: 0, total: 0, platform: '', company: '' })
-const matches = ref([])
-const errorCount = ref(0)
 const snack = reactive({ show: false, text: '', color: 'success' })
-const logs = ref([])
 const showLogs = ref(false)
 
-let abortController = null
+const newRoleInput = ref('')
+const tableSearch = ref('')
+const platformFilter = ref('all')
 
-const form = reactive({
-  roles: [],
-  platforms: ['ashby', 'greenhouse', 'lever'],
-  latamOnly: true,
-  maxYears: 7,
-  allowCaptcha: false,
-  concurrency: 50,
-})
+const existingApps = ref([])
+const activePreset = ref('QA / SDET')
 
-const PRESETS = [
-  {
-    name: 'QA / SDET',
-    icon: 'mdi-shield-check',
-    roles: ['QA Automation Engineer', 'Senior QA Engineer', 'SDET', 'Software Engineer in Test', 'QA Engineer'],
-  },
-  {
-    name: 'Backend',
-    icon: 'mdi-server',
-    roles: ['Backend Engineer', 'Senior Backend Engineer', 'Python Developer', 'Go Developer', 'Node.js Developer'],
-  },
-  {
-    name: 'Frontend',
-    icon: 'mdi-laptop',
-    roles: ['Frontend Engineer', 'Senior Frontend Engineer', 'React Developer', 'Vue Developer'],
-  },
-  {
-    name: 'Full Stack',
-    icon: 'mdi-layers-triple',
-    roles: ['Full Stack Engineer', 'Senior Full Stack Engineer', 'Software Engineer'],
-  },
-  {
-    name: 'DevOps / SRE',
-    icon: 'mdi-cloud-cog',
-    roles: ['DevOps Engineer', 'Site Reliability Engineer', 'Cloud Engineer'],
-  },
-  {
-    name: 'Data / AI',
-    icon: 'mdi-brain',
-    roles: ['Data Engineer', 'Machine Learning Engineer', 'AI Engineer'],
-  },
-]
+const localizedPresets = computed(() =>
+  PRESETS.map((p) => ({
+    ...p,
+    displayName: p.name === 'Todos' ? t('search.presets.all') : p.name,
+  }))
+)
 
 function notify(text, color = 'success') {
   Object.assign(snack, { show: true, text, color })
 }
 
-function applyPreset(preset) {
-  form.roles = [...preset.roles]
-  notify(`Preset "${preset.name}" aplicado (${preset.roles.length} roles)`)
-}
-
-function resetToProfile() {
-  if (profile.value?.search_criteria?.target_roles?.length) {
-    form.roles = [...profile.value.search_criteria.target_roles]
-  } else {
-    form.roles = ['QA Automation Engineer', 'SDET', 'QA Engineer']
-  }
-  if (profile.value?.personal_info?.years_of_experience) {
-    form.maxYears = profile.value.personal_info.years_of_experience
-  }
-  notify('Roles restablecidos desde tu perfil')
-}
-
-const existingApps = ref([])
-
 async function loadExistingApps() {
   try {
-    existingApps.value = await api.getApplications()
+    existingApps.value = await api.listApplications()
   } catch {}
 }
 
@@ -92,8 +53,6 @@ async function loadProfile() {
     profile.value = data
     if (data?.search_criteria?.target_roles?.length) {
       form.roles = [...data.search_criteria.target_roles]
-    } else {
-      form.roles = ['QA Automation Engineer', 'SDET', 'QA Engineer']
     }
     if (data?.ats_settings?.enabled_platforms?.length) {
       form.platforms = [...data.ats_settings.enabled_platforms]
@@ -102,141 +61,75 @@ async function loadProfile() {
       form.maxYears = data.personal_info.years_of_experience
     }
     await loadExistingApps()
+    await initScanSync(existingApps.value)
   } catch (e) {
-    notify('No se pudo cargar el perfil: ' + e.message, 'warning')
+    notify(t('search.toasts.profileLoadError') + e.message, 'warning')
   } finally {
     loadingProfile.value = false
   }
 }
 
 onMounted(loadProfile)
-onUnmounted(() => {
-  if (scanning.value) stopScan()
+
+watch(scanning, (newVal, oldVal) => {
+  if (oldVal === true && newVal === false) {
+    notify(t('search.toasts.scanFinished', { count: matches.value.length }))
+  }
 })
 
-const progressPercent = computed(() => {
-  if (!progress.total) return 0
-  return Math.min(100, Math.round((progress.checked / progress.total) * 100))
-})
+function applyPreset(preset) {
+  activePreset.value = preset.name
+  form.roles = [...preset.roles]
+  notify(t('search.presets.appliedToast', { name: preset.name === 'Todos' ? t('search.presets.all') : preset.name, count: preset.roles.length }))
+}
 
-async function startScan() {
-  if (!form.roles.length) {
-    return notify('Ingresa al menos un rol objetivo para buscar', 'error')
+function resetToProfile() {
+  activePreset.value = ''
+  if (profile.value?.search_criteria?.target_roles?.length) {
+    form.roles = [...profile.value.search_criteria.target_roles]
+  } else {
+    form.roles = ['QA Automation Engineer', 'SDET', 'QA Engineer']
   }
-  if (!form.platforms.length) {
-    return notify('Selecciona al menos una plataforma ATS', 'error')
+  if (profile.value?.personal_info?.years_of_experience) {
+    form.maxYears = profile.value.personal_info.years_of_experience
   }
+  notify(t('search.presets.resetToast'))
+}
 
-  scanning.value = true
-  matches.value = []
-  logs.value = []
-  errorCount.value = 0
-  Object.assign(progress, { checked: 0, total: 0, platform: '', company: '' })
-
-  abortController = new AbortController()
-
-  const parsedMaxYears = (form.maxYears !== '' && form.maxYears !== null && !isNaN(Number(form.maxYears)))
-    ? Number(form.maxYears)
-    : null
-
-  const payload = {
-    roles: form.roles,
-    platforms: form.platforms,
-    locations: form.latamOnly ? ['remote', 'latam', 'latin america', 'worldwide', 'global', 'anywhere', 'americas'] : [],
-    maxYears: parsedMaxYears,
-    allowCaptcha: form.allowCaptcha,
-    concurrency: Number(form.concurrency) || 50,
+function addRoleTag() {
+  const val = newRoleInput.value.trim()
+  if (!val) return
+  if (!form.roles.includes(val)) {
+    form.roles.push(val)
+    newRoleInput.value = ''
+    activePreset.value = ''
   }
+}
 
+function removeRoleTag(idx) {
+  form.roles.splice(idx, 1)
+  activePreset.value = ''
+}
+
+function togglePlatform(plat) {
+  const idx = form.platforms.indexOf(plat)
+  if (idx > -1) {
+    if (form.platforms.length === 1) {
+      return notify(t('search.params.mustKeepOne'), 'warning')
+    }
+    form.platforms.splice(idx, 1)
+  } else {
+    form.platforms.push(plat)
+  }
+}
+
+async function triggerScan() {
   try {
-    const res = await fetch('/api/scan/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: abortController.signal,
-    })
-
-    if (!res.ok) {
-      throw new Error(`Error en el servidor (${res.status})`)
-    }
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      let nl
-      while ((nl = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, nl).trim()
-        buffer = buffer.slice(nl + 1)
-        if (!line.startsWith('data:')) continue
-
-        const jsonStr = line.slice(5).trim()
-        if (!jsonStr) continue
-
-        try {
-          const evt = JSON.parse(jsonStr)
-          handleEvent(evt)
-        } catch {
-          // ignora chunks incompletos
-        }
-      }
-    }
+    await startScan(existingApps.value)
+    notify(t('search.toasts.scanStarted'))
   } catch (err) {
-    if (err.name !== 'AbortError') {
-      notify('Error en el escaneo: ' + err.message, 'error')
-    }
-  } finally {
-    scanning.value = false
+    notify(t('search.toasts.scanError') + err.message, 'error')
   }
-}
-
-function handleEvent(evt) {
-  if (evt.type === 'progress') {
-    progress.checked = evt.checked
-    progress.total = evt.total
-    progress.platform = evt.platform
-    progress.company = evt.company
-  } else if (evt.type === 'match') {
-    const p = evt.posting
-    // Prevenir duplicados en la lista local
-    if (!matches.value.some((m) => m.url === p.url)) {
-      const matchedApp = existingApps.value.find(
-        (a) => a.url === p.url || (a.company?.toLowerCase() === p.company?.toLowerCase() && a.role?.toLowerCase() === p.title?.toLowerCase())
-      )
-      if (matchedApp?.cv) {
-        p.cv = matchedApp.cv
-      }
-      matches.value.unshift(p)
-    }
-  } else if (evt.type === 'board_error') {
-    errorCount.value++
-    logs.value.unshift(`[${evt.platform}] ${evt.company}: ${evt.error}`)
-    if (logs.value.length > 100) logs.value.pop()
-  } else if (evt.type === 'done') {
-    notify(`Búsqueda finalizada. ${evt.total_matches} vacantes encontradas.`)
-    scanning.value = false
-  } else if (evt.type === 'exit') {
-    scanning.value = false
-  }
-}
-
-async function stopScan() {
-  if (abortController) {
-    abortController.abort()
-    abortController = null
-  }
-  try {
-    await api.stopScan()
-  } catch {
-    // ignorar
-  }
-  scanning.value = false
-  notify('Búsqueda detenida por el usuario', 'info')
 }
 
 // ---- Acciones sobre cada vacante ----
@@ -299,13 +192,14 @@ function isJobOpened(job) {
 }
 
 async function prepareApplication(posting) {
+  const compName = formatCompanyName(posting.company)
   if (isJobPrepared(posting)) {
-    return notify(`"${posting.company}" ya está en tu lista de postulaciones`, 'info')
+    return notify(t('search.toasts.prepared') + ` (${compName})`, 'info')
   }
   preparingMap[posting.url] = true
   try {
     const created = await api.createApplication({
-      company: posting.company,
+      company: compName,
       role: posting.title,
       url: posting.url,
       cv: posting.cv || undefined,
@@ -314,19 +208,22 @@ async function prepareApplication(posting) {
     })
     preparedMap[posting.url] = true
     existingApps.value.unshift(created)
-    notify(`Postulación agregada a "Pendiente de envío" para ${posting.company}`)
+    await refreshAppStats()
+    notify(t('search.toasts.prepared') + `: ${compName}`)
   } catch (err) {
-    notify('No se pudo guardar la postulación: ' + err.message, 'error')
+    notify(t('search.toasts.prepareError') + err.message, 'error')
   } finally {
     preparingMap[posting.url] = false
   }
 }
 
 async function tailorApplication(posting) {
+  const compName = formatCompanyName(posting.company)
   tailoringMap[posting.url] = true
   try {
+    notify(t('search.toasts.tailorStarted'), 'info')
     const res = await api.tailorCv({
-      company: posting.company,
+      company: compName,
       role: posting.title,
       url: posting.url,
       description: posting.title,
@@ -336,415 +233,759 @@ async function tailorApplication(posting) {
       tailoredMap[posting.url] = true
     }
     await loadExistingApps()
-    notify(`CV adaptado generado para ${posting.company} (${res.cv})`)
+    await refreshAppStats()
+    notify(t('search.toasts.tailorSuccess') + `${compName} (${res.cv})`)
   } catch (err) {
-    notify('Error al adaptar CV con agente: ' + err.message, 'error')
+    notify(t('search.toasts.tailorError') + err.message, 'error')
   } finally {
     tailoringMap[posting.url] = false
   }
 }
 
 async function openInBrowser(posting) {
+  const compName = formatCompanyName(posting.company)
   launchingMap[posting.url] = true
   try {
+    notify(t('search.toasts.playwrightLaunching'), 'info')
     await api.launchApply({
       url: posting.url,
-      company: posting.company,
+      company: compName,
       role: posting.title,
       cv: posting.cv || undefined,
     })
     openedMap[posting.url] = true
-    notify(`Navegador lanzado con Playwright para ${posting.company}`)
+    notify(t('search.toasts.playwrightSuccess') + `: ${compName}`)
   } catch (err) {
-    notify('Error al abrir navegador: ' + err.message, 'error')
+    notify(t('search.toasts.playwrightError') + err.message, 'error')
   } finally {
     launchingMap[posting.url] = false
   }
 }
 
-function platformColor(ats) {
+const filteredMatches = computed(() => {
+  const q = tableSearch.value.trim().toLowerCase()
+  const p = platformFilter.value
+  return matches.value.filter((job) => {
+    const matchesQuery = !q || (job.title || '').toLowerCase().includes(q) || (job.company || '').toLowerCase().includes(q)
+    const matchesPlat = p === 'all' || (job.ats || '').toLowerCase() === p.toLowerCase()
+    return matchesQuery && matchesPlat
+  })
+})
+
+function getPlatformBadgeClass(ats) {
   const low = String(ats || '').toLowerCase()
-  if (low === 'greenhouse') return 'green'
-  if (low === 'ashby') return 'purple'
-  if (low === 'lever') return 'blue'
-  return 'grey'
+  if (low === 'greenhouse') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+  if (low === 'ashby') return 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+  if (low === 'lever') return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+  return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
 }
 </script>
 
 <template>
-  <v-container fluid class="pa-6" style="max-width: 1400px">
-    <!-- Encabezado -->
-    <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-2">
-      <div>
-        <h1 class="text-h5 font-weight-bold d-flex align-center">
-          <v-icon icon="mdi-magnify" class="mr-2" color="primary" />
-          Búsqueda y Preparación de Vacantes
+  <div class="flex flex-col gap-6 w-full">
+    <!-- TITULO DE PAGINA Y SUBTITULO -->
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h1 class="text-xl font-semibold text-on-surface tracking-tight">
+          {{ $t('search.title') }}
         </h1>
-        <div class="text-subtitle-2 text-medium-emphasis">
-          Escaneo directo en APIs de Ashby, Greenhouse y Lever con filtrado estricto por residencia y experiencia.
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 text-xs text-outline font-mono">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {{ $t('search.platformsTag') }}
+          </span>
         </div>
       </div>
-      <div class="d-flex gap-2">
-        <v-btn
-          v-if="!scanning"
-          color="primary"
-          prepend-icon="mdi-play"
-          size="large"
-          elevation="2"
-          :loading="loadingProfile"
-          @click="startScan"
-        >
-          Buscar vacantes
-        </v-btn>
-        <v-btn
-          v-else
-          color="error"
-          prepend-icon="mdi-stop"
-          size="large"
-          elevation="2"
-          @click="stopScan"
-        >
-          Detener búsqueda
-        </v-btn>
+      <p class="text-xs text-on-surface-variant">
+        {{ $t('search.subtitle') }}
+      </p>
+    </div>
+
+    <!-- 4 TARJETAS KPI CON SPARKLINES DINAMICOS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <!-- KPI 1: Total analizadas -->
+      <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between text-on-surface-variant mb-2">
+          <span class="text-xs font-medium">{{ $t('search.kpi.totalAnalyzed') }}</span>
+          <span class="material-symbols-outlined text-[15px] text-outline">analytics</span>
+        </div>
+        <div class="flex items-end justify-between">
+          <div class="flex flex-col">
+            <span class="text-2xl font-bold font-mono tracking-tight text-on-surface">
+              {{ progress.total || (scanning ? progress.checked : 0) }}
+            </span>
+            <div class="flex items-center gap-1 text-[11px] font-mono text-emerald-400 mt-0.5">
+              <span class="material-symbols-outlined text-[13px]">
+                {{ scanning ? 'sync' : 'arrow_upward' }}
+              </span>
+              <span>{{ progressPercent }}% {{ $t('search.kpi.completed') }}</span>
+            </div>
+          </div>
+          <!-- Sparkline SVG -->
+          <div class="w-24 h-10">
+            <svg class="w-full h-full stroke-emerald-500 fill-none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 100 35">
+              <path d="M 0 30 Q 15 28, 25 20 T 50 15 T 75 8 T 100 2"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI 2: Vacantes encontradas -->
+      <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between text-on-surface-variant mb-2">
+          <span class="text-xs font-medium">{{ $t('search.kpi.openingsFound') }}</span>
+          <span class="material-symbols-outlined text-[15px] text-outline">travel_explore</span>
+        </div>
+        <div class="flex items-end justify-between">
+          <div class="flex flex-col">
+            <span class="text-2xl font-bold font-mono tracking-tight text-accent">
+              {{ matches.length }}
+            </span>
+            <div class="flex items-center gap-1 text-[11px] font-mono text-accent mt-0.5">
+              <span class="material-symbols-outlined text-[13px]">add</span>
+              <span>{{ matches.length }} {{ $t('search.kpi.qualified') }}</span>
+            </div>
+          </div>
+          <!-- Sparkline SVG -->
+          <div class="w-24 h-10">
+            <svg class="w-full h-full stroke-blue-500 fill-none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 100 35">
+              <path d="M 0 25 L 20 28 L 40 16 L 60 22 L 80 8 L 100 4"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI 3: Empresas activas / analizadas -->
+      <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between text-on-surface-variant mb-2">
+          <span class="text-xs font-medium">{{ $t('search.kpi.companiesAnalyzed') }}</span>
+          <span class="material-symbols-outlined text-[15px] text-outline">domain</span>
+        </div>
+        <div class="flex items-end justify-between">
+          <div class="flex flex-col">
+            <span class="text-2xl font-bold font-mono tracking-tight text-on-surface">
+              {{ progress.checked }}
+            </span>
+            <div class="flex items-center gap-1 text-[11px] font-mono text-amber-400 mt-0.5">
+              <span class="material-symbols-outlined text-[13px]">trending_up</span>
+              <span>{{ progress.platform ? progress.platform.toUpperCase() : $t('search.kpi.atsBoards') }}</span>
+            </div>
+          </div>
+          <!-- Sparkline SVG -->
+          <div class="w-24 h-10">
+            <svg class="w-full h-full stroke-amber-500 fill-none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 100 35">
+              <path d="M 0 32 Q 25 10, 45 22 T 80 18 T 100 12"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI 4: Errores / descartadas -->
+      <div class="p-4 rounded-xl bg-surface border border-border-subtle flex flex-col justify-between relative overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between text-on-surface-variant mb-2">
+          <span class="text-xs font-medium">{{ $t('search.kpi.errors') }}</span>
+          <span class="material-symbols-outlined text-[15px] text-outline">error_outline</span>
+        </div>
+        <div class="flex items-end justify-between">
+          <div class="flex flex-col">
+            <span class="text-2xl font-bold font-mono tracking-tight text-on-surface">
+              {{ errorCount }}
+            </span>
+            <div class="flex items-center gap-1 text-[11px] font-mono text-outline mt-0.5">
+              <span class="material-symbols-outlined text-[13px]">
+                {{ errorCount === 0 ? 'check_circle' : 'warning' }}
+              </span>
+              <span>{{ errorCount === 0 ? $t('search.kpi.zeroErrors') : $t('search.kpi.incidents', { count: errorCount }) }}</span>
+            </div>
+          </div>
+          <!-- Sparkline SVG -->
+          <div class="w-24 h-10">
+            <svg class="w-full h-full stroke-zinc-600 fill-none" stroke-linecap="round" stroke-width="2" viewBox="0 0 100 35">
+              <path d="M 0 30 L 30 30 L 50 30 L 70 30 L 100 30"></path>
+            </svg>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Panel de Filtros -->
-    <v-card class="mb-6" elevation="1">
-      <v-card-text>
-        <!-- Fila de Presets rápidos -->
-        <div class="mb-3">
-          <div class="text-caption text-medium-emphasis mb-1 font-weight-bold">
-            PRESETS RÁPIDOS (1 CLIC PARA CONFIGURAR CARGOS):
+    <!-- PANEL DE FILTROS (OBSIDIAN STYLE) -->
+    <section class="bg-surface border border-border-subtle rounded-xl flex flex-col gap-3.5 shadow-sm p-5">
+      <!-- 1. BLOQUE SUPERIOR: PRESETS DE ROL Y ESTADO GENERAL -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border-subtle">
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-mono uppercase tracking-wider text-outline font-semibold">
+              {{ $t('search.presets.title') }}
+            </span>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-container-high text-accent border border-border-subtle">
+              {{ $t('search.presets.syncedBadge') }}
+            </span>
           </div>
-          <div class="d-flex flex-wrap gap-2 align-center">
-            <v-btn
-              v-for="p in PRESETS"
+          <div class="flex items-center gap-1.5 overflow-x-auto py-1">
+            <button
+              v-for="p in localizedPresets"
               :key="p.name"
-              size="small"
-              variant="tonal"
-              color="primary"
-              :prepend-icon="p.icon"
+              :class="[
+                'px-3 py-1 rounded-md text-xs font-medium transition-colors shrink-0',
+                activePreset === p.name
+                  ? 'bg-surface-container-highest text-on-surface shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
+              ]"
+              type="button"
               @click="applyPreset(p)"
             >
-              {{ p.name }}
-            </v-btn>
-            <v-btn
-              size="small"
-              variant="outlined"
-              color="secondary"
-              prepend-icon="mdi-refresh"
-              @click="resetToProfile"
-            >
-              Restablecer de mi perfil
-            </v-btn>
-            <v-btn
-              v-if="form.roles.length"
-              size="small"
-              variant="text"
-              color="error"
-              @click="form.roles = []"
-            >
-              Limpiar
-            </v-btn>
+              {{ p.displayName }}
+            </button>
           </div>
         </div>
 
-        <!-- Entrada de Cargos con Chips -->
-        <v-combobox
-          v-model="form.roles"
-          label="Cargos o palabras clave a buscar (Escribe y presiona Enter)"
-          multiple
-          chips
-          closable-chips
-          variant="outlined"
-          density="comfortable"
-          hint="Ej: QA Automation Engineer, SDET, Backend Engineer, Playwright"
-          persistent-hint
-          class="mb-4"
-        />
-
-        <!-- Controles secundarios -->
-        <v-row density="compact" class="mt-1">
-          <!-- Plataformas ATS -->
-          <v-col cols="12" sm="6" md="3">
-            <div class="text-caption text-medium-emphasis mb-1 font-weight-bold">PLATAFORMAS ATS:</div>
-            <div class="d-flex flex-wrap gap-2">
-              <v-checkbox
-                v-model="form.platforms"
-                value="greenhouse"
-                label="Greenhouse"
-                density="compact"
-                hide-details
-                color="green"
-              />
-              <v-checkbox
-                v-model="form.platforms"
-                value="ashby"
-                label="Ashby"
-                density="compact"
-                hide-details
-                color="purple"
-              />
-              <v-checkbox
-                v-model="form.platforms"
-                value="lever"
-                label="Lever"
-                density="compact"
-                hide-details
-                color="blue"
-              />
-            </div>
-          </v-col>
-
-          <!-- Filtro de residencia -->
-          <v-col cols="12" sm="6" md="3">
-            <div class="text-caption text-medium-emphasis mb-1 font-weight-bold">UBICACIÓN Y RESIDENCIA:</div>
-            <v-switch
-              v-model="form.latamOnly"
-              color="primary"
-              density="compact"
-              hide-details
-              :label="form.latamOnly ? 'Solo LATAM / Global' : 'Cualquier remoto'"
-            />
-            <div class="text-caption text-medium-emphasis mt-1">
-              {{ form.latamOnly ? 'Descarta vacantes que exigen residencia en EE. UU., Europa o Asia.' : 'Permite vacantes remotas de cualquier país.' }}
-            </div>
-          </v-col>
-
-          <!-- Experiencia máxima -->
-          <v-col cols="12" sm="6" md="3">
-            <div class="text-caption text-medium-emphasis mb-1 font-weight-bold">EXPERIENCIA MÁXIMA:</div>
-            <v-text-field
-              v-model.number="form.maxYears"
-              type="number"
-              variant="outlined"
-              density="compact"
-              suffix="años"
-              hint="Descarta ofertas que exijan más años"
-              persistent-hint
-            />
-          </v-col>
-
-          <!-- Filtro de captcha -->
-          <v-col cols="12" sm="6" md="3">
-            <div class="text-caption text-medium-emphasis mb-1 font-weight-bold">VACANTES CON CAPTCHA:</div>
-            <v-switch
-              v-model="form.allowCaptcha"
-              color="primary"
-              density="compact"
-              hide-details
-              :label="form.allowCaptcha ? 'Permitir (con evasión)' : 'Ocultar vacantes'"
-            />
-            <div class="text-caption text-medium-emphasis mt-1">
-              {{ form.allowCaptcha ? 'Permite vacantes con captcha (ej. Lever con hCaptcha).' : 'Descarta vacantes con captcha por defecto.' }}
-            </div>
-          </v-col>
-        </v-row>
-      </v-card-text>
-    </v-card>
-
-    <!-- Estado y Progreso en vivo -->
-    <v-card v-if="scanning || progress.total > 0" class="mb-6" elevation="1">
-      <v-card-text>
-        <div class="d-flex align-center justify-space-between mb-2">
-          <div class="d-flex align-center">
-            <v-progress-circular
-              v-if="scanning"
-              indeterminate
-              color="primary"
-              size="20"
-              width="2"
-              class="mr-2"
-            />
-            <span class="font-weight-medium">
-              {{ scanning ? 'Escaneando bolsas de empleo...' : 'Escaneo finalizado' }}
-            </span>
-            <span v-if="progress.company" class="text-caption text-medium-emphasis ml-2">
-              Analizando: {{ progress.platform.toUpperCase() }} / {{ progress.company }}
-            </span>
+        <div class="flex items-center gap-3 self-end md:self-auto">
+          <div class="flex items-center gap-1.5 text-xs text-outline font-mono bg-surface-container px-2.5 py-1.5 rounded-lg border border-border-subtle">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+            <span>{{ $t('search.presets.activeMatch', { count: form.roles.length }) }}</span>
           </div>
-          <div class="text-caption font-weight-bold">
-            {{ progress.checked }} / {{ progress.total }} empresas ({{ progressPercent }}%)
-          </div>
-        </div>
-
-        <v-progress-linear
-          :model-value="progressPercent"
-          color="primary"
-          height="8"
-          rounded
-          class="mb-3"
-        />
-
-        <!-- Métricas rápidas -->
-        <v-row density="compact">
-          <v-col cols="4">
-            <v-card variant="tonal" color="primary" class="pa-2 text-center">
-              <div class="text-caption">EMPRESAS ANALIZADAS</div>
-              <div class="text-h6 font-weight-bold">{{ progress.checked }}</div>
-            </v-card>
-          </v-col>
-          <v-col cols="4">
-            <v-card variant="tonal" color="success" class="pa-2 text-center">
-              <div class="text-caption">VACANTES ENCONTRADAS</div>
-              <div class="text-h6 font-weight-bold">{{ matches.length }}</div>
-            </v-card>
-          </v-col>
-          <v-col cols="4">
-            <v-card variant="tonal" color="warning" class="pa-2 text-center">
-              <div class="text-caption">ERRORES HTTP / 404</div>
-              <div class="text-h6 font-weight-bold">{{ errorCount }}</div>
-            </v-card>
-          </v-col>
-        </v-row>
-      </v-card-text>
-    </v-card>
-
-    <!-- Tabla de Vacantes Encontradas -->
-    <v-card elevation="1">
-      <v-card-title class="d-flex align-center justify-space-between flex-wrap py-3">
-        <div class="d-flex align-center">
-          <span>Vacantes encontradas</span>
-          <v-chip size="small" color="success" class="ml-2 font-weight-bold">
-            {{ matches.length }}
-          </v-chip>
-        </div>
-        <v-btn
-          v-if="logs.length"
-          size="small"
-          variant="text"
-          :prepend-icon="showLogs ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-          @click="showLogs = !showLogs"
-        >
-          {{ showLogs ? 'Ocultar registro de errores' : `Ver errores (${errorCount})` }}
-        </v-btn>
-      </v-card-title>
-
-      <!-- Panel desplegable de logs de error -->
-      <v-expand-transition>
-        <div v-if="showLogs" class="pa-4 bg-grey-lighten-4 border-b">
-          <div class="text-caption text-medium-emphasis mb-1 font-weight-bold">ÚLTIMOS ERRORES DE CONEXIÓN:</div>
-          <div style="max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 11px">
-            <div v-for="(log, idx) in logs" :key="idx" class="text-error">
-              {{ log }}
-            </div>
-          </div>
-        </div>
-      </v-expand-transition>
-
-      <v-divider />
-
-      <v-table v-if="matches.length" hover density="comfortable">
-        <thead>
-          <tr>
-            <th>Plataforma</th>
-            <th>Empresa</th>
-            <th>Puesto</th>
-            <th>Ubicación</th>
-            <th>Exp. requerida</th>
-            <th class="text-end" style="min-width: 330px">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="job in matches" :key="job.url">
-            <td>
-              <v-chip size="x-small" :color="platformColor(job.ats)" class="text-uppercase font-weight-bold">
-                {{ job.ats }}
-              </v-chip>
-            </td>
-            <td class="font-weight-medium">
-              {{ job.company }}
-              <v-chip
-                v-if="job.has_captcha"
-                size="x-small"
-                color="warning"
-                variant="tonal"
-                class="ml-1"
-                prepend-icon="mdi-shield-alert-outline"
-                title="Esta vacante requiere resolver un captcha (hCaptcha / Turnstile)"
-              >
-                Captcha
-              </v-chip>
-            </td>
-            <td>
-              <a :href="job.url" target="_blank" rel="noopener noreferrer" class="text-primary text-decoration-none font-weight-medium">
-                {{ job.title }}
-                <v-icon icon="mdi-open-in-new" size="x-small" class="ml-1" />
-              </a>
-            </td>
-            <td class="text-body-2">{{ job.location || 'Remote' }}</td>
-            <td>
-              <v-chip v-if="job.required_years" size="x-small" color="info" variant="tonal">
-                {{ job.required_years }}+ años
-              </v-chip>
-              <span v-else class="text-medium-emphasis text-caption">-</span>
-            </td>
-            <td class="text-end" style="min-width: 350px; white-space: nowrap">
-              <div class="d-flex align-center justify-end ga-2 flex-nowrap">
-                <v-btn
-                  size="small"
-                  variant="tonal"
-                  :color="isJobPrepared(job) ? 'success' : 'primary'"
-                  :prepend-icon="isJobPrepared(job) ? 'mdi-check' : 'mdi-plus'"
-                  :loading="preparingMap[job.url]"
-                  @click="prepareApplication(job)"
-                >
-                  {{ isJobPrepared(job) ? 'Preparado' : 'Preparar' }}
-                </v-btn>
-                <v-btn
-                  size="small"
-                  variant="tonal"
-                  :color="isJobTailored(job) ? 'success' : 'info'"
-                  :prepend-icon="isJobTailored(job) ? 'mdi-check-circle' : 'mdi-file-document-edit'"
-                  :loading="tailoringMap[job.url]"
-                  @click="tailorApplication(job)"
-                >
-                  {{ isJobTailored(job) ? 'CV Adaptado' : 'Adaptar CV' }}
-                </v-btn>
-                <v-btn
-                  size="small"
-                  :variant="isJobOpened(job) ? 'tonal' : 'outlined'"
-                  :color="isJobOpened(job) ? 'success' : 'secondary'"
-                  :prepend-icon="isJobOpened(job) ? 'mdi-check-all' : 'mdi-web'"
-                  :loading="launchingMap[job.url]"
-                  @click="openInBrowser(job)"
-                >
-                  {{ isJobOpened(job) ? 'Formulario abierto' : 'Abrir form' }}
-                </v-btn>
-              </div>
-              <div v-if="job.cv" class="text-caption text-success mt-1 d-flex align-center justify-end">
-                <v-icon icon="mdi-check-circle" size="x-small" color="success" class="mr-1" />
-                <span>CV listo: {{ job.cv.split('/').pop() }}</span>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </v-table>
-
-      <!-- Estado vacío -->
-      <div v-else class="pa-10 text-center text-medium-emphasis">
-        <v-icon icon="mdi-text-box-search-outline" size="48" class="mb-2" />
-        <div class="text-body-1 font-weight-medium">
-          {{ scanning ? 'Buscando ofertas que coincidan con tus filtros...' : 'No hay ofertas escaneadas todavía' }}
-        </div>
-        <div class="text-caption mt-1">
-          {{ scanning ? 'Las ofertas aparecerán aquí en tiempo real a medida que sean descubiertas.' : 'Configura tus roles y presiona "Buscar vacantes" para iniciar el escaneo.' }}
+          <button
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border-subtle bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium transition-colors shadow-sm"
+            type="button"
+            @click="resetToProfile"
+          >
+            <span class="material-symbols-outlined text-[15px] text-outline">restart_alt</span>
+            <span>{{ $t('search.presets.reset') }}</span>
+          </button>
         </div>
       </div>
-    </v-card>
 
+      <!-- 2. BLOQUE CENTRAL: PARÁMETROS CLAVE & TOGGLES CON TOOLTIPS -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 py-1">
+        <!-- Parámetro 1: Plataformas ATS -->
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1">
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.atsPlatforms') }}</label>
+              <div class="relative group/tip flex items-center cursor-help">
+                <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-56 p-2 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
+                  <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">hub</span> {{ $t('search.params.officialApis') }}
+                  </div>
+                  {{ $t('search.params.atsTip') }}
+                </div>
+              </div>
+            </div>
+            <span class="px-1.5 py-0.2 rounded bg-surface-container-high text-[10px] font-mono text-accent">
+              {{ $t('search.params.activeCount', { count: form.platforms.length }) }}
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5 pt-0.5 flex-wrap">
+            <button
+              v-for="plat in ['greenhouse', 'ashby', 'lever']"
+              :key="plat"
+              :class="[
+                'px-2 py-0.5 rounded text-[11px] font-mono capitalize border transition-colors',
+                form.platforms.includes(plat)
+                  ? 'bg-accent/10 border-accent/30 text-accent font-medium'
+                  : 'bg-surface-card border-border-subtle text-outline line-through opacity-60'
+              ]"
+              type="button"
+              @click="togglePlatform(plat)"
+            >
+              {{ plat }}
+            </button>
+          </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">hub</span>
+              <span>{{ $t('search.params.scansPortals', { count: form.platforms.length }) }}</span>
+            </span>
+          </p>
+        </div>
+
+        <!-- Parámetro 2: Experiencia Máxima -->
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1">
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.maxExp') }}</label>
+              <div class="relative group/tip flex items-center cursor-help">
+                <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-56 p-2 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
+                  <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">work_history</span> {{ $t('search.params.yearsLimit') }}
+                  </div>
+                  {{ $t('search.params.maxExpTip') }}
+                </div>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono text-outline">{{ $t('search.params.rangeExp') }}</span>
+          </div>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-xs text-on-surface-variant font-medium">{{ $t('search.params.upTo') }}</span>
+            <div class="flex items-center gap-2">
+              <input
+                v-model.number="form.maxYears"
+                class="w-14 py-1 text-center font-mono font-medium text-xs bg-surface-card border border-border-muted rounded text-on-surface focus:outline-none focus:border-accent transition-colors shadow-sm"
+                max="15"
+                min="1"
+                type="number"
+              />
+              <span class="text-xs text-outline font-mono">{{ $t('search.params.years') }}</span>
+            </div>
+          </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">filter_list</span>
+              <span>{{ $t('search.params.discardsOver', { count: form.maxYears || 0 }) }}</span>
+            </span>
+          </p>
+        </div>
+
+        <!-- Parámetro 3: Alcance Territorial (Filtro de Residencia) -->
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1">
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.territorialScope') }}</label>
+              <div class="relative group/tip flex items-center cursor-help">
+                <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-72 p-2.5 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
+                  <div class="font-semibold text-accent mb-1 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">public</span> {{ $t('search.params.residencyFilter') }}
+                  </div>
+                  <div class="space-y-1.5 text-[11px]">
+                    <div>
+                      {{ $t('search.params.residencyLatamGlobalDesc') }}
+                    </div>
+                    <div>
+                      {{ $t('search.params.residencyLatamOnlyDesc') }}
+                    </div>
+                    <div>
+                      {{ $t('search.params.residencyAnyDesc') }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono text-outline">{{ $t('search.params.residence') }}</span>
+          </div>
+          <div class="pt-0.5">
+            <select
+              v-model="form.locationScope"
+              class="w-full py-1 px-2 text-xs font-medium bg-surface-card border border-border-muted rounded text-on-surface focus:outline-none focus:border-accent transition-colors shadow-sm cursor-pointer"
+            >
+              <option value="latam_global">{{ $t('search.params.optLatamGlobal') }}</option>
+              <option value="latam_only">{{ $t('search.params.optLatamOnly') }}</option>
+              <option value="any">{{ $t('search.params.optAny') }}</option>
+            </select>
+          </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span v-if="form.locationScope === 'latam_global'" class="text-amber-500/95 dark:text-amber-400 font-medium flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">filter_alt</span>
+              <span>{{ $t('search.params.tipLatamGlobal') }}</span>
+            </span>
+            <span v-else-if="form.locationScope === 'latam_only'" class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">location_on</span>
+              <span>{{ $t('search.params.tipLatamOnly') }}</span>
+            </span>
+            <span v-else class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">public_off</span>
+              <span>{{ $t('search.params.tipAny') }}</span>
+            </span>
+          </p>
+        </div>
+
+        <!-- Parámetro 4: Anti-CAPTCHA -->
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1">
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.antiCaptcha') }}</label>
+              <div class="relative group/tip flex items-center cursor-help">
+                <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
+                <div class="absolute bottom-full right-0 mb-2 hidden group-hover/tip:flex flex-col w-64 p-2.5 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
+                  <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">security</span> {{ $t('search.params.cloudflareProtection') }}
+                  </div>
+                  {{ $t('search.params.captchaTip') }}
+                </div>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono text-outline">{{ $t('search.params.botFilter') }}</span>
+          </div>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-xs text-on-surface-variant font-medium">{{ $t('search.params.hideTurnstile') }}</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                v-model="form.allowCaptcha"
+                class="sr-only peer"
+                type="checkbox"
+              />
+              <div class="w-8 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-accent"></div>
+            </label>
+          </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">shield</span>
+              <span>{{ form.allowCaptcha ? $t('search.params.captchaAllowed') : $t('search.params.captchaDiscarded') }}</span>
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <!-- 3. BLOQUE INFERIOR: TÍTULOS Y ROLES ATS -->
+      <div class="flex flex-col gap-3 pt-3 border-t border-border-subtle">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-[12px] font-semibold text-on-surface tracking-tight">
+              {{ $t('search.roles.title') }}
+            </span>
+            <span class="text-[11px] font-mono text-outline">{{ $t('search.roles.addedCount', { count: form.roles.length }) }}</span>
+          </div>
+          <span class="text-[11px] text-outline font-mono">{{ $t('search.roles.helpText') }}</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1 flex items-center">
+            <span class="material-symbols-outlined absolute left-3 text-[16px] text-outline">label</span>
+            <input
+              v-model="newRoleInput"
+              class="w-full pl-9 pr-4 py-2 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors shadow-sm"
+              :placeholder="$t('search.roles.placeholder')"
+              type="text"
+              @keydown.enter.prevent="addRoleTag"
+            />
+          </div>
+          <button
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-surface-container-highest hover:bg-surface-container-high border border-border-muted text-xs font-medium text-on-surface transition-colors shadow-sm shrink-0"
+            type="button"
+            @click="addRoleTag"
+          >
+            <span class="material-symbols-outlined text-[15px] text-accent">add</span>
+            <span>{{ $t('search.roles.addBtn') }}</span>
+          </button>
+        </div>
+
+        <!-- Tags activos -->
+        <div class="flex items-center flex-wrap gap-2 pt-1">
+          <span
+            v-for="(r, idx) in form.roles"
+            :key="r"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container text-xs text-on-surface border border-border-subtle hover:border-border-muted transition-colors shadow-sm"
+          >
+            <span>{{ r }}</span>
+            <button
+              :aria-label="$t('search.roles.deleteAria')"
+              class="text-outline hover:text-on-surface p-0.5 transition-colors"
+              type="button"
+              @click="removeRoleTag(idx)"
+            >
+              <span class="material-symbols-outlined text-[13px] block">close</span>
+            </button>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ESTADO DE PROGRESO EN VIVO (DURANTE ESCANEO) -->
+    <div
+      v-if="scanning"
+      class="p-4 rounded-xl bg-surface border border-accent/30 flex flex-col gap-3 shadow-sm"
+    >
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-accent animate-ping"></span>
+          <span class="text-xs font-semibold text-on-surface">{{ $t('search.live.scanningRealtime') }}</span>
+          <span v-if="progress.company" class="text-xs font-mono text-outline">
+            [{{ progress.platform.toUpperCase() }}] {{ formatCompanyName(progress.company) }}
+          </span>
+        </div>
+        <div class="text-xs font-mono text-on-surface-variant">
+          {{ $t('search.live.companiesProgress', { checked: progress.checked, total: progress.total, percent: progressPercent }) }}
+        </div>
+      </div>
+      <div class="w-full bg-surface-container h-2 rounded-full overflow-hidden">
+        <div
+          class="bg-accent h-full rounded-full transition-all duration-300"
+          :style="{ width: progressPercent + '%' }"
+        ></div>
+      </div>
+    </div>
+
+    <!-- TABLA DE VACANTES DETECTADAS (OBSIDIAN STYLE) -->
+    <section class="bg-surface border border-border-subtle rounded-xl flex flex-col overflow-hidden shadow-sm">
+      <!-- Barra superior de búsqueda y filtro de la tabla -->
+      <div class="p-3 border-b border-border-subtle flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="relative flex items-center flex-1 max-w-sm">
+          <span class="material-symbols-outlined absolute left-2.5 text-[16px] text-outline">search</span>
+          <input
+            v-model="tableSearch"
+            class="w-full pl-8 pr-3 py-1.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors"
+            :placeholder="$t('search.table.searchPlaceholder')"
+            type="text"
+          />
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <select
+            v-model="platformFilter"
+            class="px-2.5 py-1.5 rounded-lg bg-surface-container border border-border-subtle text-xs text-on-surface focus:outline-none cursor-pointer"
+          >
+            <option value="all">{{ $t('search.table.allPlatforms', { count: matches.length }) }}</option>
+            <option value="greenhouse">Greenhouse</option>
+            <option value="ashby">Ashby</option>
+            <option value="lever">Lever</option>
+          </select>
+          <button
+            v-if="errorCount > 0"
+            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-container border border-border-subtle text-xs text-amber-400 hover:text-amber-300 transition-colors"
+            type="button"
+            @click="showLogs = !showLogs"
+          >
+            <span class="material-symbols-outlined text-[15px]">warning</span>
+            <span>{{ showLogs ? $t('search.table.hideErrors') : $t('search.table.viewErrors', { count: errorCount }) }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Logs desplegables de errores -->
+      <div v-if="showLogs && logs.length" class="p-3 bg-surface-container-lowest border-b border-border-subtle max-h-40 overflow-y-auto font-mono text-[11px] text-rose-400 flex flex-col gap-1">
+        <div v-for="(log, idx) in logs" :key="idx" class="truncate">
+          {{ log }}
+        </div>
+      </div>
+
+      <!-- Tabla -->
+      <div class="overflow-x-auto w-full">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-border-subtle bg-surface-card text-outline uppercase tracking-wider text-[11px] font-mono">
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colAts') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colCompany') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colRole') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colLocation') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colExp') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colMatch') }}</th>
+              <th class="py-2.5 px-3 font-medium text-right pr-4">{{ $t('search.table.colActions') }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border-subtle">
+            <tr
+              v-for="job in filteredMatches"
+              :key="job.url"
+              class="hover:bg-surface-container/50 transition-colors group"
+            >
+              <!-- ATS / ID -->
+              <td class="py-3 px-3">
+                <span
+                  class="px-2 py-0.5 rounded font-mono text-[10px] border capitalize"
+                  :class="getPlatformBadgeClass(job.ats)"
+                >
+                  {{ job.ats }}
+                </span>
+              </td>
+
+              <!-- Empresa -->
+              <td class="py-3 px-3 font-medium text-on-surface">
+                <div class="flex items-center gap-1.5">
+                  <span>{{ formatCompanyName(job.company) }}</span>
+                  <span
+                    v-if="job.has_captcha"
+                    class="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 font-mono text-[9px] border border-amber-500/20"
+                    :title="$t('search.table.captchaRequired')"
+                  >
+                    Captcha
+                  </span>
+                </div>
+              </td>
+
+              <!-- Puesto de trabajo -->
+              <td class="py-3 px-3">
+                <a
+                  :href="job.url"
+                  class="text-on-surface font-medium hover:text-accent cursor-pointer transition-colors"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {{ job.title }}
+                </a>
+              </td>
+
+              <!-- Ubicación -->
+              <td class="py-3 px-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[11px]">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  {{ job.location || $t('common.remote') }}
+                </span>
+              </td>
+
+              <!-- Exp. requerida -->
+              <td class="py-3 px-3 font-mono text-on-surface-variant">
+                {{ job.required_years ? $t('search.table.expYears', { count: job.required_years }) : $t('search.table.expNotSpecified') }}
+              </td>
+
+              <!-- Match -->
+              <td class="py-3 px-3">
+                <div class="flex items-center gap-2">
+                  <div class="w-14 bg-surface-container h-1.5 rounded-full overflow-hidden">
+                    <div
+                      class="bg-accent h-full rounded-full transition-all duration-300"
+                      :style="{ width: (job.matchScore || 85) + '%' }"
+                    ></div>
+                  </div>
+                  <span class="font-mono text-on-surface font-medium text-[11px]">
+                    {{ job.matchScore || 85 }}%
+                  </span>
+                </div>
+              </td>
+
+              <!-- Acciones -->
+              <td class="py-3 px-3 text-right pr-4">
+                <div class="flex items-center justify-end gap-1.5">
+                  <!-- Preparar postulación -->
+                  <button
+                    :class="[
+                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-colors',
+                      isJobPrepared(job)
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : preparingMap[job.url]
+                          ? 'bg-surface-container border border-border-subtle text-on-surface cursor-wait'
+                          : 'bg-surface-container hover:bg-surface-container-high border border-border-subtle text-on-surface'
+                    ]"
+                    :disabled="preparingMap[job.url]"
+                    type="button"
+                    @click="prepareApplication(job)"
+                  >
+                    <svg
+                      v-if="preparingMap[job.url]"
+                      class="animate-spin h-3 w-3 text-outline shrink-0"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>{{ preparingMap[job.url] ? $t('search.table.btnPreparing') : (isJobPrepared(job) ? $t('search.table.btnPrepared') : $t('search.table.btnPrepare')) }}</span>
+                  </button>
+
+                  <!-- Adaptar CV con agente IA -->
+                  <button
+                    :class="[
+                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-all duration-200',
+                      tailoringMap[job.url]
+                        ? 'bg-accent/20 text-accent border border-accent/40 cursor-wait'
+                        : isJobTailored(job)
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-accent-subtle hover:bg-accent/20 text-accent border border-transparent'
+                    ]"
+                    :disabled="tailoringMap[job.url]"
+                    :title="tailoringMap[job.url] ? $t('search.table.tailorTipInProgress') : (job.cv ? $t('search.table.tailorTipReady', { cv: job.cv }) : $t('search.table.tailorTipDefault'))"
+                    type="button"
+                    @click="tailorApplication(job)"
+                  >
+                    <!-- Animación de carga durante la adaptación -->
+                    <svg
+                      v-if="tailoringMap[job.url]"
+                      class="animate-spin h-3 w-3 text-accent shrink-0"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <!-- Icono cuando ya está generado -->
+                    <span
+                      v-else-if="isJobTailored(job)"
+                      class="material-symbols-outlined text-[13px] leading-none text-emerald-400"
+                    >check_circle</span>
+                    <!-- Icono cuando está pendiente -->
+                    <span
+                      v-else
+                      class="material-symbols-outlined text-[13px] leading-none text-accent"
+                    >auto_fix_high</span>
+
+                    <span>{{ tailoringMap[job.url] ? $t('search.table.btnTailoring') : (isJobTailored(job) ? $t('search.table.btnTailored') : $t('search.table.btnTailor')) }}</span>
+                  </button>
+
+                  <!-- Abrir formulario Playwright -->
+                  <button
+                    :class="[
+                      'p-1.5 rounded text-[11px] font-medium transition-colors border',
+                      launchingMap[job.url]
+                        ? 'bg-surface-container border-accent/40 text-accent cursor-wait'
+                        : isJobOpened(job)
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : 'bg-surface-container hover:bg-surface-container-high border-border-subtle text-outline hover:text-on-surface'
+                    ]"
+                    :disabled="launchingMap[job.url]"
+                    :title="$t('search.table.openPlaywright')"
+                    type="button"
+                    @click="openInBrowser(job)"
+                  >
+                    <svg
+                      v-if="launchingMap[job.url]"
+                      class="animate-spin h-3.5 w-3.5 text-accent block"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span v-else class="material-symbols-outlined text-[14px] block">web</span>
+                  </button>
+
+                  <a
+                    :href="job.url"
+                    class="p-1 rounded text-outline hover:text-on-surface transition-colors"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                    :title="$t('search.table.openExternal')"
+                  >
+                    <span class="material-symbols-outlined text-[15px] block">open_in_new</span>
+                  </a>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Estado vacío -->
+            <tr v-if="!filteredMatches.length">
+              <td class="py-12 px-4 text-center text-outline" colspan="7">
+                <div class="flex flex-col items-center justify-center gap-2">
+                  <span class="material-symbols-outlined text-[36px] text-outline opacity-60">search_off</span>
+                  <p class="text-xs font-medium text-on-surface">
+                    {{ scanning ? $t('search.table.emptyTitleScanning') : $t('search.table.emptyTitleIdle') }}
+                  </p>
+                  <p class="text-[11px] text-outline max-w-sm">
+                    {{ scanning ? $t('search.table.emptyDescScanning') : $t('search.table.emptyDescIdle') }}
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pie de tabla / Resumen -->
+      <div class="p-3 border-t border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-outline">
+        <div class="flex items-center gap-2">
+          <span>
+            {{ $t('search.table.showingFooter', { shown: filteredMatches.length, total: matches.length }) }}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- NOTIFICACIONES TOAST -->
     <v-snackbar v-model="snack.show" :color="snack.color" timeout="3500">
       {{ snack.text }}
     </v-snackbar>
-  </v-container>
+  </div>
 </template>
-
-<style scoped>
-.gap-2 {
-  gap: 8px;
-}
-.gap-4 {
-  gap: 16px;
-}
-</style>

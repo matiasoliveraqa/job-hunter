@@ -4,7 +4,7 @@ Data models for Job Hunter.
 
 from typing import List, Optional, Dict
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class ATSPlatform(str, Enum):
     ASHBY = "ashby"
@@ -24,10 +24,76 @@ class PersonalInfo(BaseModel):
     current_company: Optional[str] = Field(None, description="Current employer or 'Freelance'")
     years_of_experience: Optional[int] = Field(None, description="Total years of professional experience")
     requires_us_visa_sponsorship: str = Field("No", description="'Yes' or 'No'")
-    gender: Optional[str] = Field(None, description="Gender (e.g. 'Male', 'Female', 'Decline to self-identify')")
-    race: Optional[str] = Field(None, description="Race / Ethnicity (e.g. 'Decline to self-identify')")
-    veteran_status: Optional[str] = Field(None, description="Veteran status")
-    disability_status: Optional[str] = Field(None, description="Disability status")
+    gender: Optional[str] = Field(None, description="Canonical gender code ('male', 'female', 'non_binary', 'decline')")
+    race: Optional[str] = Field(None, description="Canonical race/ethnicity code ('hispanic_latino', 'white', 'black', 'asian', 'two_or_more', 'decline')")
+    veteran_status: Optional[str] = Field(None, description="Canonical veteran status code ('not_veteran', 'veteran', 'decline')")
+    disability_status: Optional[str] = Field(None, description="Canonical disability status code ('no', 'yes', 'decline')")
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_gender(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "deseo" in norm:
+            return "decline"
+        if norm in ("male", "hombre", "masculino", "man"):
+            return "male"
+        if norm in ("female", "mujer", "femenino", "woman"):
+            return "female"
+        if "non-binary" in norm or "non binary" in norm or "non_binary" in norm or "no binario" in norm:
+            return "non_binary"
+        return norm
+
+    @field_validator("race", mode="before")
+    @classmethod
+    def normalize_race(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "deseo" in norm:
+            return "decline"
+        if "hispanic" in norm or "latino" in norm or "hispano" in norm:
+            return "hispanic_latino"
+        if "two or more" in norm or "dos o más" in norm or "dos o mas" in norm:
+            return "two_or_more"
+        if "asian" in norm or "asiático" in norm or "asiatico" in norm:
+            return "asian"
+        if "black" in norm or "negro" in norm or "afro" in norm:
+            return "black"
+        if "white" in norm or "blanco" in norm:
+            return "white"
+        if "indigenous" in norm or "indígena" in norm or "indigena" in norm or "american indian" in norm:
+            return "indigenous"
+        return norm
+
+    @field_validator("veteran_status", mode="before")
+    @classmethod
+    def normalize_veteran(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "wish to self-identify" in norm or "deseo" in norm:
+            return "decline"
+        if norm.startswith("no") or "not a veteran" in norm or "not a protected" in norm or "no soy" in norm or norm == "not_veteran":
+            return "not_veteran"
+        if norm.startswith("yes") or norm.startswith("sí") or norm.startswith("si") or "veteran" in norm or "veterano" in norm:
+            return "veteran"
+        return norm
+
+    @field_validator("disability_status", mode="before")
+    @classmethod
+    def normalize_disability(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "wish to answer" in norm or "deseo" in norm:
+            return "decline"
+        if norm.startswith("no") or "not have" in norm or "don't have" in norm or "no tengo" in norm or "no poseo" in norm:
+            return "no"
+        if norm.startswith("yes") or norm.startswith("sí") or norm.startswith("si") or "have a disability" in norm or "tengo" in norm or "poseo" in norm:
+            return "yes"
+        return norm
 
     @property
     def first_name(self) -> str:
@@ -37,6 +103,19 @@ class PersonalInfo(BaseModel):
     def last_name(self) -> str:
         parts = self.full_name.strip().split() if self.full_name else []
         return " ".join(parts[1:]) if len(parts) > 1 else ""
+
+    @property
+    def city(self) -> str:
+        if not self.location:
+            return ""
+        return self.location.split(",")[0].strip()
+
+    @property
+    def country(self) -> str:
+        if not self.location:
+            return ""
+        parts = self.location.split(",")
+        return parts[-1].strip() if len(parts) > 1 else self.location.strip()
 
 class SearchCriteria(BaseModel):
     target_roles: List[str] = Field(default_factory=list, description="Target job titles / roles")
@@ -75,6 +154,7 @@ class CandidatePreferences(BaseModel):
     salary_period: str = Field("monthly", description="'monthly' or 'annual'")
     notice_period: str = Field("2 weeks", description="e.g. 'Immediately', '2 weeks', '1 month'")
     english_level: Optional[str] = Field("Fluent / Professional", description="e.g. 'B2', 'Fluent', 'Native'")
+    native_language: Optional[str] = Field(None, description="Candidate native language, e.g. 'Spanish', 'Portuguese'")
     legally_authorized_to_work: str = Field("Yes", description="'Yes' or 'No'")
 
     def get_salary_value(self, is_contractor: bool = False) -> Optional[int]:
@@ -107,25 +187,45 @@ class OpenQuestionTemplates(BaseModel):
         None,
         description="General motivation answer (Why do you want to work here / Why this role)"
     )
-    fintech_motivation: Optional[str] = Field(
-        None,
-        description="Motivation answer for fintech / banking / payments companies"
-    )
     experience_summary: Optional[str] = Field(
         None,
         description="Summary of background and daily technical stack"
     )
-    metrics_and_kpis: Optional[str] = Field(
+    key_project: Optional[str] = Field(
         None,
-        description="Targets, KPIs, and achievements in recent roles"
+        description="Proudest project or technical challenge solved"
+    )
+    timezone_overlap: Optional[str] = Field(
+        None,
+        description="Time zone and overlap statement"
     )
     education_level: Optional[str] = Field(
         None,
         description="Highest level of education completed or current degree"
     )
-    timezone_overlap: Optional[str] = Field(
+    education_institution: Optional[str] = Field(
         None,
-        description="Time zone and overlap statement"
+        description="School or university name, used to match education dropdowns"
+    )
+    education_start_year: Optional[int] = Field(
+        None,
+        description="Start year of higher education"
+    )
+    education_end_year: Optional[int] = Field(
+        None,
+        description="End or expected graduation year of higher education"
+    )
+    additional_info: Optional[str] = Field(
+        None,
+        description="Additional information or cover letter notes"
+    )
+    fintech_motivation: Optional[str] = Field(
+        None,
+        description="Legacy fallback motivation answer for fintech"
+    )
+    metrics_and_kpis: Optional[str] = Field(
+        None,
+        description="Legacy fallback targets and KPIs"
     )
     custom_qa: Dict[str, str] = Field(
         default_factory=dict,

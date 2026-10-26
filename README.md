@@ -1,12 +1,22 @@
+<div align="center">
+
+<img src="web/public/isotype.png" alt="Job Hunter" width="140">
+
 # Job Hunter
 
-**Autonomous, Human-in-the-Loop Job Search & Application Assistant**  
+**Autonomous, Human-in-the-Loop Job Search & Application Assistant**
+
 *Powered by Local AI Agents, Concurrent ATS Scanners & Headed Playwright Automation.*
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Playwright](https://img.shields.io/badge/playwright-stealth-green.svg)](https://playwright.dev/)
+[![Node 22+](https://img.shields.io/badge/node-22+-green.svg)](https://nodejs.org/)
+[![Playwright](https://img.shields.io/badge/playwright-stealth-blueviolet.svg)](https://playwright.dev/)
 [![ATS Support](https://img.shields.io/badge/ATS-Ashby%20%7C%20Greenhouse%20%7C%20Lever-purple.svg)](#supported-ats-platforms)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+</div>
+
+https://github.com/user-attachments/assets/49257a3b-661a-4313-8cde-a4509c301a67
 
 ---
 
@@ -18,42 +28,23 @@ The modern tech job search is broken:
 - **Dangerous spam bots:** Blind auto-apply scripts that spray generic resumes across LinkedIn, triggering bot bans and recruiter spam filters.
 
 **Job Hunter takes a fundamentally different, human-in-the-loop approach:**
+
 1. **Direct Public ATS APIs:** Queries official endpoints across **15,000+ top tech companies** on **Ashby**, **Greenhouse**, and **Lever** in seconds using semaphore-bounded concurrency.
 2. **Experience & Modality Aware:** Filters out roles demanding more years of experience than you have, and automatically switches between your **dependent employee salary** (default) and **contractor salary** based on the job posting.
 3. **Dedicated Folder & Tailored 1-Page CV per Role:** Generates an isolated folder for each application (`output/applications/<YYYY-MM>_<Company>_<Role>/`) containing your tailored 1-page ATS PDF, HTML source, and a standalone `open_application.py` script with the application URL and all completed field values.
 4. **Stealth Headed Pre-Filling & Human Review:** Launches a persistent Chromium/Chrome instance with native OS fingerprint that switches to the Application tab, splits First/Last Name accurately, attaches your tailored CV, and pauses on your desktop so you retain 100% control to review and click **Submit**.
 
----
-
-## Architecture
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor You as Candidate
-    participant AI as Local AI Agent
-    participant ATS as Ashby / Greenhouse / Lever
-    participant Browser as Stealth Browser
-
-    AI->>ATS: Scan 15,000+ public company boards (Semaphore-bounded)
-    ATS-->>AI: Filtered remote opportunities (<= candidate experience)
-    AI->>AI: Create per-company folder & Tailor 1-Page ATS Resume (PDF)
-    AI->>Browser: Launch & Pre-fill application form + save open_application.py
-    Browser-->>You: Headed window opens on desktop
-    You->>Browser: Review, verify & click Submit
-```
-
 > [!IMPORTANT]
-> **Human-in-the-Loop by Design:**  
+> **Human-in-the-Loop by Design:**
 > Job Hunter is not a blind auto-apply spam bot. It is an intelligent acceleration tool engineered to eliminate repetitive data entry. The AI handles the tedious discovery, tailoring, and form pre-filling, but you always review, verify, and click Submit. Quality and trust over spam, always.
 
 ---
 
-## Quick Start (Web App & One-Click Launch)
+## Quick Start
 
 ### 1. Prerequisites
 - **Python 3.10+**
-- **Node.js 18+**
+- **Node.js 22+**
 
 ### 2. One-Click Launch (Recommended)
 
@@ -73,17 +64,16 @@ start.bat
 
 The script sets up the Python virtual environment (`venv`), installs dependencies, runs `playwright install chromium`, compiles the frontend, and launches the web interface at `http://127.0.0.1:3100` (with automatic fallback to `3101`, `3102`, etc. if port 3100 is busy).
 
-### 3. Setup Your Profile
+### 3. Set Up Your Profile
 
 1. Open `http://127.0.0.1:3100` in your browser.
-2. Go to the **Mi perfil** tab.
-3. Fill in your contact info, target compensation, years of experience, and target roles.
-4. Go to **Buscar vacantes**: choose a preset (e.g. `QA / SDET`, `Backend`, `Frontend`) or enter your target roles as tags.
-5. Click **Buscar vacantes** to watch opportunities stream in real time.
+2. Go to the **Mi perfil** tab and fill in your contact info, target compensation, years of experience, and target roles.
+3. Go to **Buscar vacantes**: choose a preset (`QA / SDET`, `Backend`, `Frontend`, ...) or enter your target roles as tags.
+4. Click **Buscar vacantes** to watch opportunities stream in real time.
 
 ---
 
-## Architecture & Security Model
+## Architecture
 
 ```mermaid
 sequenceDiagram
@@ -113,45 +103,62 @@ sequenceDiagram
 ```
 
 ### Security & Privacy Guarantees
+
 - **Prompt Injection Defense:** LLM providers (`claude`, `agy`, `codex`) execute in pure text-to-text mode with zero tools (`--tools ""` and no shell access). Untrusted job descriptions cannot execute shell commands or exfiltrate local files.
 - **Strict ATS Domain Allowlist:** Autofill only launches against verified platform domains (`greenhouse.io`, `ashbyhq.com`, `lever.co`). Arbitrary external URLs are rejected to protect personal information.
-- **Dynamic Port Allocation:** The local web server automatically detects port conflicts on 3100 and switches to the next available port.
+- **Local Only:** The web server binds to `127.0.0.1` and rejects foreign `Host` and `Origin` headers, so no external site can reach it.
+- **Offline PDF Rendering:** CV compilation blocks all outbound HTTP(S) requests, so a tailored CV cannot phone home.
 - **Human-in-the-Loop:** Applications remain `pending` until you verify and confirm them.
-- **Strict Privacy:** Candidate profiles (`config/profile.json`), exclusions (`config/exclusions.json`), and generated PDFs are kept in `.gitignore` and never committed.
+- **Strict Privacy:** Candidate profiles (`config/profile.json`), exclusions (`config/exclusions.json`), and generated PDFs are listed in `.gitignore` and never committed.
+
+---
+
+## Supported ATS Platforms
+
+| Platform | Scanning | Autofill |
+|---|---|---|
+| Ashby | Yes | Yes |
+| Greenhouse | Yes | Yes |
+| Lever | Yes | Yes |
 
 ---
 
 ## CLI Reference
 
-You can also run all components manually via the terminal:
+Every component also runs from the terminal.
 
 ### Discover Positions
 ```bash
-# Scan across Ashby, Greenhouse, and Lever for remote roles matching your experience
 python -m src.cli scan --roles "QA Automation Engineer,SDET" --locations "remote,latam" --max-years 7 --limit 30
 ```
 
+Options: `--roles`, `--locations`, `--platforms`, `--limit`, `--concurrency`, `--max-years`, `--allow-captcha`, `--stream-json`.
+
 ### Compile a 1-Page ATS CV
 ```bash
-python -m src.cli build-cv --company "AcmeCorp" --role "QA_Automation_Engineer" --html output/applications/2026-10_AcmeCorp_QA_Automation_Engineer/cv_tailored.html
+python -m src.cli build-cv --company "AcmeCorp" --role "QA Automation Engineer" --html output/applications/2026-10_AcmeCorp_QA_Automation_Engineer/cv_tailored.html
 ```
 
 ### Pre-fill an Application
 ```bash
-# Opens headed browser, navigates to Application tab, fills form, and saves open_application.py
-python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id" --company "AcmeCorp" --role "QA_Automation_Engineer" --cv output/applications/2026-10_AcmeCorp_QA_Automation_Engineer/CV.pdf
+python -m src.cli apply --url "https://jobs.ashbyhq.com/company/job-id" --company "AcmeCorp" --role "QA Automation Engineer" --cv output/applications/2026-10_AcmeCorp_QA_Automation_Engineer/CV.pdf
 ```
+
+Opens a headed browser, navigates to the Application tab, fills the form, and saves `open_application.py` with the URL and every completed field.
 
 ---
 
 ## Contributing
 
-Contributions are welcome! If you want to add new ATS platform adapters (e.g., Workable, SmartRecruiters, BambooHR) or expand company registries:
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
+Contributions are welcome. If you want to add new ATS platform adapters (Workable, SmartRecruiters, BambooHR) or expand company registries:
+
+1. Fork the project
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+Run `pytest` and `npm test --prefix web` before opening the PR. CI runs both on Python 3.10/3.12 and Node 22/24.
 
 ---
 

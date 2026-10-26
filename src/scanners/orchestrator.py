@@ -64,6 +64,14 @@ class ScannerOrchestrator:
         active_platforms = platforms or self.profile.ats_settings.enabled_platforms
         roles = custom_roles or self.profile.search_criteria.target_roles
         locations = custom_locations or self.profile.search_criteria.location_keywords
+        # The candidate's own city and country decide whether a hybrid or on-site
+        # posting is acceptable, so they come from the profile, never hardcoded.
+        home_terms = [
+            t for t in (
+                getattr(self.profile.personal_info, "city", None),
+                getattr(self.profile.personal_info, "country", None),
+            ) if t and str(t).strip()
+        ]
         max_years = (
             max_years_experience
             if max_years_experience is not None
@@ -106,6 +114,7 @@ class ScannerOrchestrator:
                         roles,
                         locations,
                         max_years_experience=max_years,
+                        home_terms=home_terms,
                     )
                     if not allow_captcha:
                         postings = [p for p in postings if not p.has_captcha]
@@ -116,12 +125,21 @@ class ScannerOrchestrator:
                             on_progress(checked_count, total_tasks, plat_key, slug)
                         except Exception:
                             pass
-                    if postings and on_match:
-                        for p in postings:
-                            try:
-                                on_match(p)
-                            except Exception:
-                                pass
+                    if postings:
+                        all_postings.extend(postings)
+                        try:
+                            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+                            out_file = OUTPUT_DIR / "scan_results.json"
+                            with open(out_file, "w", encoding="utf-8") as f:
+                                json.dump([p.model_dump() for p in all_postings], f, indent=2, ensure_ascii=False)
+                        except Exception:
+                            pass
+                        if on_match:
+                            for p in postings:
+                                try:
+                                    on_match(p)
+                                except Exception:
+                                    pass
                     return postings
             except Exception as e:
                 checked_count += 1
@@ -134,10 +152,7 @@ class ScannerOrchestrator:
 
         async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
             tasks = [_bounded_scan(sc, session, pk, sl) for sc, pk, sl in items]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for res in results:
-                if isinstance(res, list):
-                    all_postings.extend(res)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         # Allow underlying SSL transports to close cleanly on Windows ProactorEventLoop
         await asyncio.sleep(0.1)

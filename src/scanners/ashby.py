@@ -4,7 +4,7 @@ Ashby ATS Job Board Scanner.
 
 from typing import List, Optional
 import aiohttp
-from src.scanners.base import BaseScanner
+from src.scanners.base import BaseScanner, format_company_name
 from src.core.models import JobPosting, ATSPlatform
 
 class AshbyScanner(BaseScanner):
@@ -18,6 +18,7 @@ class AshbyScanner(BaseScanner):
         role_keywords: List[str],
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
+        home_terms: Optional[List[str]] = None,
     ) -> List[JobPosting]:
         url = f"https://api.ashbyhq.com/posting-api/job-board/{company_slug}"
         postings: List[JobPosting] = []
@@ -34,19 +35,22 @@ class AshbyScanner(BaseScanner):
                     addr_country = ((j.get("address") or {}).get("postalAddress") or {}).get("addressCountry") or ""
                     if addr_country and addr_country.lower() not in loc.lower():
                         loc = f"{loc}, {addr_country}".strip(", ")
-                    if j.get("isRemote") is False and not any(r in loc.lower() for r in ("remote", "worldwide", "global", "uruguay", "montevideo")):
+                    home_lower = [h.lower() for h in (home_terms or []) if h]
+                    if j.get("isRemote") is False and not any(
+                        r in loc.lower() for r in ("remote", "worldwide", "global", *home_lower)
+                    ):
                         continue
 
                     if j.get("isRemote") and "remote" not in loc.lower():
                         loc = f"{loc} (Remote)".strip()
 
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords):
-                        desc = (
-                            f"{title} "
-                            f"{j.get('descriptionPlain') or ''} "
-                            f"{j.get('descriptionHtml') or ''}"
-                        )
-                        if self.has_residency_restriction(desc):
+                    desc = (
+                        f"{title} "
+                        f"{j.get('descriptionPlain') or ''} "
+                        f"{j.get('descriptionHtml') or ''}"
+                    )
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc, home_terms=home_terms):
+                        if self.has_residency_restriction(desc, location_keywords, home_terms=home_terms):
                             continue
                         if not self.matches_experience(desc, max_years_experience):
                             continue
@@ -55,7 +59,7 @@ class AshbyScanner(BaseScanner):
                         job_url = j.get("jobUrl") or f"https://jobs.ashbyhq.com/{company_slug}/{j.get('id')}"
                         postings.append(JobPosting(
                             ats=self.platform,
-                            company=company_slug,
+                            company=format_company_name(company_slug),
                             title=title,
                             location=loc,
                             url=job_url,
