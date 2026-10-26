@@ -38,19 +38,18 @@ class LeverScanner(BaseScanner):
                     if wpt == "hybrid" and not any(u in (cats.get("location") or "").lower() for u in ("uruguay", "montevideo")):
                         continue
 
-                    loc = ((cats.get("location") or "") + " " + wpt).strip()
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords):
-                        lists_text = " ".join(
-                            f"{lst.get('text', '')} {lst.get('content', '')}"
-                            for lst in (j.get("lists") or [])
-                            if isinstance(lst, dict)
-                        )
-                        desc = (
-                            f"{title} "
-                            f"{j.get('descriptionPlain') or ''} "
-                            f"{j.get('description') or ''} "
-                            f"{lists_text}"
-                        )
+                    lists_text = " ".join(
+                        f"{lst.get('text', '')} {lst.get('content', '')}"
+                        for lst in (j.get("lists") or [])
+                        if isinstance(lst, dict)
+                    )
+                    desc = (
+                        f"{title} "
+                        f"{j.get('descriptionPlain') or ''} "
+                        f"{j.get('description') or ''} "
+                        f"{lists_text}"
+                    )
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc):
                         if self.has_residency_restriction(desc, location_keywords):
                             continue
                         if not self.matches_experience(desc, max_years_experience):

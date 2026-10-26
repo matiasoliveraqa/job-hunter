@@ -132,4 +132,78 @@ def test_captcha_model_and_filtering():
     assert filtered_all == [jp1, jp2]
 
 
+def test_location_fixes_a1_residency_phrases():
+    scanner = AshbyScanner()
+    phrases = [
+        ("Candidates must be authorized to work in the United States.", True),
+        ("We are only able to hire US-based employees at this time.", True),
+        ("Applicants must be legally authorized to work in the U.S.", True),
+        ("Must be eligible to work in the US without sponsorship.", True),
+        ("We can only consider candidates who reside in the United States.", True),
+        ("Employment is contingent on US work authorization.", True),
+        ("This role is open to candidates located anywhere in the U.S.", True),
+        ("You must be based in North America.", True),
+        ("This position is remote within the United States.", True),
+        ("Remote (US only).", True),
+        ("Open to candidates across Latin America.", False),
+    ]
+    for text, expected in phrases:
+        assert scanner.has_residency_restriction(text) is expected, f"Failed on phrase: {text}"
+
+
+def test_location_fixes_a2_a3_a4():
+    from src.scanners.base import RESTRICTED_LOCATION_RE
+    scanner = AshbyScanner()
+    latam_keywords = ["remote", "latam", "worldwide", "global", "anywhere", "uruguay"]
+
+    # A2: anywhere in the U.S. and anywhere in the U.S. market
+    assert RESTRICTED_LOCATION_RE.search("anywhere in the U.S.") is not None
+    assert RESTRICTED_LOCATION_RE.search("anywhere in the U.S. market") is not None
+    assert scanner.matches_location("QA Engineer", "Anywhere in the U.S.", latam_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Anywhere in the U.S. market", latam_keywords) is False
+
+    # A3: US-Remote anchor test
+    assert scanner.matches_location("QA Engineer", "US-Remote", latam_keywords) is False
+
+    # A4: North America, Americas
+    assert scanner.matches_location("QA Engineer", "Remote - North America", latam_keywords) is False
+    assert scanner.matches_location("QA Engineer", "Remote - Americas", latam_keywords) is False
+
+    # A4: Empty location with compatible title/description does NOT get filtered
+    assert scanner.matches_location(
+        "QA Engineer",
+        "",
+        latam_keywords,
+        description="Role open to Latin America remote candidates."
+    ) is True
+
+    # Control cases that must continue to pass
+    assert scanner.matches_location("QA Engineer", "Remote - LATAM", latam_keywords) is True
+    assert scanner.matches_location("QA Engineer", "South America (Remote)", latam_keywords) is True
+    assert scanner.matches_location("QA Engineer", "Remote (Worldwide)", latam_keywords) is True
+    assert scanner.matches_location("QA Engineer", "Montevideo, Uruguay", latam_keywords) is True
+
+
+def test_location_empty_loc_and_empty_description():
+    scanner = AshbyScanner()
+    kw = ["remote", "latam", "worldwide", "global", "anywhere", "uruguay"]
+
+    # When both location and description are empty strings:
+    assert scanner.matches_location("Remote QA Engineer", "", kw, description="") is True
+    assert scanner.matches_location("QA Engineer - LATAM", "", kw, description="") is True
+    assert scanner.matches_location("QA Engineer", "", kw, description="") is False
+
+    # Control cases that must continue passing:
+    assert scanner.matches_location("QA Engineer", "Remote - LATAM", kw, description="") is True
+    assert scanner.matches_location("QA Engineer", "South America (Remote)", kw, description="") is True
+    assert scanner.matches_location("QA Engineer", "Remote (Worldwide)", kw, description="") is True
+    assert scanner.matches_location("QA Engineer", "Montevideo, Uruguay", kw, description="") is True
+
+    # Control cases that must continue being filtered out:
+    assert scanner.matches_location("QA Engineer", "US-Remote", kw, description="") is False
+    assert scanner.matches_location("QA Engineer", "Remote - North America", kw, description="") is False
+    assert scanner.matches_location("QA Engineer", "Austin, TX", kw, description="") is False
+
+
+
 

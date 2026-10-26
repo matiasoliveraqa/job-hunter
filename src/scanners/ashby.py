@@ -40,12 +40,12 @@ class AshbyScanner(BaseScanner):
                     if j.get("isRemote") and "remote" not in loc.lower():
                         loc = f"{loc} (Remote)".strip()
 
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords):
-                        desc = (
-                            f"{title} "
-                            f"{j.get('descriptionPlain') or ''} "
-                            f"{j.get('descriptionHtml') or ''}"
-                        )
+                    desc = (
+                        f"{title} "
+                        f"{j.get('descriptionPlain') or ''} "
+                        f"{j.get('descriptionHtml') or ''}"
+                    )
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc):
                         if self.has_residency_restriction(desc, location_keywords):
                             continue
                         if not self.matches_experience(desc, max_years_experience):

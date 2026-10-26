@@ -48,17 +48,27 @@ HYBRID_RE = re.compile(
     re.IGNORECASE,
 )
 
+US_STATES_DELIMITED = (
+    r",\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|"
+    r"MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|"
+    r"SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b"
+)
+
+US_VARIANTS = r"(?:united\s+states|usa|us|u\.?\s?s\.?)"
+
 # Non-LATAM country/city/region restrictions in location or title (e.g. "United States (Remote)", "Remote, US", "Anywhere in the US.")
 RESTRICTED_LOCATION_RE = re.compile(
     r"(?:"
-    r"\b(?:united\s+states|u\.s\.a?\.?|usa)\b|"
-    r"\b(?:anywhere|everywhere|remote|based|located|resident)\s+in\s+(?:the\s+)?(?:us|u\.s\.|usa|united\s+states)\b|"
-    r"\b(?:in|within)\s+(?:the\s+)?(?:us|u\.s\.)\b|"
-    r"[-–,/|\(\[]\s*(?:us|u\.s\.)\s*[-–,/|\)\]\.]|"
-    r"[-–,/|\(\[]\s*(?:us|u\.s\.)\s*$|"
-    r"^\s*(?:us|u\.s\.)\s*[-–,/|\)\]]|"
-    r"\b(?:us|u\.s\.)\s+(?:remote|only|based|resident|citizens?|nationwide)\b|"
-    r"\b(?:remote\s*[-–,/|]\s*(?:us|u\.s\.))\b|"
+    r"\b(?:united\s+states|usa)\b|\bu\.s\.?(?!\w)|"
+    rf"^\s*{US_VARIANTS}\s*$|"
+    rf"^\s*{US_VARIANTS}\s*[-–,/|\)\]]|"
+    rf"[-–,/|\(\[]\s*{US_VARIANTS}\s*(?:[-–,/|\)\]\.]|$)|"
+    rf"\b(?:anywhere|everywhere|remote|based|located|resident)\s+in\s+(?:the\s+)?{US_VARIANTS}(?!\w)|"
+    rf"\b(?:in|within)\s+(?:the\s+)?{US_VARIANTS}(?!\w)|"
+    rf"\b(?:us|u\.?\s?s\.?|united\s+states)\s+(?:remote|only|based|resident|citizens?|nationwide)\b|"
+    rf"\b(?:remote\s*[-–,/|]\s*{US_VARIANTS})(?!\w)|"
+    r"\b(?:north\s+america|americas)\b|"
+    + US_STATES_DELIMITED + r"|"
     r"\b(uk|united\s+kingdom|england|london|manchester|scotland|"
     r"canada|toronto|ottawa|montreal|vancouver|british\s+columbia|"
     r"europe|european\s+union|eu\s+remote|emea|cet|"
@@ -78,22 +88,27 @@ RESTRICTED_LOCATION_RE = re.compile(
 # Phrases inside the job description or application form questions that restrict the role to specific residents/citizens
 RESIDENCY_RESTRICTION_RE = re.compile(
     r"(state\s+of\s+residence\s+within\s+the\s+united\s+states|"
-    r"must\s+(?:reside|live|be\s+located|be\s+based)\s+in\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa|us|uk|canada|europe|eu|brazil|brasil|india)\b|"
-    r"only\s+(?:hiring|open\s+to\s+candidates)\s+in\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa|us|brazil|brasil)\b|"
-    r"candidates\s+must\s+be\s+(?:located|based|residing)\s+in\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa|us|brazil|brasil)\b|"
+    r"(?:must\s+)?(?:reside|live|be\s+located|be\s+based)\s+in\s+(?:the\s+)?(?:united\s+states|usa|uk|canada|europe|eu|brazil|brasil|india|\bu\.?\s?s\.?(?!\w))|"
+    r"only\s+(?:hiring|open\s+to\s+candidates|able\s+to\s+hire)\s+in\s+(?:the\s+)?(?:united\s+states|usa|brazil|brasil|\bu\.?\s?s\.?(?!\w))|"
+    r"candidates\s+must\s+be\s+(?:located|based|residing)\s+in\s+(?:the\s+)?(?:united\s+states|usa|brazil|brasil|\bu\.?\s?s\.?(?!\w))|"
     r"residir\s+(?:en|no)\s+(?:brasil|brazil)|"
     r"contrato\s+clt|regime\s+clt|vaga\s+exclusiva\s+para\s+residentes|"
     r"requires?\s+on-site\s+availability|"
     r"required\s+clearance\s*:\s*(?:public\s+trust|secret|active\s+secret|top\s+secret)|"
-    r"u\.?s\.?\s+citizenship\s+(?:is\s+)?required|"
-    r"\b(?:anywhere|everywhere)\s+in\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa|us)\b|"
-    r"\b(?:us|u\.s\.|united\s+states)\s+(?:only|residents?\s+only|based\s+candidates\s+only|citizens?\s+only)\b|"
-    r"\b(?:open|available)\s+(?:only\s+to|to)\s+(?:candidates\s+(?:based|located)\s+in\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa|us))\b|"
-    r"\b(?:position|role)\s+is\s+(?:only\s+)?(?:open\s+to|available\s+to)\s+(?:candidates\s+in\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa|us))\b|"
-    r"\b(?:located|based|residing)\s+(?:within|in)\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa)\b|"
-    r"\b(?:remote\s+within\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa))\b|"
-    r"\b(?:remote\s*[-–,/|]\s*(?:anywhere\s+in\s+(?:the\s+)?(?:us|u\.s\.|usa|united\s+states)))\b|"
-    r"(?:location|workplace)\s*[:\s–-]+\s*(?:anywhere\s+in\s+(?:the\s+)?(?:united\s+states|u\.s\.|usa|us)|(?:united\s+states|u\.s\.|usa|us)\s+remote|remote\s*[,–-]\s*(?:us|u\.s\.))\b)",
+    r"\bu\.?\s?s\.?(?!\w)\s+citizenship\s+(?:is\s+)?required|"
+    r"\b(?:anywhere|everywhere)\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
+    r"\b(?:united\s+states|\bu\.?\s?s\.?(?!\w))\s+(?:only|residents?\s+only|based\s+candidates\s+only|citizens?\s+only)\b|"
+    r"\b(?:open|available)\s+(?:only\s+to|to)\s+(?:candidates\s+(?:based|located)\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
+    r"\b(?:position|role)\s+is\s+(?:only\s+)?(?:open\s+to|available\s+to)\s+(?:candidates\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
+    r"\b(?:located|based|residing)\s+(?:within|in)\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
+    r"\b(?:remote\s+within\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
+    r"\b(?:remote\s*[-–,/|]\s*(?:anywhere\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))))|"
+    r"(?:location|workplace)\s*[:\s–-]+\s*(?:anywhere\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))\s+remote|remote\s*[,–-]\s*(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
+    r"(?:authorized|eligible|legally\s+(?:authorized|eligible|able))\s+to\s+work\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
+    r"\bu\.?\s?s\.?(?!\w)[-\s]based\s+(?:employees|candidates|applicants|workers|team|only)|"
+    r"(?:reside|residing|located|based)\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
+    r"\bu\.?\s?s\.?(?!\w)\s+work\s+authorization|"
+    r"based\s+in\s+north\s+america)",
     re.IGNORECASE,
 )
 
@@ -131,36 +146,67 @@ class BaseScanner(ABC):
                 return True
         return False
 
-    def matches_location(self, title: str, location: str, loc_keywords: List[str]) -> bool:
+    def matches_location(self, title: str, location: str, loc_keywords: List[str], description: str = "") -> bool:
         """
         Check if location or title matches target location criteria while rejecting
         onsite positions, hybrid positions outside Uruguay, and restricted regions.
         """
-        combined = f"{title or ''} {location or ''}".strip()
-        loc_lower = (location or "").lower()
-        t_lower = (title or "").lower()
+        loc_str = (location or "").strip()
+        t_str = (title or "").strip()
+        desc_str = (description or "").strip()
+        combined = f"{t_str} {loc_str}".strip()
+        loc_lower = loc_str.lower()
+        t_lower = t_str.lower()
 
         # Reject explicit onsite or in-office jobs immediately
-        if ONSITE_RE.search(combined):
+        if ONSITE_RE.search(t_str) or ONSITE_RE.search(loc_str):
             return False
 
         # Reject hybrid jobs unless located in Uruguay
-        if HYBRID_RE.search(combined) and not re.search(r"\b(uruguay|montevideo)\b", combined, re.IGNORECASE):
+        if (HYBRID_RE.search(t_str) or HYBRID_RE.search(loc_str)) and not re.search(r"\b(uruguay|montevideo)\b", combined, re.IGNORECASE):
             return False
 
         if loc_keywords:
             # If the user chose "any", accept any remote job without discarding restricted regions
             if any(k.lower() in ("all", "any", "*") for k in loc_keywords):
-                return "remote" in t_lower or "remote" in loc_lower or not ONSITE_RE.search(combined)
+                return "remote" in t_lower or "remote" in loc_lower or not (ONSITE_RE.search(t_str) or ONSITE_RE.search(loc_str))
+
+            # When location is empty, evaluate based on description and title
+            if not loc_str:
+                if desc_str:
+                    if self.has_residency_restriction(desc_str, loc_keywords):
+                        return False
+                    if (RESTRICTED_LOCATION_RE.search(desc_str) or ONSITE_RE.search(desc_str)) and not re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", desc_str, re.IGNORECASE):
+                        return False
+                    if LATAM_OR_GLOBAL_RE.search(desc_str) or LATAM_OR_GLOBAL_RE.search(t_str):
+                        wants_global = any(k.lower() in ("remote", "worldwide", "global", "anywhere") for k in loc_keywords)
+                        if not wants_global:
+                            return bool(re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", f"{t_str} {desc_str}", re.IGNORECASE))
+                        return True
+                    if any(k.lower() in desc_str.lower() or k.lower() in t_lower for k in loc_keywords):
+                        return True
+                else:
+                    if RESTRICTED_LOCATION_RE.search(t_str) and not re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", t_str, re.IGNORECASE):
+                        return False
+                    if LATAM_OR_GLOBAL_RE.search(t_str):
+                        wants_global = any(k.lower() in ("remote", "worldwide", "global", "anywhere") for k in loc_keywords)
+                        if not wants_global:
+                            return bool(re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", t_str, re.IGNORECASE))
+                        return True
+                    if any(k.lower() in t_lower for k in loc_keywords):
+                        return True
+                return False
 
             # Reject physical on-site locations outside Uruguay if neither location nor title mentions remote/worldwide
             is_uruguay = bool(re.search(r"\b(uruguay|montevideo)\b", combined, re.IGNORECASE))
             has_remote_indicator = bool(re.search(r"\b(remote|remoto|worldwide|global|anywhere)\b", combined, re.IGNORECASE))
-            is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america)\s*$", (location or "").strip(), re.IGNORECASE))
-            if (location or "").strip() and not is_uruguay and not has_remote_indicator and not is_distributed_latam:
+            is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america)\s*$", loc_str, re.IGNORECASE))
+            if loc_str and not is_uruguay and not has_remote_indicator and not is_distributed_latam:
                 return False
 
-            if RESTRICTED_LOCATION_RE.search(combined):
+            # Evaluate restricted locations on location and title separately so anchors (^, $) work
+            is_restricted = bool(RESTRICTED_LOCATION_RE.search(loc_str) or RESTRICTED_LOCATION_RE.search(t_str))
+            if is_restricted:
                 # When a restricted location (US/UK/EU/India/etc.) matches, strictly reject
                 # unless the posting explicitly includes LATAM / Uruguay in the title/location
                 if not re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", combined, re.IGNORECASE):
@@ -176,6 +222,7 @@ class BaseScanner(ABC):
             return any(k.lower() in loc_lower or k.lower() in t_lower for k in loc_keywords)
 
         return "remote" in t_lower or "remote" in loc_lower
+
 
     def has_residency_restriction(self, text: str, location_keywords: Optional[List[str]] = None) -> bool:
         """Return True if the job description or form questions contain a US/EU/UK residency or clearance restriction."""

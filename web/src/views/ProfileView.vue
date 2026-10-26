@@ -32,10 +32,41 @@ function adopt(data) {
   data.personal_info.current_company ??= ''
   data.personal_info.years_of_experience ??= 7
   data.personal_info.requires_us_visa_sponsorship ??= 'No'
-  data.personal_info.gender ??= 'Male'
-  data.personal_info.race ??= 'Hispanic or Latino'
-  data.personal_info.veteran_status ??= 'I am not a veteran'
-  data.personal_info.disability_status ??= 'No, I do not have a disability'
+
+  const normalizeCanonical = (val, map) => {
+    if (!val) return null
+    const lower = String(val).trim().toLowerCase()
+    return map[lower] || val
+  }
+  const genderMap = {
+    male: 'male', hombre: 'male', masculino: 'male', man: 'male',
+    female: 'female', mujer: 'female', femenino: 'female', woman: 'female',
+    'non-binary': 'non_binary', 'non binary': 'non_binary', 'no binario': 'non_binary',
+    'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  const raceMap = {
+    'hispanic or latino': 'hispanic_latino', hispanic: 'hispanic_latino', latino: 'hispanic_latino',
+    'hispano o latino': 'hispanic_latino', hispano: 'hispanic_latino',
+    white: 'white', blanco: 'white', 'white (not hispanic or latino)': 'white',
+    'black or african american': 'black', black: 'black', negro: 'black', 'negro o afroamericano': 'black',
+    asian: 'asian', 'asiático': 'asian', asiatico: 'asian',
+    'two or more races': 'two_or_more', 'dos o más razas': 'two_or_more', 'dos o más etnias': 'two_or_more',
+    'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  const veteranMap = {
+    'i am not a veteran': 'not_veteran', 'not a veteran': 'not_veteran', 'no soy veterano': 'not_veteran', 'no soy un veterano': 'not_veteran', no: 'not_veteran', not_veteran: 'not_veteran',
+    'i identify as one or more of the classifications of protected veteran': 'veteran', 'protected veteran': 'veteran', veteran: 'veteran', veterano: 'veteran', 'soy veterano protegido': 'veteran', yes: 'veteran',
+    'i decline to self-identify': 'decline', 'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  const disabilityMap = {
+    'no, i do not have a disability': 'no', no: 'no', 'no tengo discapacidad': 'no', 'no tengo una discapacidad': 'no',
+    'yes, i have a disability (or previously had one)': 'yes', 'yes, i have a disability': 'yes', 'sí tengo o tuve una discapacidad': 'yes', 'sí, tengo una discapacidad': 'yes', yes: 'yes',
+    'i do not wish to answer': 'decline', 'decline to self-identify': 'decline', 'prefer not to say': 'decline', 'prefiero no responder': 'decline', decline: 'decline'
+  }
+  data.personal_info.gender = normalizeCanonical(data.personal_info.gender, genderMap) || 'male'
+  data.personal_info.race = normalizeCanonical(data.personal_info.race, raceMap) || 'hispanic_latino'
+  data.personal_info.veteran_status = normalizeCanonical(data.personal_info.veteran_status, veteranMap) || 'not_veteran'
+  data.personal_info.disability_status = normalizeCanonical(data.personal_info.disability_status, disabilityMap) || 'no'
 
   data.search_criteria ??= {}
   data.search_criteria.target_roles ??= []
@@ -63,6 +94,8 @@ function adopt(data) {
   data.open_questions.key_project ??= data.open_questions.metrics_and_kpis || ''
   data.open_questions.timezone_overlap ??= ''
   data.open_questions.education_level ??= ''
+  data.open_questions.education_start_year ??= null
+  data.open_questions.education_end_year ??= null
   data.open_questions.additional_info ??= ''
   data.open_questions.custom_qa ??= {}
   if (data.open_questions.fintech_motivation && !data.open_questions.custom_qa.fintech) {
@@ -713,10 +746,10 @@ onMounted(async () => {
                 v-model="profile.personal_info.gender"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="Male">{{ $lang === 'es' ? 'Masculino / Male' : 'Male' }}</option>
-                <option value="Female">{{ $lang === 'es' ? 'Femenino / Female' : 'Female' }}</option>
-                <option value="Non-binary">{{ $lang === 'es' ? 'No binario / Non-binary' : 'Non-binary' }}</option>
-                <option value="Decline to Self-Identify">{{ $lang === 'es' ? 'Prefiero no responder' : 'Decline to Self-Identify' }}</option>
+                <option value="male">{{ $t('profile.sections.genderOptions.male') }}</option>
+                <option value="female">{{ $t('profile.sections.genderOptions.female') }}</option>
+                <option value="non_binary">{{ $t('profile.sections.genderOptions.non_binary') }}</option>
+                <option value="decline">{{ $t('profile.sections.genderOptions.decline') }}</option>
               </select>
             </div>
 
@@ -728,12 +761,12 @@ onMounted(async () => {
                 v-model="profile.personal_info.race"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="Hispanic or Latino">{{ $lang === 'es' ? 'Hispano o Latino' : 'Hispanic or Latino' }}</option>
-                <option value="White">{{ $lang === 'es' ? 'Blanco (no hispano o latino)' : 'White (Not Hispanic or Latino)' }}</option>
-                <option value="Black or African American">{{ $lang === 'es' ? 'Negro o afroamericano' : 'Black or African American' }}</option>
-                <option value="Asian">{{ $lang === 'es' ? 'Asiático' : 'Asian' }}</option>
-                <option value="Two or More Races">{{ $lang === 'es' ? 'Dos o más etnias' : 'Two or More Races' }}</option>
-                <option value="Decline to Self-Identify">{{ $lang === 'es' ? 'Prefiero no responder' : 'Decline to Self-Identify' }}</option>
+                <option value="hispanic_latino">{{ $t('profile.sections.raceOptions.hispanic_latino') }}</option>
+                <option value="white">{{ $t('profile.sections.raceOptions.white') }}</option>
+                <option value="black">{{ $t('profile.sections.raceOptions.black') }}</option>
+                <option value="asian">{{ $t('profile.sections.raceOptions.asian') }}</option>
+                <option value="two_or_more">{{ $t('profile.sections.raceOptions.two_or_more') }}</option>
+                <option value="decline">{{ $t('profile.sections.raceOptions.decline') }}</option>
               </select>
             </div>
 
@@ -745,9 +778,9 @@ onMounted(async () => {
                 v-model="profile.personal_info.veteran_status"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="I am not a veteran">{{ $lang === 'es' ? 'No soy veterano' : 'I am not a veteran' }}</option>
-                <option value="I identify as one or more of the classifications of protected veteran">{{ $lang === 'es' ? 'Soy veterano protegido' : 'Protected veteran' }}</option>
-                <option value="I decline to self-identify">{{ $lang === 'es' ? 'Prefiero no responder' : 'I decline to self-identify' }}</option>
+                <option value="not_veteran">{{ $t('profile.sections.veteranOptions.not_veteran') }}</option>
+                <option value="veteran">{{ $t('profile.sections.veteranOptions.veteran') }}</option>
+                <option value="decline">{{ $t('profile.sections.veteranOptions.decline') }}</option>
               </select>
             </div>
 
@@ -759,9 +792,9 @@ onMounted(async () => {
                 v-model="profile.personal_info.disability_status"
                 class="h-9 px-3 rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
-                <option value="No, I do not have a disability">{{ $lang === 'es' ? 'No tengo discapacidad' : 'No, I do not have a disability' }}</option>
-                <option value="Yes, I have a disability (or previously had one)">{{ $lang === 'es' ? 'Sí tengo o tuve una discapacidad' : 'Yes, I have a disability (or previously had one)' }}</option>
-                <option value="I do not wish to answer">{{ $lang === 'es' ? 'Prefiero no responder' : 'I do not wish to answer' }}</option>
+                <option value="no">{{ $t('profile.sections.disabilityOptions.no') }}</option>
+                <option value="yes">{{ $t('profile.sections.disabilityOptions.yes') }}</option>
+                <option value="decline">{{ $t('profile.sections.disabilityOptions.decline') }}</option>
               </select>
             </div>
           </div>
@@ -1133,6 +1166,29 @@ onMounted(async () => {
             type="text"
             class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
           />
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.educationStartYear') }}</label>
+              <span class="text-[11px] text-outline">{{ $t('profile.sections.educationStartYearDesc') }}</span>
+              <input
+                v-model.number="profile.open_questions.education_start_year"
+                type="number"
+                placeholder="2018"
+                class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+              />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-semibold text-on-surface">{{ $t('profile.sections.educationEndYear') }}</label>
+              <span class="text-[11px] text-outline">{{ $t('profile.sections.educationEndYearDesc') }}</span>
+              <input
+                v-model.number="profile.open_questions.education_end_year"
+                type="number"
+                placeholder="2022"
+                class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+              />
+            </div>
+          </div>
         </div>
 
         <!-- 6. Disponibilidad horaria y huso horario -->

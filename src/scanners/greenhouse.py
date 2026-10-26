@@ -40,9 +40,9 @@ class GreenhouseScanner(BaseScanner):
                     loc_obj = j.get("location", {})
                     loc_name = loc_obj.get("name") if isinstance(loc_obj, dict) else str(loc_obj) or ""
 
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc_name, location_keywords):
+                    desc_text = f"{title} {j.get('content') or ''}"
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc_name, location_keywords, description=desc_text):
                         job_id = j.get("id")
-                        desc_text = f"{title} {j.get('content') or ''}"
 
                         if self.has_residency_restriction(desc_text, location_keywords):
                             continue

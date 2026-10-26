@@ -10,10 +10,10 @@
     "current_company": "Acme Cloud Corp",
     "years_of_experience": 6,
     "requires_us_visa_sponsorship": "No",
-    "gender": "Decline to self-identify",
-    "race": "Decline to self-identify",
-    "veteran_status": "I am not a veteran",
-    "disability_status": "No, I do not have a disability"
+    "gender": "decline",
+    "race": "decline",
+    "veteran_status": "not_veteran",
+    "disability_status": "no"
   },
   "search_criteria": {
     "target_roles": [
@@ -69,6 +69,8 @@
     "experience_summary": "I work across backend systems, test automation, and CI/CD pipelines to ensure software reliability and test coverage.",
     "metrics_and_kpis": "My goals focus on test coverage, release stability, and automated regression pass rates.",
     "education_level": "Bachelor's Degree in Computer Science (or equivalent practical experience)",
+    "education_start_year": 2018,
+    "education_end_year": 2022,
     "timezone_overlap": "UTC-3 with full overlap during US and Americas business hours."
   }
 }

@@ -4,7 +4,7 @@ Data models for Job Hunter.
 
 from typing import List, Optional, Dict
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class ATSPlatform(str, Enum):
     ASHBY = "ashby"
@@ -24,10 +24,76 @@ class PersonalInfo(BaseModel):
     current_company: Optional[str] = Field(None, description="Current employer or 'Freelance'")
     years_of_experience: Optional[int] = Field(None, description="Total years of professional experience")
     requires_us_visa_sponsorship: str = Field("No", description="'Yes' or 'No'")
-    gender: Optional[str] = Field(None, description="Gender (e.g. 'Male', 'Female', 'Decline to self-identify')")
-    race: Optional[str] = Field(None, description="Race / Ethnicity (e.g. 'Decline to self-identify')")
-    veteran_status: Optional[str] = Field(None, description="Veteran status")
-    disability_status: Optional[str] = Field(None, description="Disability status")
+    gender: Optional[str] = Field(None, description="Canonical gender code ('male', 'female', 'non_binary', 'decline')")
+    race: Optional[str] = Field(None, description="Canonical race/ethnicity code ('hispanic_latino', 'white', 'black', 'asian', 'two_or_more', 'decline')")
+    veteran_status: Optional[str] = Field(None, description="Canonical veteran status code ('not_veteran', 'veteran', 'decline')")
+    disability_status: Optional[str] = Field(None, description="Canonical disability status code ('no', 'yes', 'decline')")
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_gender(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "deseo" in norm:
+            return "decline"
+        if norm in ("male", "hombre", "masculino", "man"):
+            return "male"
+        if norm in ("female", "mujer", "femenino", "woman"):
+            return "female"
+        if "non-binary" in norm or "non binary" in norm or "non_binary" in norm or "no binario" in norm:
+            return "non_binary"
+        return norm
+
+    @field_validator("race", mode="before")
+    @classmethod
+    def normalize_race(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "deseo" in norm:
+            return "decline"
+        if "hispanic" in norm or "latino" in norm or "hispano" in norm:
+            return "hispanic_latino"
+        if "two or more" in norm or "dos o más" in norm or "dos o mas" in norm:
+            return "two_or_more"
+        if "asian" in norm or "asiático" in norm or "asiatico" in norm:
+            return "asian"
+        if "black" in norm or "negro" in norm or "afro" in norm:
+            return "black"
+        if "white" in norm or "blanco" in norm:
+            return "white"
+        if "indigenous" in norm or "indígena" in norm or "indigena" in norm or "american indian" in norm:
+            return "indigenous"
+        return norm
+
+    @field_validator("veteran_status", mode="before")
+    @classmethod
+    def normalize_veteran(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "wish to self-identify" in norm or "deseo" in norm:
+            return "decline"
+        if norm.startswith("no") or "not a veteran" in norm or "not a protected" in norm or "no soy" in norm or norm == "not_veteran":
+            return "not_veteran"
+        if norm.startswith("yes") or norm.startswith("sí") or norm.startswith("si") or "veteran" in norm or "veterano" in norm:
+            return "veteran"
+        return norm
+
+    @field_validator("disability_status", mode="before")
+    @classmethod
+    def normalize_disability(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        norm = str(v).strip().lower()
+        if "decline" in norm or "prefer not" in norm or "prefiero no" in norm or "wish to answer" in norm or "deseo" in norm:
+            return "decline"
+        if norm.startswith("no") or "not have" in norm or "don't have" in norm or "no tengo" in norm or "no poseo" in norm:
+            return "no"
+        if norm.startswith("yes") or norm.startswith("sí") or norm.startswith("si") or "have a disability" in norm or "tengo" in norm or "poseo" in norm:
+            return "yes"
+        return norm
 
     @property
     def first_name(self) -> str:
@@ -135,6 +201,14 @@ class OpenQuestionTemplates(BaseModel):
     education_level: Optional[str] = Field(
         None,
         description="Highest level of education completed or current degree"
+    )
+    education_start_year: Optional[int] = Field(
+        None,
+        description="Start year of higher education"
+    )
+    education_end_year: Optional[int] = Field(
+        None,
+        description="End or expected graduation year of higher education"
     )
     additional_info: Optional[str] = Field(
         None,
