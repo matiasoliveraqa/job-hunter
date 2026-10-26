@@ -27,7 +27,7 @@ const tableSearch = ref('')
 const platformFilter = ref('all')
 
 const existingApps = ref([])
-const activePreset = ref('QA / SDET')
+const activePreset = ref('')
 
 const localizedPresets = computed(() =>
   PRESETS.map((p) => ({
@@ -53,12 +53,16 @@ async function loadProfile() {
     profile.value = data
     if (data?.search_criteria?.target_roles?.length) {
       form.roles = [...data.search_criteria.target_roles]
+    } else {
+      form.roles = []
     }
     if (data?.ats_settings?.enabled_platforms?.length) {
       form.platforms = [...data.ats_settings.enabled_platforms]
     }
     if (data?.personal_info?.years_of_experience) {
       form.maxYears = data.personal_info.years_of_experience
+    } else {
+      form.maxYears = null
     }
     await loadExistingApps()
     await initScanSync(existingApps.value)
@@ -88,10 +92,12 @@ function resetToProfile() {
   if (profile.value?.search_criteria?.target_roles?.length) {
     form.roles = [...profile.value.search_criteria.target_roles]
   } else {
-    form.roles = ['QA Automation Engineer', 'SDET', 'QA Engineer']
+    form.roles = []
   }
   if (profile.value?.personal_info?.years_of_experience) {
     form.maxYears = profile.value.personal_info.years_of_experience
+  } else {
+    form.maxYears = null
   }
   notify(t('search.presets.resetToast'))
 }
@@ -677,6 +683,9 @@ function getPlatformBadgeClass(ats) {
             >
               <span class="material-symbols-outlined text-[13px] block">close</span>
             </button>
+          </span>
+          <span v-if="!form.roles.length" class="text-xs text-outline italic py-0.5">
+            {{ $t('search.roles.noRoles') }}
           </span>
         </div>
       </div>

@@ -846,6 +846,9 @@ onMounted(async () => {
                   ✕
                 </button>
               </span>
+              <span v-if="!profile.search_criteria.target_roles?.length" class="text-xs text-outline italic self-center px-1">
+                {{ $t('profile.sections.noRolesConfigured') }}
+              </span>
             </div>
             <div class="flex items-center gap-2 mt-1">
               <input
@@ -871,7 +874,7 @@ onMounted(async () => {
               <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.keywords') }}</label>
               <span class="font-mono text-[10px] text-outline">{{ profile.search_criteria.keywords?.length || 0 }} tags</span>
             </div>
-            <div class="flex flex-wrap gap-1 p-2 rounded-lg bg-surface-container border border-border-subtle max-h-36 overflow-y-auto">
+            <div class="flex flex-wrap gap-1 p-2 rounded-lg bg-surface-container border border-border-subtle min-h-[38px] max-h-36 overflow-y-auto">
               <span
                 v-for="(kw, idx) in profile.search_criteria.keywords"
                 :key="kw"
@@ -885,6 +888,9 @@ onMounted(async () => {
                 >
                   ✕
                 </button>
+              </span>
+              <span v-if="!profile.search_criteria.keywords?.length" class="text-xs text-outline italic self-center px-1">
+                {{ $t('profile.sections.noKeywordsConfigured') }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-1">
@@ -908,7 +914,7 @@ onMounted(async () => {
           <!-- Ubicaciones Aceptadas -->
           <div class="flex flex-col gap-2">
             <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.locationKeywords') }}</label>
-            <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle">
+            <div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-surface-container border border-border-subtle min-h-[38px]">
               <span
                 v-for="(loc, idx) in profile.search_criteria.location_keywords"
                 :key="loc"
@@ -922,6 +928,9 @@ onMounted(async () => {
                 >
                   ✕
                 </button>
+              </span>
+              <span v-if="!profile.search_criteria.location_keywords?.length" class="text-xs text-outline italic self-center px-1">
+                {{ $t('profile.sections.noLocationsConfigured') }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-1">

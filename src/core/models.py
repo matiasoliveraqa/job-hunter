@@ -120,10 +120,7 @@ class PersonalInfo(BaseModel):
 class SearchCriteria(BaseModel):
     target_roles: List[str] = Field(default_factory=list, description="Target job titles / roles")
     keywords: List[str] = Field(default_factory=list, description="Technical skill keywords")
-    location_keywords: List[str] = Field(
-        default_factory=lambda: ["remote", "latam", "worldwide", "global", "anywhere"],
-        description="Location filtering keywords"
-    )
+    location_keywords: List[str] = Field(default_factory=list, description="Location filtering keywords")
     max_years_of_experience: Optional[int] = Field(
         None,
         description="Maximum years of experience required by a job posting (defaults to personal_info.years_of_experience)"

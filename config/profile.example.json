@@ -18,13 +18,7 @@
   "search_criteria": {
     "target_roles": [],
     "keywords": [],
-    "location_keywords": [
-      "remote",
-      "latam",
-      "worldwide",
-      "global",
-      "anywhere"
-    ],
+    "location_keywords": [],
     "max_years_of_experience": null,
     "min_salary_usd": null
   },
