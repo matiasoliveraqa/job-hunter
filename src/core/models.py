@@ -14,11 +14,11 @@ class ATSPlatform(str, Enum):
     OTHER = "other"
 
 class PersonalInfo(BaseModel):
-    full_name: str = Field(..., description="Candidate full name")
-    email: str = Field(..., description="Candidate email address")
-    phone: str = Field(..., description="Candidate phone number with country code")
-    location: str = Field(..., description="City and Country or Remote base")
-    linkedin_url: str = Field(..., description="LinkedIn profile URL")
+    full_name: str = Field("", description="Candidate full name")
+    email: str = Field("", description="Candidate email address")
+    phone: str = Field("", description="Candidate phone number with country code")
+    location: str = Field("", description="City and Country or Remote base")
+    linkedin_url: str = Field("", description="LinkedIn profile URL")
     github_url: Optional[str] = Field(None, description="GitHub profile URL")
     portfolio_url: Optional[str] = Field(None, description="Personal portfolio or website URL")
     current_company: Optional[str] = Field(None, description="Current employer or 'Freelance'")
@@ -120,10 +120,7 @@ class PersonalInfo(BaseModel):
 class SearchCriteria(BaseModel):
     target_roles: List[str] = Field(default_factory=list, description="Target job titles / roles")
     keywords: List[str] = Field(default_factory=list, description="Technical skill keywords")
-    location_keywords: List[str] = Field(
-        default_factory=lambda: ["remote", "latam", "worldwide", "global", "anywhere"],
-        description="Location filtering keywords"
-    )
+    location_keywords: List[str] = Field(default_factory=list, description="Location filtering keywords")
     max_years_of_experience: Optional[int] = Field(
         None,
         description="Maximum years of experience required by a job posting (defaults to personal_info.years_of_experience)"

@@ -73,6 +73,7 @@ def test_applicator_custom_questions():
     from src.core.config import load_candidate_profile
     from src.automation.applicators.greenhouse_applicator import GreenhouseApplicator
     profile = load_candidate_profile()
+    profile.open_questions.education_level = "Bachelor's Degree in Computer Science"
     app = GreenhouseApplicator(None, profile)
     assert app._generate_open_question_answer("Why Hone? Tell us what you know about what we do and how that aligns with your career path.") is not None
     assert app._generate_open_question_answer("Level of education * Indicate your highest level of education completed.") is not None

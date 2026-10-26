@@ -88,10 +88,10 @@ export async function loadPersistedResults(existingApps = []) {
 }
 
 export const form = reactive({
-  roles: ['QA Automation Engineer', 'Senior QA Engineer', 'SDET', 'Quality Engineer', 'Software Engineer in Test', 'QA Engineer'],
+  roles: [],
   platforms: ['ashby', 'greenhouse', 'lever'],
   locationScope: 'latam_global',
-  maxYears: 7,
+  maxYears: null,
   allowCaptcha: false,
   concurrency: 50,
 })
