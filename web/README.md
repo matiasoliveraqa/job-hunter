@@ -25,6 +25,7 @@ Requisitos: Node 20+, Claude Code instalado y con sesión iniciada (`claude`), y
 | Variable | Por defecto | Uso |
 |---|---|---|
 | `PORT` | `3100` | Puerto del servidor (siempre en 127.0.0.1) |
+| `JOBHUNTER_NO_OPEN` | sin definir | Si está definida, no abre el navegador al arrancar |
 | `CLAUDE_BIN` | `claude` | Ruta del ejecutable de Claude Code |
 | `PYTHON_BIN` | `python` | Intérprete usado para `apply` |
 | `JOBHUNTER_ALLOWED_TOOLS` | ver `server/chat.js` | Herramientas que el agente puede usar sin pedir permiso (separadas por coma) |
