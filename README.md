@@ -92,6 +92,11 @@ cd job-hunter
 
 The script sets up the Python virtual environment (`venv`), installs dependencies, runs `playwright install chromium`, compiles the frontend, and launches the web interface at `http://127.0.0.1:3100` (with automatic fallback to `3101`, `3102`, etc. if port 3100 is busy).
 
+The first run takes a few minutes: it downloads Chromium (~120 MB) and builds the
+frontend. When it is ready, your browser opens on its own and the terminal prints the
+address to use. Keep that terminal open, since it is running the server. Set
+`JOBHUNTER_NO_OPEN=1` if you prefer to open the browser yourself.
+
 ### 3. Set Up Your Profile
 
 1. Open `http://127.0.0.1:3100` in your browser.
