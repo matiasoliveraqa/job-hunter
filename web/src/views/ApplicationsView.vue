@@ -88,9 +88,13 @@ function fmtDate(iso) {
 
 function getAppAts(item) {
   const u = (item.url || '').toLowerCase()
-  if (u.includes('greenhouse.io')) return { key: 'greenhouse', label: 'Greenhouse ATS' }
+  if (u.includes('greenhouse.io') || u.includes('gh_jid')) return { key: 'greenhouse', label: 'Greenhouse ATS' }
   if (u.includes('lever.co')) return { key: 'lever', label: 'Lever ATS' }
   if (u.includes('ashbyhq.com')) return { key: 'ashby', label: 'Ashby ATS' }
+  if (u.includes('workable.com')) return { key: 'workable', label: 'Workable ATS' }
+  if (u.includes('breezy.hr')) return { key: 'breezy', label: 'Breezy HR' }
+  if (u.includes('recruitee.com')) return { key: 'recruitee', label: 'Recruitee ATS' }
+  if (u.includes('bamboohr.com')) return { key: 'bamboohr', label: 'BambooHR ATS' }
   return { key: 'direct', label: t('applications.toolbar.directApply') }
 }
 
@@ -767,6 +771,10 @@ async function clearDemos() {
             <option value="greenhouse">Greenhouse ATS</option>
             <option value="lever">Lever ATS</option>
             <option value="ashby">Ashby ATS</option>
+            <option value="workable">Workable ATS</option>
+            <option value="breezy">Breezy HR</option>
+            <option value="recruitee">Recruitee ATS</option>
+            <option value="bamboohr">BambooHR ATS</option>
             <option value="direct">{{ $t('applications.toolbar.directApply') }}</option>
           </select>
           <span class="material-symbols-outlined absolute right-2 top-2.5 text-[16px] text-outline pointer-events-none">arrow_drop_down</span>

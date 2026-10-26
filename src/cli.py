@@ -23,6 +23,10 @@ from src.automation.browser import launch_stealth_browser
 from src.automation.applicators.ashby_applicator import AshbyApplicator
 from src.automation.applicators.greenhouse_applicator import GreenhouseApplicator
 from src.automation.applicators.lever_applicator import LeverApplicator
+from src.automation.applicators.workable_applicator import WorkableApplicator
+from src.automation.applicators.breezy_applicator import BreezyApplicator
+from src.automation.applicators.recruitee_applicator import RecruiteeApplicator
+from src.automation.applicators.bamboohr_applicator import BambooHRApplicator
 from src.cv.builder import (
     CVBuilder,
     get_or_create_application_dir,
@@ -160,7 +164,10 @@ def scan_command(args):
     roles = [r.strip() for r in args.roles.split(",")] if args.roles else profile.search_criteria.target_roles
     locations = [l.strip() for l in args.locations.split(",")] if args.locations else profile.search_criteria.location_keywords
     platforms = [p.strip().lower() for p in args.platforms.split(",")] if args.platforms else profile.ats_settings.enabled_platforms
-    max_years = args.max_years if args.max_years is not None else profile.effective_max_years
+    max_years = None if args.max_years == 0 else (args.max_years if args.max_years is not None else profile.effective_max_years)
+    geo_scope = getattr(args, "geo_scope", None)
+    countries = [c.strip() for c in args.countries.split(",")] if getattr(args, "countries", None) else None
+    work_modes = [w.strip().lower() for w in args.work_modes.split(",")] if getattr(args, "work_modes", None) else None
 
     if getattr(args, "stream_json", False):
         def on_match(posting):
@@ -195,6 +202,9 @@ def scan_command(args):
                 concurrency_limit=args.concurrency,
                 max_years_experience=max_years,
                 allow_captcha=allow_captcha,
+                geo_scope=geo_scope,
+                custom_countries=countries,
+                work_modes=work_modes,
                 on_match=on_match,
                 on_progress=on_progress,
                 on_error=on_error,
@@ -223,6 +233,9 @@ def scan_command(args):
         concurrency_limit=args.concurrency,
         max_years_experience=max_years,
         allow_captcha=allow_captcha,
+        geo_scope=geo_scope,
+        custom_countries=countries,
+        work_modes=work_modes,
     ))
 
     table = Table(title=f"Discovered Job Openings ({len(postings)} found)")
@@ -313,6 +326,14 @@ def apply_command(args):
                 applicator = GreenhouseApplicator(page, profile, company=company, role=role)
             elif "lever" in url_lower:
                 applicator = LeverApplicator(page, profile, company=company, role=role)
+            elif "workable" in url_lower:
+                applicator = WorkableApplicator(page, profile, company=company, role=role)
+            elif "breezy" in url_lower:
+                applicator = BreezyApplicator(page, profile, company=company, role=role)
+            elif "recruitee" in url_lower:
+                applicator = RecruiteeApplicator(page, profile, company=company, role=role)
+            elif "bamboohr" in url_lower:
+                applicator = BambooHRApplicator(page, profile, company=company, role=role)
             else:
                 applicator = GreenhouseApplicator(page, profile, company=company, role=role)
 
@@ -402,8 +423,11 @@ def main():
     scan_parser.add_argument("--platforms", help="Comma-separated platforms: ashby,greenhouse,lever")
     scan_parser.add_argument("--limit", type=int, default=30, help="Display limit")
     scan_parser.add_argument("--concurrency", type=int, default=200, help="Concurrent HTTP connections")
-    scan_parser.add_argument("--max-years", type=int, default=None, help="Maximum required years of experience")
+    scan_parser.add_argument("--max-years", type=int, default=None, help="Maximum required years of experience (0 = no limit)")
     scan_parser.add_argument("--allow-captcha", action="store_true", default=False, help="Include vacancies that require captcha solving")
+    scan_parser.add_argument("--geo-scope", choices=["latam", "latam_na", "global"], default=None, help="Geographical scope (latam, latam_na, global)")
+    scan_parser.add_argument("--countries", help="Comma-separated custom countries list")
+    scan_parser.add_argument("--work-modes", help="Comma-separated work modes: remote,hybrid,onsite")
     scan_parser.add_argument("--stream-json", action="store_true", help="Stream progress and matches as JSON lines")
 
     # apply

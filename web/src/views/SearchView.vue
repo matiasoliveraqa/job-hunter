@@ -14,6 +14,8 @@ import {
   startScan,
   stopScan,
   initScanSync,
+  getAvailableCountries,
+  setGeoScope,
 } from '../scanController.js'
 import { t } from '../i18n/index.js'
 
@@ -28,6 +30,26 @@ const platformFilter = ref('all')
 
 const existingApps = ref([])
 const activePreset = ref('')
+
+const countrySearch = ref('')
+const isCountryDropdownOpen = ref(false)
+
+const availableScopeCountries = computed(() => {
+  return getAvailableCountries(form.geoScope)
+})
+
+const filteredCountries = computed(() => {
+  const q = countrySearch.value.trim().toLowerCase()
+  return availableScopeCountries.value.filter(
+    (c) => !form.countries.includes(c) && (!q || c.toLowerCase().includes(q))
+  )
+})
+
+const currentScopeLabel = computed(() => {
+  if (form.geoScope === 'latam') return t('search.params.optLatam')
+  if (form.geoScope === 'latam_na') return t('search.params.optLatamNa')
+  return t('search.params.optGlobal')
+})
 
 const localizedPresets = computed(() =>
   PRESETS.map((p) => ({
@@ -59,11 +81,11 @@ async function loadProfile() {
     if (data?.ats_settings?.enabled_platforms?.length) {
       form.platforms = [...data.ats_settings.enabled_platforms]
     }
-    if (data?.personal_info?.years_of_experience) {
-      form.maxYears = data.personal_info.years_of_experience
-    } else {
-      form.maxYears = null
-    }
+    form.maxYears = 0
+    form.geoScope = 'latam'
+    form.countries = []
+    form.workModes = ['remote']
+
     await loadExistingApps()
     await initScanSync(existingApps.value)
   } catch (e) {
@@ -94,11 +116,10 @@ function resetToProfile() {
   } else {
     form.roles = []
   }
-  if (profile.value?.personal_info?.years_of_experience) {
-    form.maxYears = profile.value.personal_info.years_of_experience
-  } else {
-    form.maxYears = null
-  }
+  form.maxYears = 0
+  form.geoScope = 'latam'
+  form.countries = []
+  form.workModes = ['remote']
   notify(t('search.presets.resetToast'))
 }
 
@@ -128,6 +149,64 @@ function togglePlatform(plat) {
     form.platforms.push(plat)
   }
 }
+
+function toggleWorkMode(mode) {
+  const idx = form.workModes.indexOf(mode)
+  if (idx > -1) {
+    if (form.workModes.length === 1) {
+      return notify(t('search.params.mustKeepOneMode'), 'warning')
+    }
+    form.workModes.splice(idx, 1)
+  } else {
+    form.workModes.push(mode)
+  }
+}
+
+function handleCountryEnter() {
+  const val = countrySearch.value.trim()
+  if (!val) {
+    if (filteredCountries.value.length > 0) {
+      addCountry(filteredCountries.value[0])
+    }
+    return
+  }
+  const match = filteredCountries.value.find(
+    (c) => c.toLowerCase() === val.toLowerCase()
+  ) || filteredCountries.value[0]
+  if (match) {
+    addCountry(match)
+  } else {
+    notify(t('search.countries.notInScope'), 'warning')
+  }
+}
+
+function addCountry(country) {
+  if (!country) return
+  if (!availableScopeCountries.value.includes(country)) {
+    return notify(t('search.countries.notInScope'), 'warning')
+  }
+  if (form.countries.includes(country)) {
+    return notify(t('search.countries.alreadyAdded'), 'warning')
+  }
+  form.countries.push(country)
+  countrySearch.value = ''
+  isCountryDropdownOpen.value = false
+}
+
+function removeCountry(idx) {
+  form.countries.splice(idx, 1)
+}
+
+function clearCountries() {
+  form.countries = []
+}
+
+watch(
+  () => form.geoScope,
+  (newScope) => {
+    setGeoScope(newScope)
+  }
+)
 
 async function triggerScan() {
   try {
@@ -283,6 +362,10 @@ function getPlatformBadgeClass(ats) {
   if (low === 'greenhouse') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
   if (low === 'ashby') return 'bg-purple-500/10 text-purple-400 border-purple-500/20'
   if (low === 'lever') return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+  if (low === 'workable') return 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+  if (low === 'breezy') return 'bg-teal-500/10 text-teal-400 border-teal-500/20'
+  if (low === 'recruitee') return 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+  if (low === 'bamboohr') return 'bg-lime-500/10 text-lime-400 border-lime-500/20'
   return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
 }
 </script>
@@ -461,8 +544,8 @@ function getPlatformBadgeClass(ats) {
         </div>
       </div>
 
-      <!-- 2. BLOQUE CENTRAL: PARÁMETROS CLAVE & TOGGLES CON TOOLTIPS -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 py-1">
+      <!-- 2. BLOQUE CENTRAL: 5 PARÁMETROS CLAVE & TOGGLES CON TOOLTIPS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 py-1">
         <!-- Parámetro 1: Plataformas ATS -->
         <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
           <div class="flex items-center justify-between">
@@ -482,12 +565,12 @@ function getPlatformBadgeClass(ats) {
               {{ $t('search.params.activeCount', { count: form.platforms.length }) }}
             </span>
           </div>
-          <div class="flex items-center gap-1.5 pt-0.5 flex-wrap">
+          <div class="flex items-center gap-1 pt-0.5 flex-wrap">
             <button
-              v-for="plat in ['greenhouse', 'ashby', 'lever']"
+              v-for="plat in ['greenhouse', 'ashby', 'lever', 'workable', 'breezy', 'recruitee', 'bamboohr']"
               :key="plat"
               :class="[
-                'px-2 py-0.5 rounded text-[11px] font-mono capitalize border transition-colors',
+                'px-1.5 py-0.5 rounded text-[10.5px] font-mono capitalize border transition-colors',
                 form.platforms.includes(plat)
                   ? 'bg-accent/10 border-accent/30 text-accent font-medium'
                   : 'bg-surface-card border-border-subtle text-outline line-through opacity-60'
@@ -495,7 +578,7 @@ function getPlatformBadgeClass(ats) {
               type="button"
               @click="togglePlatform(plat)"
             >
-              {{ plat }}
+              {{ plat === 'bamboohr' ? 'Bamboo' : (plat === 'breezy' ? 'Breezy' : plat) }}
             </button>
           </div>
           <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
@@ -506,7 +589,7 @@ function getPlatformBadgeClass(ats) {
           </p>
         </div>
 
-        <!-- Parámetro 2: Experiencia Máxima -->
+        <!-- Parámetro 2: Experiencia Máxima (Default 0 = Sin límite) -->
         <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1">
@@ -530,21 +613,25 @@ function getPlatformBadgeClass(ats) {
                 v-model.number="form.maxYears"
                 class="w-14 py-1 text-center font-mono font-medium text-xs bg-surface-card border border-border-muted rounded text-on-surface focus:outline-none focus:border-accent transition-colors shadow-sm"
                 max="15"
-                min="1"
+                min="0"
                 type="number"
               />
               <span class="text-xs text-outline font-mono">{{ $t('search.params.years') }}</span>
             </div>
           </div>
           <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
-            <span class="text-on-surface-variant flex items-center gap-1">
+            <span v-if="!form.maxYears || form.maxYears === 0" class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">all_inclusive</span>
+              <span>{{ $t('search.params.discardsNone') }}</span>
+            </span>
+            <span v-else class="text-on-surface-variant flex items-center gap-1">
               <span class="material-symbols-outlined text-[13px] shrink-0">filter_list</span>
-              <span>{{ $t('search.params.discardsOver', { count: form.maxYears || 0 }) }}</span>
+              <span>{{ $t('search.params.discardsOver', { count: form.maxYears }) }}</span>
             </span>
           </p>
         </div>
 
-        <!-- Parámetro 3: Alcance Territorial (Filtro de Residencia) -->
+        <!-- Parámetro 3: Alcance Territorial -->
         <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1">
@@ -556,15 +643,7 @@ function getPlatformBadgeClass(ats) {
                     <span class="material-symbols-outlined text-[13px]">public</span> {{ $t('search.params.residencyFilter') }}
                   </div>
                   <div class="space-y-1.5 text-[11px]">
-                    <div>
-                      {{ $t('search.params.residencyLatamGlobalDesc') }}
-                    </div>
-                    <div>
-                      {{ $t('search.params.residencyLatamOnlyDesc') }}
-                    </div>
-                    <div>
-                      {{ $t('search.params.residencyAnyDesc') }}
-                    </div>
+                    <div>{{ $t('search.params.residencyScopeDesc') }}</div>
                   </div>
                 </div>
               </div>
@@ -573,31 +652,78 @@ function getPlatformBadgeClass(ats) {
           </div>
           <div class="pt-0.5">
             <select
-              v-model="form.locationScope"
+              v-model="form.geoScope"
               class="w-full py-1 px-2 text-xs font-medium bg-surface-card border border-border-muted rounded text-on-surface focus:outline-none focus:border-accent transition-colors shadow-sm cursor-pointer"
             >
-              <option value="latam_global">{{ $t('search.params.optLatamGlobal') }}</option>
-              <option value="latam_only">{{ $t('search.params.optLatamOnly') }}</option>
-              <option value="any">{{ $t('search.params.optAny') }}</option>
+              <option value="latam">{{ $t('search.params.optLatam') }}</option>
+              <option value="latam_na">{{ $t('search.params.optLatamNa') }}</option>
+              <option value="global">{{ $t('search.params.optGlobal') }}</option>
             </select>
           </div>
           <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
-            <span v-if="form.locationScope === 'latam_global'" class="text-amber-500/95 dark:text-amber-400 font-medium flex items-center gap-1">
-              <span class="material-symbols-outlined text-[13px] shrink-0">filter_alt</span>
-              <span>{{ $t('search.params.tipLatamGlobal') }}</span>
-            </span>
-            <span v-else-if="form.locationScope === 'latam_only'" class="text-on-surface-variant flex items-center gap-1">
+            <span v-if="form.geoScope === 'latam'" class="text-on-surface-variant flex items-center gap-1">
               <span class="material-symbols-outlined text-[13px] shrink-0">location_on</span>
-              <span>{{ $t('search.params.tipLatamOnly') }}</span>
+              <span>{{ $t('search.params.tipLatam') }}</span>
             </span>
-            <span v-else class="text-on-surface-variant flex items-center gap-1">
-              <span class="material-symbols-outlined text-[13px] shrink-0">public_off</span>
-              <span>{{ $t('search.params.tipAny') }}</span>
+            <span v-else-if="form.geoScope === 'latam_na'" class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">travel_explore</span>
+              <span>{{ $t('search.params.tipLatamNa') }}</span>
+            </span>
+            <span v-else class="text-amber-500/95 dark:text-amber-400 font-medium flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">public</span>
+              <span>{{ $t('search.params.tipGlobal') }}</span>
             </span>
           </p>
         </div>
 
-        <!-- Parámetro 4: Anti-CAPTCHA -->
+        <!-- Parámetro 4: Modalidad de Trabajo (Remoto, Híbrido, Presencial) -->
+        <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1">
+              <label class="text-[11px] font-medium text-outline uppercase tracking-wider">{{ $t('search.params.workModes') }}</label>
+              <div class="relative group/tip flex items-center cursor-help">
+                <span class="material-symbols-outlined text-[14px] text-outline hover:text-on-surface">help</span>
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tip:flex flex-col w-56 p-2 rounded-lg bg-surface-container-highest border border-border-muted shadow-lg z-50 text-[11px] text-on-surface leading-snug pointer-events-none">
+                  <div class="font-semibold text-accent mb-0.5 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">badge</span> {{ $t('search.params.workModes') }}
+                  </div>
+                  {{ $t('search.params.workModesTip') }}
+                </div>
+              </div>
+            </div>
+            <span class="px-1.5 py-0.2 rounded bg-surface-container-high text-[10px] font-mono text-accent">
+              {{ $t('search.params.modesCount', { count: form.workModes.length }) }}
+            </span>
+          </div>
+          <div class="flex items-center gap-1 pt-0.5 flex-wrap">
+            <button
+              v-for="m in [
+                { key: 'remote', label: $t('search.params.modeRemote') },
+                { key: 'hybrid', label: $t('search.params.modeHybrid') },
+                { key: 'onsite', label: $t('search.params.modeOnsite') }
+              ]"
+              :key="m.key"
+              :class="[
+                'px-1.5 py-0.5 rounded text-[10.5px] font-mono border transition-colors',
+                form.workModes.includes(m.key)
+                  ? 'bg-accent/10 border-accent/30 text-accent font-medium'
+                  : 'bg-surface-card border-border-subtle text-outline line-through opacity-60'
+              ]"
+              type="button"
+              @click="toggleWorkMode(m.key)"
+            >
+              {{ m.label }}
+            </button>
+          </div>
+          <p class="text-[10.5px] leading-tight min-h-[20px] flex items-center">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px] shrink-0">domain</span>
+              <span>{{ $t('search.params.modesDesc', { modes: form.workModes.join(', ') }) }}</span>
+            </span>
+          </p>
+        </div>
+
+        <!-- Parámetro 5: Anti-CAPTCHA -->
         <div class="flex flex-col justify-between gap-1.5 p-3 rounded-lg bg-surface-container border border-border-subtle group hover:border-border-muted transition-colors relative">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1">
@@ -630,6 +756,113 @@ function getPlatformBadgeClass(ats) {
               <span class="material-symbols-outlined text-[13px] shrink-0">shield</span>
               <span>{{ form.allowCaptcha ? $t('search.params.captchaAllowed') : $t('search.params.captchaDiscarded') }}</span>
             </span>
+          </p>
+        </div>
+      </div>
+
+      <!-- BLOQUE INTERMEDIO: FILTRO POR PAÍSES ESPECÍFICOS (OPCIONAL) -->
+      <div class="flex flex-col gap-2.5 pt-3 border-t border-border-subtle">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-[12px] font-semibold text-on-surface tracking-tight">
+              {{ $t('search.countries.title') }}
+            </span>
+            <span class="text-[11px] font-mono text-outline">
+              ({{ form.countries.length }})
+            </span>
+            <span v-if="form.countries.length" class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-accent/10 text-accent border border-accent/20">
+              {{ $t('search.countries.activeFilter', { count: form.countries.length }) }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-outline font-mono">
+              {{ $t('search.countries.subtitle') }}
+            </span>
+            <button
+              v-if="form.countries.length"
+              class="text-[11px] text-accent hover:underline font-mono ml-1"
+              type="button"
+              @click="clearCountries"
+            >
+              {{ $t('search.countries.clearAll') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Buscador con autocompletado y botón Agregar -->
+        <div class="relative flex items-center gap-2">
+          <div class="relative flex-1 flex items-center">
+            <span class="material-symbols-outlined absolute left-3 text-[16px] text-outline">travel_explore</span>
+            <input
+              v-model="countrySearch"
+              class="w-full pl-9 pr-8 py-2 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors shadow-sm"
+              :placeholder="$t('search.countries.placeholder')"
+              type="text"
+              @blur="setTimeout(() => { isCountryDropdownOpen = false }, 200)"
+              @focus="isCountryDropdownOpen = true"
+              @keydown.enter.prevent="handleCountryEnter"
+            />
+            <button
+              v-if="countrySearch"
+              class="absolute right-2.5 text-outline hover:text-on-surface p-0.5 text-xs"
+              type="button"
+              @click="countrySearch = ''"
+            >
+              <span class="material-symbols-outlined text-[14px]">close</span>
+            </button>
+          </div>
+
+          <!-- Botón Agregar país -->
+          <button
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-surface-container-highest hover:bg-surface-container-high border border-border-muted text-xs font-medium text-on-surface transition-colors shadow-sm shrink-0"
+            type="button"
+            @click="handleCountryEnter"
+          >
+            <span class="material-symbols-outlined text-[15px] text-accent">add_location_alt</span>
+            <span>{{ $t('search.countries.addBtn') }}</span>
+          </button>
+
+          <!-- Dropdown asistido de sugerencias de países disponibles en el scope actual -->
+          <div
+            v-if="isCountryDropdownOpen && filteredCountries.length"
+            class="absolute top-full left-0 right-28 mt-1 max-h-48 overflow-y-auto rounded-lg bg-surface-container-highest border border-border-muted shadow-xl z-50 py-1"
+          >
+            <button
+              v-for="country in filteredCountries.slice(0, 8)"
+              :key="country"
+              class="w-full text-left px-3 py-1.5 text-xs text-on-surface hover:bg-surface-container flex items-center justify-between transition-colors"
+              type="button"
+              @mousedown.prevent="addCountry(country)"
+            >
+              <span class="flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[14px] text-outline">flag</span>
+                <span>{{ country }}</span>
+              </span>
+              <span class="text-[10px] text-outline font-mono">{{ currentScopeLabel }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Chips de países seleccionados o mensaje vacío -->
+        <div class="flex items-center flex-wrap gap-2 pt-0.5">
+          <span
+            v-for="(c, idx) in form.countries"
+            :key="c"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container text-xs text-on-surface border border-accent/30 text-accent font-medium shadow-sm"
+          >
+            <span class="material-symbols-outlined text-[13px]">location_on</span>
+            <span>{{ c }}</span>
+            <button
+              :aria-label="$t('search.countries.deleteAria')"
+              class="text-outline hover:text-on-surface p-0.5 transition-colors ml-0.5"
+              type="button"
+              @click="removeCountry(idx)"
+            >
+              <span class="material-symbols-outlined text-[13px] block">close</span>
+            </button>
+          </span>
+          <p v-if="!form.countries.length" class="text-[11px] text-outline italic">
+            {{ $t('search.countries.noCountries', { scope: currentScopeLabel }) }}
           </p>
         </div>
       </div>
@@ -738,6 +971,10 @@ function getPlatformBadgeClass(ats) {
             <option value="greenhouse">Greenhouse</option>
             <option value="ashby">Ashby</option>
             <option value="lever">Lever</option>
+            <option value="workable">Workable</option>
+            <option value="breezy">Breezy HR</option>
+            <option value="recruitee">Recruitee</option>
+            <option value="bamboohr">BambooHR</option>
           </select>
           <button
             v-if="errorCount > 0"

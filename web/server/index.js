@@ -113,7 +113,7 @@ app.post('/api/applications', async (req, res) => {
   if (wantsDemo === true && !isDemoUrl) return res.status(400).json({ error: 'La demo solo admite publicaciones de prueba' })
   if (url && !isDemoUrl && !isAllowedAtsHost(url)) {
     return res.status(400).json({
-      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite registrar postulaciones en dominios oficiales de Greenhouse, Ashby o Lever.',
+      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite registrar postulaciones en dominios oficiales de plataformas ATS soportadas.',
     })
   }
   const { item, created } = await store.create({
@@ -343,6 +343,11 @@ const ALLOWED_ATS_DOMAINS = [
   'jobs.ashbyhq.com',
   'lever.co',
   'jobs.lever.co',
+  'workable.com',
+  'apply.workable.com',
+  'breezy.hr',
+  'recruitee.com',
+  'bamboohr.com',
 ]
 
 export function isAllowedAtsHost(urlString) {
@@ -365,7 +370,7 @@ app.post('/api/apply', async (req, res) => {
 
   if (!isDemoUrl && !isAllowedAtsHost(url)) {
     return res.status(400).json({
-      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite autocompletar en dominios oficiales de Greenhouse, Ashby o Lever.',
+      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite autocompletar en dominios oficiales de plataformas ATS soportadas.',
     })
   }
 
@@ -515,7 +520,7 @@ app.get('/api/scan/events', (req, res) => {
   })
 })
 
-function launchScanProcess({ roles, platforms, locations, maxYears, concurrency, allowCaptcha }) {
+function launchScanProcess({ roles, platforms, locations, maxYears, concurrency, allowCaptcha, geoScope, countries, workModes }) {
   if (activeScanChild) {
     try { activeScanChild.kill('SIGTERM') } catch {}
     activeScanChild = null
@@ -539,6 +544,15 @@ function launchScanProcess({ roles, platforms, locations, maxYears, concurrency,
   }
   if (allowCaptcha === true) {
     args.push('--allow-captcha')
+  }
+  if (geoScope) {
+    args.push('--geo-scope', String(geoScope))
+  }
+  if (Array.isArray(countries) && countries.length) {
+    args.push('--countries', countries.join(','))
+  }
+  if (Array.isArray(workModes) && workModes.length) {
+    args.push('--work-modes', workModes.join(','))
   }
 
   latestScanMatches = []

@@ -11,6 +11,9 @@ class ATSPlatform(str, Enum):
     GREENHOUSE = "greenhouse"
     LEVER = "lever"
     WORKABLE = "workable"
+    BREEZY = "breezy"
+    RECRUITEE = "recruitee"
+    BAMBOOHR = "bamboohr"
     OTHER = "other"
 
 class PersonalInfo(BaseModel):
@@ -129,7 +132,7 @@ class SearchCriteria(BaseModel):
 
 class ATSSettings(BaseModel):
     enabled_platforms: List[str] = Field(
-        default_factory=lambda: ["ashby", "greenhouse", "lever"],
+        default_factory=lambda: ["ashby", "greenhouse", "lever", "workable", "breezy", "recruitee", "bamboohr"],
         description="Active ATS scanners"
     )
     auto_upload_resume: bool = True

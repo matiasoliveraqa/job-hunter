@@ -209,5 +209,61 @@ def test_location_empty_loc_and_empty_description():
     assert scanner.matches_location("QA Engineer", "Austin, TX", kw, description="", home_terms=HOME) is False
 
 
+def test_new_scanners_and_orchestrator():
+    from src.core.models import ATSPlatform, CandidateProfile, PersonalInfo, SearchCriteria
+    from src.scanners.orchestrator import ScannerOrchestrator
+    from src.scanners.workable import WorkableScanner
+    from src.scanners.breezy import BreezyScanner
+    from src.scanners.recruitee import RecruiteeScanner
+    from src.scanners.bamboohr import BambooHRScanner
+
+    scanners = [WorkableScanner(), BreezyScanner(), RecruiteeScanner(), BambooHRScanner()]
+    expected = [ATSPlatform.WORKABLE, ATSPlatform.BREEZY, ATSPlatform.RECRUITEE, ATSPlatform.BAMBOOHR]
+    for s, p in zip(scanners, expected):
+        assert s.platform == p
+        assert s.matches_keywords("QA Engineer", ["QA"]) is True
+
+    profile = CandidateProfile(
+        personal_info=PersonalInfo(full_name="Test", email="test@example.com", location="Montevideo, Uruguay", linkedin_url="https://linkedin.com/in/test"),
+        search_criteria=SearchCriteria(target_roles=["QA"]),
+    )
+    orch = ScannerOrchestrator(profile)
+    for plat in ["ashby", "greenhouse", "lever", "workable", "breezy", "recruitee", "bamboohr"]:
+        assert plat in orch.scanners
+
+
+def test_dynamic_geo_scope_and_filters():
+    scanner = AshbyScanner()
+    kw = ["remote", "latam", "worldwide", "global", "anywhere"]
+
+    # 1. Scope LATAM
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="latam") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="latam") is False
+    assert scanner.matches_location("QA Engineer", "Remote - US", kw, geo_scope="latam") is False
+
+    # 2. Scope LATAM + North America
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="latam_na") is True
+    assert scanner.matches_location("QA Engineer", "Remote - United States", kw, geo_scope="latam_na") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Canada", kw, geo_scope="latam_na") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="latam_na") is False
+
+    # 3. Scope Global (Worldwide)
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="global") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="global") is True
+    assert scanner.matches_location("QA Engineer", "Remote - China", kw, geo_scope="global") is True
+
+    # 4. Custom Countries filter (e.g. Germany)
+    assert scanner.matches_location("QA Engineer", "Berlin, Germany", kw, geo_scope="global", custom_countries=["Alemania", "Germany"], work_modes=["remote", "onsite"]) is True
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="global", custom_countries=["Alemania", "Germany"]) is False
+
+    # 5. Work modes: On-site in Global scope allows onsite from any country
+    assert scanner.matches_location("QA Engineer", "Beijing, China", kw, geo_scope="global", work_modes=["onsite"]) is True
+
+    # 6. Experience filter: None (resulting from max_years == 0) does not filter out experience
+    assert scanner.matches_experience("Requires 8+ years of test automation experience", max_years=None) is True
+    assert scanner.matches_experience("Requires 8+ years of test automation experience", max_years=5) is False
+
+
+
 
 

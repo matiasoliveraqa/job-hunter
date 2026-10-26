@@ -106,6 +106,14 @@ function enrichFile(f, applications = []) {
     platform = 'Lever'
   } else if (appUrl.includes('ashbyhq.com')) {
     platform = 'Ashby'
+  } else if (appUrl.includes('workable.com')) {
+    platform = 'Workable'
+  } else if (appUrl.includes('breezy.hr')) {
+    platform = 'Breezy'
+  } else if (appUrl.includes('recruitee.com')) {
+    platform = 'Recruitee'
+  } else if (appUrl.includes('bamboohr.com')) {
+    platform = 'BambooHR'
   } else if (f.dir === 'my_cv' || fileName.includes('Matias_Olivera_QA_CV')) {
     platform = 'Base'
   } else if (folder.toLowerCase().includes('greenhouse')) {
@@ -114,6 +122,14 @@ function enrichFile(f, applications = []) {
     platform = 'Lever'
   } else if (folder.toLowerCase().includes('ashby')) {
     platform = 'Ashby'
+  } else if (folder.toLowerCase().includes('workable')) {
+    platform = 'Workable'
+  } else if (folder.toLowerCase().includes('breezy')) {
+    platform = 'Breezy'
+  } else if (folder.toLowerCase().includes('recruitee')) {
+    platform = 'Recruitee'
+  } else if (folder.toLowerCase().includes('bamboohr')) {
+    platform = 'BambooHR'
   }
 
   const isBase = platform === 'Base' || f.dir === 'my_cv'
@@ -167,6 +183,10 @@ const stats = computed(() => {
       greenhouse: 0,
       lever: 0,
       ashby: 0,
+      workable: 0,
+      breezy: 0,
+      recruitee: 0,
+      bamboohr: 0,
       base: 0,
     }
   }
@@ -180,6 +200,10 @@ const stats = computed(() => {
   let greenhouse = 0
   let lever = 0
   let ashby = 0
+  let workable = 0
+  let breezy = 0
+  let recruitee = 0
+  let bamboohr = 0
   let base = 0
 
   for (const item of enrichedFiles.value) {
@@ -196,6 +220,10 @@ const stats = computed(() => {
     if (item.platform === 'Greenhouse') greenhouse++
     else if (item.platform === 'Lever') lever++
     else if (item.platform === 'Ashby') ashby++
+    else if (item.platform === 'Workable') workable++
+    else if (item.platform === 'Breezy') breezy++
+    else if (item.platform === 'Recruitee') recruitee++
+    else if (item.platform === 'BambooHR') bamboohr++
     else if (item.platform === 'Base') base++
   }
 
@@ -216,6 +244,10 @@ const stats = computed(() => {
     greenhouse,
     lever,
     ashby,
+    workable,
+    breezy,
+    recruitee,
+    bamboohr,
     base,
   }
 })
@@ -564,6 +596,58 @@ onMounted(() => {
             <button
               class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
               :class="[
+                selectedPlatform === 'Workable'
+                  ? 'bg-surface-container-high text-blue-400 border border-blue-500/30 font-semibold'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+              ]"
+              type="button"
+              @click="selectedPlatform = 'Workable'"
+            >
+              Workable ({{ stats.workable }})
+            </button>
+
+            <button
+              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+              :class="[
+                selectedPlatform === 'Breezy'
+                  ? 'bg-surface-container-high text-teal-400 border border-teal-500/30 font-semibold'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+              ]"
+              type="button"
+              @click="selectedPlatform = 'Breezy'"
+            >
+              Breezy ({{ stats.breezy }})
+            </button>
+
+            <button
+              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+              :class="[
+                selectedPlatform === 'Recruitee'
+                  ? 'bg-surface-container-high text-rose-400 border border-rose-500/30 font-semibold'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+              ]"
+              type="button"
+              @click="selectedPlatform = 'Recruitee'"
+            >
+              Recruitee ({{ stats.recruitee }})
+            </button>
+
+            <button
+              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+              :class="[
+                selectedPlatform === 'BambooHR'
+                  ? 'bg-surface-container-high text-lime-400 border border-lime-500/30 font-semibold'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+              ]"
+              type="button"
+              @click="selectedPlatform = 'BambooHR'"
+            >
+              BambooHR ({{ stats.bamboohr }})
+            </button>
+
+            <button
+              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+              :class="[
                 selectedPlatform === 'Base'
                   ? 'bg-surface-container-high text-primary border border-primary/30 font-semibold'
                   : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
@@ -634,7 +718,15 @@ onMounted(() => {
                         ? 'bg-amber-500/10 text-amber-400'
                         : item.platform === 'Ashby'
                           ? 'bg-emerald-500/10 text-emerald-400'
-                          : 'bg-surface-container-highest text-on-surface-variant'
+                          : item.platform === 'Workable'
+                            ? 'bg-blue-500/10 text-blue-400'
+                            : item.platform === 'Breezy'
+                              ? 'bg-teal-500/10 text-teal-400'
+                              : item.platform === 'Recruitee'
+                                ? 'bg-rose-500/10 text-rose-400'
+                                : item.platform === 'BambooHR'
+                                  ? 'bg-lime-500/10 text-lime-400'
+                                  : 'bg-surface-container-highest text-on-surface-variant'
                   ]"
                 >
                   {{ item.company }} • {{ item.platform }}
