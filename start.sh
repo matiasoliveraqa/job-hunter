@@ -9,6 +9,29 @@ echo "=========================================="
 echo "        Starting Job Hunter Local         "
 echo "=========================================="
 
+# 0. Verify prerequisites before doing anything else
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[X] python3 was not found on PATH."
+    echo "    macOS:  brew install python@3.12"
+    echo "    Debian: sudo apt install python3 python3-venv"
+    echo "    Arch:   sudo pacman -S python"
+    exit 1
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+    echo "[X] Node.js was not found on PATH."
+    echo "    macOS:  brew install node"
+    echo "    Debian: see https://github.com/nodesource/distributions"
+    echo "    Arch:   sudo pacman -S nodejs npm"
+    exit 1
+fi
+
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+if [ "$NODE_MAJOR" -lt 22 ]; then
+    echo "[X] Node.js 22 or newer is required. Found major version $NODE_MAJOR."
+    exit 1
+fi
+
 # 1. Configure Python virtual environment
 if [ ! -d "venv" ] && [ ! -L "venv" ]; then
     echo "[*] Creating Python virtual environment (venv)..."

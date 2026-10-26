@@ -43,8 +43,33 @@ The modern tech job search is broken:
 ## Quick Start
 
 ### 1. Prerequisites
-- **Python 3.10+**
-- **Node.js 22+**
+
+You need **Python 3.10+**, **Node.js 22+** and **Git** installed before running the
+launcher. Everything else (virtual environment, dependencies, Chromium, frontend build)
+is handled by the start script.
+
+Check what you already have:
+
+```bash
+python --version   # or python3 --version
+node --version
+git --version
+```
+
+If any of them is missing or below the required version:
+
+| OS | Install |
+|---|---|
+| **Windows** | `winget install Python.Python.3.12 OpenJS.NodeJS.LTS Git.Git` |
+| **macOS** | `brew install python@3.12 node git` |
+| **Debian / Ubuntu** | `sudo apt install python3 python3-venv git` + [NodeSource](https://github.com/nodesource/distributions) for Node 22 |
+| **Arch** | `sudo pacman -S python nodejs npm git` |
+
+> **Windows note:** install Python from [python.org](https://www.python.org/downloads/) or
+> `winget`, not from the Microsoft Store. The Store build ships a stub that makes
+> `python` open the Store instead of running, which breaks the launcher.
+
+Close and reopen the terminal after installing so the new commands are on your `PATH`.
 
 ### 2. One-Click Launch (Recommended)
 
@@ -55,12 +80,15 @@ cd job-hunter
 ./start.sh
 ```
 
-**Windows:**
-```bat
+**Windows (PowerShell or CMD):**
+```powershell
 git clone https://github.com/matiasoliveraqa/job-hunter.git
 cd job-hunter
-start.bat
+.\start.bat
 ```
+
+> PowerShell does not run scripts from the current directory unless you prefix
+> them with `.\`. The same command also works in CMD.
 
 The script sets up the Python virtual environment (`venv`), installs dependencies, runs `playwright install chromium`, compiles the frontend, and launches the web interface at `http://127.0.0.1:3100` (with automatic fallback to `3101`, `3102`, etc. if port 3100 is busy).
 
