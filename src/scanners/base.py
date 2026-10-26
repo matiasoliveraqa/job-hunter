@@ -29,7 +29,10 @@ EXPERIENCE_PATTERNS = [
 # Explicit LATAM / Global keywords that override regional restrictions in location strings
 LATAM_OR_GLOBAL_RE = re.compile(
     r"\b("
-    r"latam|latin\s+america|south\s+america|uruguay|montevideo|"
+    r"latam|latin\s+america|south\s+america|"
+    r"argentina|bolivia|brazil|brasil|chile|colombia|costa\s+rica|ecuador|el\s+salvador|guatemala|"
+    r"honduras|mexico|m\u00e9xico|nicaragua|panama|panam\u00e1|paraguay|peru|per\u00fa|"
+    r"dominican\s+republic|uruguay|venezuela|"
     r"worldwide|global|"
     r"anywhere(?!\s+in\s+(?:the\s+)?(us|u\.s\.|usa|united\s+states|uk|united\s+kingdom|canada|europe|eu|india|apac|brazil|brasil))"
     r")\b",
@@ -42,7 +45,7 @@ ONSITE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Hybrid jobs are only acceptable if located in the candidate's residence (Uruguay)
+# Hybrid jobs are only acceptable if located in the candidate's own city or country
 HYBRID_RE = re.compile(
     r"\b(hybrid|híbrido)\b",
     re.IGNORECASE,
@@ -112,6 +115,25 @@ RESIDENCY_RESTRICTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+def build_home_region_re(home_terms: Optional[List[str]] = None) -> re.Pattern:
+    """Regex matching the candidate's own region: configured LATAM-style terms plus
+    whatever city/country the profile declares. Keeps the filter candidate-agnostic."""
+    terms = ["latam", r"latin\s+america", r"south\s+america"]
+    for t in home_terms or []:
+        t = (t or "").strip()
+        if t:
+            terms.append(re.escape(t.lower()).replace(r"\ ", r"\s+"))
+    return re.compile(r"\b(" + "|".join(terms) + r")\b", re.IGNORECASE)
+
+
+def build_home_only_re(home_terms: Optional[List[str]] = None) -> re.Pattern:
+    """Regex matching only the candidate's own city/country, used to accept hybrid roles."""
+    terms = [re.escape((t or "").strip().lower()).replace(r"\ ", r"\s+") for t in (home_terms or []) if (t or "").strip()]
+    if not terms:
+        return re.compile(r"(?!x)x")
+    return re.compile(r"\b(" + "|".join(terms) + r")\b", re.IGNORECASE)
+
+
 class BaseScanner(ABC):
     def __init__(self, platform: ATSPlatform):
         self.platform = platform
@@ -124,6 +146,7 @@ class BaseScanner(ABC):
         role_keywords: List[str],
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
+        home_terms: Optional[List[str]] = None,
     ) -> List[JobPosting]:
         """Scan a single company job board and return matching postings."""
         pass
@@ -146,11 +169,13 @@ class BaseScanner(ABC):
                 return True
         return False
 
-    def matches_location(self, title: str, location: str, loc_keywords: List[str], description: str = "") -> bool:
+    def matches_location(self, title: str, location: str, loc_keywords: List[str], description: str = "", home_terms: Optional[List[str]] = None) -> bool:
         """
         Check if location or title matches target location criteria while rejecting
-        onsite positions, hybrid positions outside Uruguay, and restricted regions.
+        onsite positions, hybrid positions outside the candidate's home location, and restricted regions.
         """
+        home_re = build_home_region_re(home_terms)
+        home_only_re = build_home_only_re(home_terms)
         loc_str = (location or "").strip()
         t_str = (title or "").strip()
         desc_str = (description or "").strip()
@@ -162,8 +187,8 @@ class BaseScanner(ABC):
         if ONSITE_RE.search(t_str) or ONSITE_RE.search(loc_str):
             return False
 
-        # Reject hybrid jobs unless located in Uruguay
-        if (HYBRID_RE.search(t_str) or HYBRID_RE.search(loc_str)) and not re.search(r"\b(uruguay|montevideo)\b", combined, re.IGNORECASE):
+        # Reject hybrid jobs unless located in the candidate's own city or country
+        if (HYBRID_RE.search(t_str) or HYBRID_RE.search(loc_str)) and not home_only_re.search(combined):
             return False
 
         if loc_keywords:
@@ -176,47 +201,47 @@ class BaseScanner(ABC):
                 if desc_str:
                     if self.has_residency_restriction(desc_str, loc_keywords):
                         return False
-                    if (RESTRICTED_LOCATION_RE.search(desc_str) or ONSITE_RE.search(desc_str)) and not re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", desc_str, re.IGNORECASE):
+                    if (RESTRICTED_LOCATION_RE.search(desc_str) or ONSITE_RE.search(desc_str)) and not home_re.search(desc_str):
                         return False
                     if LATAM_OR_GLOBAL_RE.search(desc_str) or LATAM_OR_GLOBAL_RE.search(t_str):
                         wants_global = any(k.lower() in ("remote", "worldwide", "global", "anywhere") for k in loc_keywords)
                         if not wants_global:
-                            return bool(re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", f"{t_str} {desc_str}", re.IGNORECASE))
+                            return bool(home_re.search(f"{t_str} {desc_str}"))
                         return True
                     if any(k.lower() in desc_str.lower() or k.lower() in t_lower for k in loc_keywords):
                         return True
                 else:
-                    if RESTRICTED_LOCATION_RE.search(t_str) and not re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", t_str, re.IGNORECASE):
+                    if RESTRICTED_LOCATION_RE.search(t_str) and not home_re.search(t_str):
                         return False
                     if LATAM_OR_GLOBAL_RE.search(t_str):
                         wants_global = any(k.lower() in ("remote", "worldwide", "global", "anywhere") for k in loc_keywords)
                         if not wants_global:
-                            return bool(re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", t_str, re.IGNORECASE))
+                            return bool(home_re.search(t_str))
                         return True
                     if any(k.lower() in t_lower for k in loc_keywords):
                         return True
                 return False
 
-            # Reject physical on-site locations outside Uruguay if neither location nor title mentions remote/worldwide
-            is_uruguay = bool(re.search(r"\b(uruguay|montevideo)\b", combined, re.IGNORECASE))
+            # Reject physical on-site locations away from home if neither location nor title mentions remote/worldwide
+            is_home = bool(home_only_re.search(combined))
             has_remote_indicator = bool(re.search(r"\b(remote|remoto|worldwide|global|anywhere)\b", combined, re.IGNORECASE))
             is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america)\s*$", loc_str, re.IGNORECASE))
-            if loc_str and not is_uruguay and not has_remote_indicator and not is_distributed_latam:
+            if loc_str and not is_home and not has_remote_indicator and not is_distributed_latam:
                 return False
 
             # Evaluate restricted locations on location and title separately so anchors (^, $) work
             is_restricted = bool(RESTRICTED_LOCATION_RE.search(loc_str) or RESTRICTED_LOCATION_RE.search(t_str))
             if is_restricted:
                 # When a restricted location (US/UK/EU/India/etc.) matches, strictly reject
-                # unless the posting explicitly includes LATAM / Uruguay in the title/location
-                if not re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", combined, re.IGNORECASE):
+                # unless the posting explicitly includes the candidate's region in the title/location
+                if not home_re.search(combined):
                     return False
                 return True
 
             if LATAM_OR_GLOBAL_RE.search(combined):
                 wants_global = any(k.lower() in ("remote", "worldwide", "global", "anywhere") for k in loc_keywords)
                 if not wants_global:
-                    return bool(re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", combined, re.IGNORECASE))
+                    return bool(home_re.search(combined))
                 return True
 
             return any(k.lower() in loc_lower or k.lower() in t_lower for k in loc_keywords)
@@ -224,7 +249,7 @@ class BaseScanner(ABC):
         return "remote" in t_lower or "remote" in loc_lower
 
 
-    def has_residency_restriction(self, text: str, location_keywords: Optional[List[str]] = None) -> bool:
+    def has_residency_restriction(self, text: str, location_keywords: Optional[List[str]] = None, home_terms: Optional[List[str]] = None) -> bool:
         """Return True if the job description or form questions contain a US/EU/UK residency or clearance restriction."""
         if location_keywords and any(k.lower() in ("all", "any", "*") for k in location_keywords):
             return False
@@ -233,8 +258,8 @@ class BaseScanner(ABC):
         clean_text = re.sub(r"<[^>]+>", " ", text)
         if not RESIDENCY_RESTRICTION_RE.search(clean_text):
             return False
-        # Do not treat as restricted if LATAM or Uruguay is explicitly supported
-        if re.search(r"\b(latam|latin\s+america|south\s+america|uruguay|montevideo)\b", clean_text, re.IGNORECASE):
+        # Do not treat as restricted if the candidate's region is explicitly supported
+        if build_home_region_re(home_terms).search(clean_text):
             return False
         return True
 

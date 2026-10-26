@@ -8,6 +8,7 @@ const router = useRouter()
 
 const rawFiles = ref([])
 const rawApplications = ref([])
+const candidateName = ref('')
 const loading = ref(true)
 const search = ref('')
 const selectedPlatform = ref('all')
@@ -131,7 +132,7 @@ function enrichFile(f, applications = []) {
     key: `${f.dir}/${f.name}`,
     fileName,
     folder,
-    company: company || (isBase ? 'Matías Olivera' : 'General'),
+    company: company || (isBase ? candidateName.value || t('cvs.detail.baseCv') : 'General'),
     role,
     platform,
     isBase,
@@ -269,12 +270,14 @@ const filteredFiles = computed(() => {
 async function loadData() {
   loading.value = true
   try {
-    const [filesRes, appsRes] = await Promise.all([
+    const [filesRes, appsRes, profileRes] = await Promise.all([
       api.listFiles().catch(() => []),
       api.listApplications().catch(() => []),
+      api.getProfile().catch(() => null),
     ])
     rawFiles.value = filesRes
     rawApplications.value = appsRes
+    candidateName.value = profileRes?.personal_info?.full_name || ''
 
     if (!selectedCv.value && enrichedFiles.value.length > 0) {
       selectedCv.value = enrichedFiles.value[0]

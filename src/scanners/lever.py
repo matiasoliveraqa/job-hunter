@@ -18,6 +18,7 @@ class LeverScanner(BaseScanner):
         role_keywords: List[str],
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
+        home_terms: Optional[List[str]] = None,
     ) -> List[JobPosting]:
         url = f"https://api.lever.co/v0/postings/{company_slug}?mode=json"
         postings: List[JobPosting] = []
@@ -35,7 +36,10 @@ class LeverScanner(BaseScanner):
                     wpt = (cats.get("workplaceType") or j.get("workplaceType") or "").lower()
                     if wpt in ("onsite", "in-office"):
                         continue
-                    if wpt == "hybrid" and not any(u in (cats.get("location") or "").lower() for u in ("uruguay", "montevideo")):
+                    home_lower = [h.lower() for h in (home_terms or []) if h]
+                    if wpt == "hybrid" and not any(
+                        u in (cats.get("location") or "").lower() for u in home_lower
+                    ):
                         continue
 
                     lists_text = " ".join(
@@ -49,8 +53,8 @@ class LeverScanner(BaseScanner):
                         f"{j.get('description') or ''} "
                         f"{lists_text}"
                     )
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc):
-                        if self.has_residency_restriction(desc, location_keywords):
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc, home_terms=home_terms):
+                        if self.has_residency_restriction(desc, location_keywords, home_terms=home_terms):
                             continue
                         if not self.matches_experience(desc, max_years_experience):
                             continue

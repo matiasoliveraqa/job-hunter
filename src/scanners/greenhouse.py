@@ -18,6 +18,7 @@ class GreenhouseScanner(BaseScanner):
         role_keywords: List[str],
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
+        home_terms: Optional[List[str]] = None,
     ) -> List[JobPosting]:
         url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs?content=true"
         postings: List[JobPosting] = []
@@ -41,10 +42,10 @@ class GreenhouseScanner(BaseScanner):
                     loc_name = loc_obj.get("name") if isinstance(loc_obj, dict) else str(loc_obj) or ""
 
                     desc_text = f"{title} {j.get('content') or ''}"
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc_name, location_keywords, description=desc_text):
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc_name, location_keywords, description=desc_text, home_terms=home_terms):
                         job_id = j.get("id")
 
-                        if self.has_residency_restriction(desc_text, location_keywords):
+                        if self.has_residency_restriction(desc_text, location_keywords, home_terms=home_terms):
                             continue
                         if not self.matches_experience(desc_text, max_years_experience):
                             continue

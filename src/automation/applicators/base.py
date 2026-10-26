@@ -238,7 +238,7 @@ class BaseApplicator(ABC):
         phone_str = (self.p_info.phone or "").strip()
         location_str = (self.p_info.location or "").strip()
 
-        country = "Uruguay"
+        country = ""
         if location_str and "," in location_str:
             country = location_str.split(",")[-1].strip()
         elif location_str:
@@ -259,7 +259,13 @@ class BaseApplicator(ABC):
             "espana": ("+34", "34", "ES"),
         }
 
-        dial_code, code_digits, iso2 = dial_codes.get(country.lower(), ("+598", "598", "UY"))
+        # Unknown country: derive the dial code from the phone number itself so the
+        # applicator stays correct for any candidate, whatever their country is.
+        fallback = ("", "", "")
+        m_dial = re.match(r"\+(\d{1,3})", phone_str)
+        if m_dial:
+            fallback = (f"+{m_dial.group(1)}", m_dial.group(1), "")
+        dial_code, code_digits, iso2 = dial_codes.get(country.lower(), fallback)
 
         digits_only = re.sub(r"\D", "", phone_str)
         if digits_only.startswith(code_digits):
@@ -809,9 +815,9 @@ class BaseApplicator(ABC):
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["current company", "current employer", "present employer"]):
             return self.p_info.current_company
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["english level", "english proficiency", "level of english", "your english"]):
-            return self.prefs.english_level or "B2 Upper Intermediate"
+            return self.prefs.english_level
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["native language", "mother tongue", "first language", "idioma nativo"]):
-            return "Spanish"
+            return getattr(self.prefs, "native_language", None)
 
         # Explicit instruction: e.g. "type 'YES' to confirm" or "enter 'AGREE'"
         m_type = re.search(r"(?:type|enter|write)\s+['\"]([^'\"]+)['\"]", question_text, re.IGNORECASE)
@@ -820,13 +826,9 @@ class BaseApplicator(ABC):
 
         oq = getattr(self.profile, "open_questions", None)
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["level of education", "highest level of education", "education completed", "educational background"]):
-            if oq and oq.education_level:
-                return oq.education_level
-            return "Bachelor's Degree in Information Technology (UTEC, in progress)"
+            return oq.education_level if oq else None
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["time zone", "timezone", "working hours"]):
-            if oq and oq.timezone_overlap:
-                return oq.timezone_overlap
-            return "UTC-3 (Montevideo, Uruguay), with full overlap with US and Americas workdays."
+            return oq.timezone_overlap if oq else None
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["where are you based", "current location", "country of residence", "city and country"]):
             return self.p_info.location
         if re.search(r"\btelegram\b", q):
@@ -1097,7 +1099,7 @@ class BaseApplicator(ABC):
         if any(k in q for k in ["política de privacidad", "politica de privacidad", "terminos", "consentimiento", "autorizo"]):
             return ["Sí", "Si", "Acepto", "Yes"]
         if any(k in q for k in ["country are you currently a resident", "country of residence", "current resident of", "resident of", "country you reside", "country do you reside", "país de residencia", "pais de residencia"]):
-            return [self.p_info.country, "Uruguay"]
+            return [self.p_info.country, self.p_info.location]
         if any(k in q for k in ["based in united states", "state of residence", "outside of the united states", "outside the united states", "state in the us"]):
             return [
                 "I am not located in the United States of America currently",
@@ -1109,11 +1111,14 @@ class BaseApplicator(ABC):
                 "None",
             ]
         if any(k in q for k in ["native language", "mother tongue", "first language", "primary language", "idioma nativo", "lengua materna"]):
-            return ["Spanish (es)", "Spanish", "Español"]
+            native = getattr(self.prefs, "native_language", None)
+            return [native] if native else None
         if any(k in q for k in ["english level", "english proficiency", "level of english", "proficiency in english", "your english", "english", "nivel de inglés", "nivel de ingles"]):
-            return ["B2", "Upper Intermediate", "Fluent", "Advanced", "Professional", "Intermediate"]
+            level = self.prefs.english_level
+            return [level, "Fluent", "Professional", "Advanced"] if level else None
         if any(k in q for k in ["languages you are proficient in", "language proficiency", "languages you speak", "working language", "idiomas", "language"]):
-            return ["American English (en)", "English", "Spanish (es)", "Spanish"]
+            native = getattr(self.prefs, "native_language", None)
+            return ["English", native] if native else ["English"]
         if any(k in q for k in ["skills category", "core strengths", "functional area", "primary skill", "area of expertise"]):
             return ["Software Engineering", "Quality Assurance", "Information Technology", "Computer Science"]
         if any(k in q for k in ["degree", "título", "titulo", "level of education", "highest level of education", "education", "educación", "educacion", "formación", "formacion"]):
@@ -1133,8 +1138,6 @@ class BaseApplicator(ABC):
                 self.p_info.location,
                 self.p_info.country,
                 self.p_info.city,
-                "Uruguay",
-                "Montevideo",
                 "Remote",
                 "Remoto",
                 "LATAM",
@@ -1425,8 +1428,8 @@ class BaseApplicator(ABC):
                 if any(k in q_lower for k in ["location (city)", "city", "ciudad", "ubicación", "ubicacion"]) or "candidate-location" in meta.get("id", ""):
                     await self.fill_react_select(
                         cb,
-                        preferred_choices=[self.p_info.location, "Montevideo, Uruguay", self.p_info.city, "Montevideo", "Remote", "Remoto", "LATAM"],
-                        query_text=self.p_info.city or "Montevideo",
+                        preferred_choices=[self.p_info.location, self.p_info.city, self.p_info.country, "Remote", "Remoto", "LATAM"],
+                        query_text=self.p_info.city or self.p_info.location,
                         fallback_first=False,
                         description="Location (City)"
                     )
@@ -1434,13 +1437,19 @@ class BaseApplicator(ABC):
 
                 # B. School / University
                 if any(k in q_lower for k in ["school", "university", "universidad", "institution"]) or "school" in meta.get("id", ""):
-                    await self.fill_react_select(
-                        cb,
-                        preferred_choices=["UTEC", "Universidad", "University"],
-                        query_text="Universidad",
-                        fallback_first=True,
-                        description="School"
-                    )
+                    oq = getattr(self.profile, "open_questions", None)
+                    institution = getattr(oq, "education_institution", None) if oq else None
+                    if institution:
+                        await self.fill_react_select(
+                            cb,
+                            preferred_choices=[institution],
+                            query_text=institution,
+                            fallback_first=False,
+                            description="School"
+                        )
+                    else:
+                        self.filled_fields[f"Select ({short_q})"] = "Pending manual review"
+                        print(f"  [!] Skipped school for '{short_q}': education_institution not set in profile")
                     continue
 
                 # C. General dropdown question via _desired_dropdown_choice

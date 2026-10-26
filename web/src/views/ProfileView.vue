@@ -76,11 +76,12 @@ function adopt(data) {
   data.search_criteria.min_salary_usd ??= 3000
 
   data.preferences ??= {}
-  data.preferences.dependent_salary_usd ??= data.preferences.desired_salary_usd ?? 3500
-  data.preferences.contractor_salary_usd ??= 4500
+  data.preferences.dependent_salary_usd ??= data.preferences.desired_salary_usd ?? null
+  data.preferences.contractor_salary_usd ??= null
   data.preferences.salary_period ??= 'monthly'
   data.preferences.notice_period ??= '2 weeks'
-  data.preferences.english_level ??= 'B2 Upper Intermediate (EF SET Certified)'
+  data.preferences.english_level ??= ''
+  data.preferences.native_language ??= ''
   data.preferences.legally_authorized_to_work ??= 'Yes'
 
   data.ats_settings ??= {}
@@ -94,6 +95,7 @@ function adopt(data) {
   data.open_questions.key_project ??= data.open_questions.metrics_and_kpis || ''
   data.open_questions.timezone_overlap ??= ''
   data.open_questions.education_level ??= ''
+  data.open_questions.education_institution ??= ''
   data.open_questions.education_start_year ??= null
   data.open_questions.education_end_year ??= null
   data.open_questions.additional_info ??= ''
@@ -1033,10 +1035,16 @@ onMounted(async () => {
                 class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
                 type="text"
               />
-              <span class="px-2 py-1 rounded bg-surface-container-highest text-accent font-mono text-[11px] whitespace-nowrap">
-                Fluent
-              </span>
             </div>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.nativeLanguage') }}</label>
+            <input
+              v-model="profile.preferences.native_language"
+              class="h-9 px-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
+              type="text"
+            />
           </div>
         </section>
 
@@ -1163,6 +1171,14 @@ onMounted(async () => {
           <span class="text-[11px] text-outline">{{ $t('profile.sections.educationLevelDesc') }}</span>
           <input
             v-model="profile.open_questions.education_level"
+            type="text"
+            class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
+          />
+
+          <label class="text-xs font-semibold text-on-surface pt-2">{{ $t('profile.sections.educationInstitution') }}</label>
+          <span class="text-[11px] text-outline">{{ $t('profile.sections.educationInstitutionDesc') }}</span>
+          <input
+            v-model="profile.open_questions.education_institution"
             type="text"
             class="h-9 px-3 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle focus:outline-none focus:border-accent transition-colors font-sans"
           />

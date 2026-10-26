@@ -64,6 +64,14 @@ class ScannerOrchestrator:
         active_platforms = platforms or self.profile.ats_settings.enabled_platforms
         roles = custom_roles or self.profile.search_criteria.target_roles
         locations = custom_locations or self.profile.search_criteria.location_keywords
+        # The candidate's own city and country decide whether a hybrid or on-site
+        # posting is acceptable, so they come from the profile, never hardcoded.
+        home_terms = [
+            t for t in (
+                getattr(self.profile.personal_info, "city", None),
+                getattr(self.profile.personal_info, "country", None),
+            ) if t and str(t).strip()
+        ]
         max_years = (
             max_years_experience
             if max_years_experience is not None
@@ -106,6 +114,7 @@ class ScannerOrchestrator:
                         roles,
                         locations,
                         max_years_experience=max_years,
+                        home_terms=home_terms,
                     )
                     if not allow_captcha:
                         postings = [p for p in postings if not p.has_captcha]

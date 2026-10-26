@@ -18,6 +18,7 @@ class AshbyScanner(BaseScanner):
         role_keywords: List[str],
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
+        home_terms: Optional[List[str]] = None,
     ) -> List[JobPosting]:
         url = f"https://api.ashbyhq.com/posting-api/job-board/{company_slug}"
         postings: List[JobPosting] = []
@@ -34,7 +35,10 @@ class AshbyScanner(BaseScanner):
                     addr_country = ((j.get("address") or {}).get("postalAddress") or {}).get("addressCountry") or ""
                     if addr_country and addr_country.lower() not in loc.lower():
                         loc = f"{loc}, {addr_country}".strip(", ")
-                    if j.get("isRemote") is False and not any(r in loc.lower() for r in ("remote", "worldwide", "global", "uruguay", "montevideo")):
+                    home_lower = [h.lower() for h in (home_terms or []) if h]
+                    if j.get("isRemote") is False and not any(
+                        r in loc.lower() for r in ("remote", "worldwide", "global", *home_lower)
+                    ):
                         continue
 
                     if j.get("isRemote") and "remote" not in loc.lower():
@@ -45,8 +49,8 @@ class AshbyScanner(BaseScanner):
                         f"{j.get('descriptionPlain') or ''} "
                         f"{j.get('descriptionHtml') or ''}"
                     )
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc):
-                        if self.has_residency_restriction(desc, location_keywords):
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc, home_terms=home_terms):
+                        if self.has_residency_restriction(desc, location_keywords, home_terms=home_terms):
                             continue
                         if not self.matches_experience(desc, max_years_experience):
                             continue

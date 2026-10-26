@@ -47,15 +47,15 @@ class GreenhouseApplicator(BaseApplicator):
 
     async def fill_location_field(self) -> bool:
         """Fill Location (City) on Greenhouse forms (React-Select autocomplete or plain text/Places)."""
-        city_query = self.p_info.city or "Montevideo"
-        full_loc = self.p_info.location or "Montevideo, Uruguay"
+        city_query = self.p_info.city or self.p_info.location
+        full_loc = self.p_info.location or self.p_info.city
 
         # Modern Greenhouse React-Select combobox (#candidate-location)
         loc_cb = self.page.locator("#candidate-location, input[id*='candidate-location' i]")
         if await loc_cb.count() > 0 and await loc_cb.first.is_visible():
             chosen = await self.fill_react_select(
                 loc_cb.first,
-                preferred_choices=[full_loc, "Montevideo, Uruguay", city_query, "Uruguay"],
+                preferred_choices=[full_loc, city_query, self.p_info.country],
                 query_text=city_query,
                 fallback_first=True,
                 description="Location (City)"
@@ -69,7 +69,11 @@ class GreenhouseApplicator(BaseApplicator):
             inp = loc_inputs.first
             await inp.fill(full_loc)
             await asyncio.sleep(0.5)
-            sugg = self.page.locator(".pac-container .pac-item, [role='option']:has-text('Montevideo')")
+            sugg = self.page.locator(".pac-container .pac-item, [role='option']")
+            if city_query:
+                narrowed = self.page.locator("[role='option']").filter(has_text=city_query)
+                if await narrowed.count() > 0:
+                    sugg = narrowed
             if await sugg.count() > 0:
                 await sugg.first.click()
             self.filled_fields["Location (City)"] = full_loc
@@ -83,13 +87,19 @@ class GreenhouseApplicator(BaseApplicator):
         # 1. School (remote search combobox)
         school_cb = self.page.locator("#school--0, input[id^='school' i]")
         if await school_cb.count() > 0 and await school_cb.first.is_visible():
-            await self.fill_react_select(
-                school_cb.first,
-                preferred_choices=["UTEC", "Universidad", "University"],
-                query_text="Universidad",
-                fallback_first=True,
-                description="Education School"
-            )
+            oq = getattr(self.profile, "open_questions", None)
+            institution = getattr(oq, "education_institution", None) if oq else None
+            if institution:
+                await self.fill_react_select(
+                    school_cb.first,
+                    preferred_choices=[institution],
+                    query_text=institution,
+                    fallback_first=False,
+                    description="Education School"
+                )
+            else:
+                self.filled_fields["Education School"] = "Pending manual review"
+                print("  [!] Skipped school: education_institution not set in profile")
 
         # 2. Degree
         deg_cb = self.page.locator("#degree--0, input[id^='degree' i]")

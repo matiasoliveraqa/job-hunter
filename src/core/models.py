@@ -154,6 +154,7 @@ class CandidatePreferences(BaseModel):
     salary_period: str = Field("monthly", description="'monthly' or 'annual'")
     notice_period: str = Field("2 weeks", description="e.g. 'Immediately', '2 weeks', '1 month'")
     english_level: Optional[str] = Field("Fluent / Professional", description="e.g. 'B2', 'Fluent', 'Native'")
+    native_language: Optional[str] = Field(None, description="Candidate native language, e.g. 'Spanish', 'Portuguese'")
     legally_authorized_to_work: str = Field("Yes", description="'Yes' or 'No'")
 
     def get_salary_value(self, is_contractor: bool = False) -> Optional[int]:
@@ -201,6 +202,10 @@ class OpenQuestionTemplates(BaseModel):
     education_level: Optional[str] = Field(
         None,
         description="Highest level of education completed or current degree"
+    )
+    education_institution: Optional[str] = Field(
+        None,
+        description="School or university name, used to match education dropdowns"
     )
     education_start_year: Optional[int] = Field(
         None,
