@@ -906,9 +906,43 @@ function startServer(port = PORT, attemptsLeft = 10) {
   })
 }
 
+// Make the entry point obvious: a bare URL in a wall of build output is easy to miss.
+function printReadyBanner(url) {
+  const line = '='.repeat(52)
+  console.log(`\n${line}`)
+  console.log('  Job Hunter is ready.')
+  console.log(`  Open this address in your browser:  ${url}`)
+  console.log('  Press Ctrl+C here to stop the server.')
+  console.log(`${line}\n`)
+}
+
+// Opening the browser is a convenience for the one-click launcher.
+// Set JOBHUNTER_NO_OPEN=1 to keep the server headless.
+function openInBrowser(url) {
+  if (process.env.JOBHUNTER_NO_OPEN) return
+  const [cmd, args] =
+    process.platform === 'win32'
+      ? ['cmd', ['/c', 'start', '', url]]
+      : process.platform === 'darwin'
+        ? ['open', [url]]
+        : ['xdg-open', [url]]
+  try {
+    const child = spawn(cmd, args, { stdio: 'ignore', detached: true })
+    // A missing opener must never take the server down with it.
+    child.on('error', () => {})
+    child.unref()
+  } catch {
+    // Same: the printed URL is the fallback.
+  }
+}
+
 const isDirectExecution = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 if (isDirectExecution && process.env.NODE_ENV !== 'test') {
-  startServer(PORT)
+  startServer(PORT).then((server) => {
+    const url = `http://${HOST}:${server.address().port}`
+    printReadyBanner(url)
+    openInBrowser(url)
+  })
 }
 
 export { app, startServer }
