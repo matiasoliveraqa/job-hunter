@@ -6,7 +6,8 @@ Integrates Claude or Agy CLI to generate direct, human, factual answers.
 import os
 import shutil
 import asyncio
-from typing import Optional
+import re
+from typing import Optional, List
 
 SYSTEM_RULES = """You are an application assistant for a job candidate.
 CRITICAL EXECUTION RULE:
@@ -297,3 +298,77 @@ Answer directly without pleasantries. Keep it under 100 words. End sentences wit
         clean = clean[1:-1].strip()
 
     return clean if len(clean) >= 10 else None
+ 
+ 
+async def choose_radio_option(
+    question_text: str,
+    options: List[str],
+    job_title: str = "",
+    company: str = "",
+    job_context: str = "",
+    candidate_profile = None,
+) -> Optional[str]:
+    """
+    Select the single most accurate option from a list of radio choices
+    based on the candidate's real profile and CV.
+    """
+    if not question_text or not options:
+        return None
+
+    valid_options = [opt.strip() for opt in options if opt and opt.strip()]
+    if not valid_options:
+        return None
+
+    p_info = getattr(candidate_profile, "personal_info", None)
+    search_crit = getattr(candidate_profile, "search_criteria", None)
+    candidate_name = getattr(p_info, "full_name", None) or "Candidate"
+    years = getattr(p_info, "years_of_experience", None) or 7
+    location = getattr(p_info, "location", None) or "Montevideo, Uruguay"
+    keywords = getattr(search_crit, "keywords", None)
+    skills_context = f"CORE SKILLS: {', '.join(keywords)}." if keywords else "CORE SKILLS: QA Automation, Playwright, Cypress, Selenium, API Testing, CI/CD, Python, TypeScript."
+
+    options_list_str = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(valid_options))
+
+    prompt = f"""{SYSTEM_RULES}
+
+CANDIDATE: {candidate_name} ({years}+ years of QA / software testing experience, based in {location}).
+{skills_context}
+TARGET COMPANY: {company or "Target Company"}
+TARGET ROLE: {job_title or "QA Automation Engineer"}
+
+QUESTION:
+"{question_text}"
+
+AVAILABLE OPTIONS:
+{options_list_str}
+
+TASK:
+Select the single option from the list above that best and most truthfully reflects the candidate's professional experience and background.
+Return ONLY the exact text of the selected option, with no additional commentary, no quotes, and no numbers.
+"""
+
+    ans = await query_model(prompt)
+    if not ans:
+        return None
+
+    clean = ans.strip().strip('"').strip("'")
+
+    # 1. Exact match (case insensitive)
+    for opt in valid_options:
+        if clean.lower() == opt.lower():
+            return opt
+
+    # 2. Numbered match (e.g., "1" or "Option 1" or "1. Yes")
+    m_num = re.match(r"^(?:option\s+)?(\d+)(?:\.|\:|\s|$)", clean, re.IGNORECASE)
+    if m_num:
+        idx = int(m_num.group(1)) - 1
+        if 0 <= idx < len(valid_options):
+            return valid_options[idx]
+
+    # 3. Substring match
+    for opt in valid_options:
+        if opt.lower() in clean.lower() or clean.lower() in opt.lower():
+            return opt
+
+    return None
+

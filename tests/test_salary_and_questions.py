@@ -1,3 +1,4 @@
+import re
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from src.core.models import CandidateProfile, PersonalInfo, SearchCriteria, CandidatePreferences, OpenQuestionTemplates
@@ -440,6 +441,66 @@ def test_regression_controls_eeo(dummy_profile):
 
     # 4. Spanish decline fallback: [Femenino, No binario, Prefiero no responder] with male returns 'Prefiero no responder'
     assert app.match_dropdown_option(["Femenino", "No binario", "Prefiero no responder"], choices_no_male or [], is_sensitive=True) == "Prefiero no responder"
+
+
+def test_match_experience_range():
+    # 7 years QA experience (Matías Olivera)
+    opts_1 = ["Less than 3", "3-5 years", "6-9 years", "10+ years"]
+    assert BaseApplicator.match_experience_range(7, opts_1) == "6-9 years"
+    assert BaseApplicator.match_experience_range(2, opts_1) == "Less than 3"
+    assert BaseApplicator.match_experience_range(4, opts_1) == "3-5 years"
+    assert BaseApplicator.match_experience_range(11, opts_1) == "10+ years"
+
+    opts_2 = ["0-2 years", "3-5 years", "5+ years"]
+    assert BaseApplicator.match_experience_range(7, opts_2) == "5+ years"
+
+    opts_3 = ["1 to 3", "4 to 6", "7 to 9", "10 or more"]
+    assert BaseApplicator.match_experience_range(7, opts_3) == "7 to 9"
+
+
+@pytest.mark.asyncio
+async def test_choose_radio_option_mocked(dummy_profile, monkeypatch):
+    from src.automation import agent_adapter
+
+    async def mock_query(prompt, preferred_provider="auto", timeout=35):
+        return "6-9 years"
+
+    monkeypatch.setattr(agent_adapter, "query_model", mock_query)
+
+    chosen = await agent_adapter.choose_radio_option(
+        question_text="How many years of experience in QA?",
+        options=["Less than 3", "3-5 years", "6-9 years", "10+ years"],
+        job_title="QA Engineer",
+        company="Acme",
+        candidate_profile=dummy_profile,
+    )
+    assert chosen == "6-9 years"
+
+
+@pytest.mark.asyncio
+async def test_fill_radio_groups_qa_questions(dummy_profile):
+    page = MagicMock()
+    app = DummyApplicator(page, dummy_profile)
+
+    # 1. Experience range question: 7 years -> "6-9 years"
+    opts_exp = ["Less than 3", "3-5 years", "6-9 years", "10+ years"]
+    matched_exp = app.match_experience_range(dummy_profile.personal_info.years_of_experience, opts_exp)
+    assert matched_exp == "6-9 years"
+
+    # 2. Sole QA owner question -> "Yes"
+    q_sole = "Have you worked as the primary or sole QA owner on a project or team?*"
+    assert any(re.search(r"\b(primary\s+or\s+sole\s+qa|sole\s+qa|solo\s+qa|primary\s+qa|qa\s+owner)\b", q_sole, re.IGNORECASE) for _ in [1])
+
+    # 3. Recent QA work question -> hands-on
+    opts_work = [
+        "Primarily hands-on testing, investigation, and automation",
+        "Mix of hands-on QA and QA leadership/mentoring",
+        "Primarily QA leadership, mentoring, or people management",
+        "Primarily project/product management with some QA involvement"
+    ]
+    picked_work = next(o for o in opts_work if any(w in o.lower() for w in ("hands-on", "automation")))
+    assert picked_work == "Primarily hands-on testing, investigation, and automation"
+
 
 
 

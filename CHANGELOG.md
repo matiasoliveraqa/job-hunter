@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- Radio button discrete option selection (`choose_radio_option`) connected to local LLM agent to answer non-standard application questions based on candidate CV and profile.
+- Deterministic experience range matcher (`match_experience_range`) for radio groups, mapping candidate experience years to option ranges such as `6-9 years`.
+- Deterministic radio handlers for primary or sole QA owner questions and recent QA work modality.
+- Improved question title and option label extraction for radio button groups across ATS platforms.
+
 ## [1.3.0] - 2026-10-26
 
 ### Added
