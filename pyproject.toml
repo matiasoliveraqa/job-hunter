@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "job-hunter"
-version = "1.3.1"
+version = "1.3.2"
 description = "Autonomous, human-in-the-loop job search & application assistant powered by local AI agents and Playwright."
 readme = "README.md"
 authors = [{ name = "Open Source Community" }]
