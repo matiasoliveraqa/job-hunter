@@ -25,8 +25,25 @@ const snack = reactive({ show: false, text: '', color: 'success' })
 const showLogs = ref(false)
 
 const newRoleInput = ref('')
+const tableSearchInput = ref('')
 const tableSearch = ref('')
 const platformFilter = ref('all')
+const currentPage = ref(1)
+const pageSize = ref(25)
+const pageSizeOptions = [25, 50, 100]
+
+let tableSearchDebounceTimer = null
+watch(tableSearchInput, (newVal) => {
+  clearTimeout(tableSearchDebounceTimer)
+  tableSearchDebounceTimer = setTimeout(() => {
+    tableSearch.value = newVal
+    currentPage.value = 1
+  }, 150)
+})
+
+watch(platformFilter, () => {
+  currentPage.value = 1
+})
 
 const existingApps = ref([])
 const activePreset = ref('')
@@ -225,6 +242,8 @@ const tailoredMap = reactive({})
 const launchingMap = reactive({})
 const openedMap = reactive({})
 
+const normUrlCache = new Map()
+
 function normalizeJobUrl(raw) {
   if (!raw || typeof raw !== 'string') return ''
   try {
@@ -241,32 +260,77 @@ function normalizeJobUrl(raw) {
   }
 }
 
-function isSameJobMatch(app, job) {
-  const normAppUrl = normalizeJobUrl(app.url)
-  const normJobUrl = normalizeJobUrl(job.url)
-  if (normAppUrl && normJobUrl && normAppUrl === normJobUrl) return true
-
-  const appComp = (app.company || '').trim().toLowerCase()
-  const jobComp = (job.company || '').trim().toLowerCase()
-  const appRole = (app.role || '').trim().toLowerCase()
-  const jobRole = (job.title || '').trim().toLowerCase()
-
-  if (appComp && jobComp && appRole && jobRole && appComp === jobComp && appRole === jobRole) {
-    return true
-  }
-  return false
+function getNormalizedUrl(raw) {
+  if (!raw || typeof raw !== 'string') return ''
+  let cached = normUrlCache.get(raw)
+  if (cached !== undefined) return cached
+  cached = normalizeJobUrl(raw)
+  if (normUrlCache.size > 2000) normUrlCache.clear()
+  normUrlCache.set(raw, cached)
+  return cached
 }
+
+const existingAppsIndex = computed(() => {
+  const preparedUrls = new Set()
+  const preparedCompRoles = new Set()
+  const tailoredUrls = new Set()
+  const tailoredCompRoles = new Set()
+  const appCvMap = new Map()
+
+  for (const a of existingApps.value || []) {
+    const norm = getNormalizedUrl(a.url)
+    const c = (a.company || '').trim().toLowerCase()
+    const r = (a.role || '').trim().toLowerCase()
+    const crKey = c && r ? `${c}:::${r}` : ''
+
+    if (norm) preparedUrls.add(norm)
+    if (crKey) preparedCompRoles.add(crKey)
+
+    if (a.cv) {
+      if (norm) {
+        tailoredUrls.add(norm)
+        appCvMap.set(norm, a.cv)
+      }
+      if (crKey) {
+        tailoredCompRoles.add(crKey)
+        appCvMap.set(crKey, a.cv)
+      }
+    }
+  }
+
+  return {
+    preparedUrls,
+    preparedCompRoles,
+    tailoredUrls,
+    tailoredCompRoles,
+    appCvMap,
+  }
+})
 
 function isJobPrepared(job) {
   if (preparedMap[job.url]) return true
-  return existingApps.value.some((a) => isSameJobMatch(a, job))
+  const norm = getNormalizedUrl(job.url)
+  const idx = existingAppsIndex.value
+  if (norm && idx.preparedUrls.has(norm)) return true
+  const c = (job.company || '').trim().toLowerCase()
+  const r = (job.title || '').trim().toLowerCase()
+  if (c && r && idx.preparedCompRoles.has(`${c}:::${r}`)) return true
+  return false
 }
 
 function isJobTailored(job) {
   if (job.cv || tailoredMap[job.url]) return true
-  const match = existingApps.value.find((a) => isSameJobMatch(a, job))
-  if (match?.cv) {
-    if (!job.cv) job.cv = match.cv
+  const norm = getNormalizedUrl(job.url)
+  const idx = existingAppsIndex.value
+  if (norm && idx.tailoredUrls.has(norm)) {
+    if (!job.cv) job.cv = idx.appCvMap.get(norm)
+    return true
+  }
+  const c = (job.company || '').trim().toLowerCase()
+  const r = (job.title || '').trim().toLowerCase()
+  const crKey = c && r ? `${c}:::${r}` : ''
+  if (crKey && idx.tailoredCompRoles.has(crKey)) {
+    if (!job.cv) job.cv = idx.appCvMap.get(crKey)
     return true
   }
   return false
@@ -356,6 +420,41 @@ const filteredMatches = computed(() => {
     return matchesQuery && matchesPlat
   })
 })
+
+const totalMatchesCount = computed(() => filteredMatches.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalMatchesCount.value / pageSize.value)))
+
+const paginatedMatches = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredMatches.value.slice(start, start + pageSize.value)
+})
+
+const pageStartItem = computed(() => {
+  if (!totalMatchesCount.value) return 0
+  return (currentPage.value - 1) * pageSize.value + 1
+})
+
+const pageEndItem = computed(() => {
+  return Math.min(currentPage.value * pageSize.value, totalMatchesCount.value)
+})
+
+watch([totalMatchesCount, pageSize], () => {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value
+  }
+})
+
+function prevPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
+}
+
+function nextPage() {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+  }
+}
 
 function getPlatformBadgeClass(ats) {
   const low = String(ats || '').toLowerCase()
@@ -1005,11 +1104,21 @@ function getWorkModeLabel(mode) {
         <div class="relative flex items-center flex-1 max-w-sm">
           <span class="material-symbols-outlined absolute left-2.5 text-[16px] text-outline">search</span>
           <input
-            v-model="tableSearch"
-            class="w-full pl-8 pr-3 py-1.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors"
+            v-model="tableSearchInput"
+            class="w-full pl-8 pr-8 py-1.5 rounded-lg bg-surface-container text-xs text-on-surface border border-border-subtle placeholder:text-outline focus:outline-none focus:border-accent transition-colors"
             :placeholder="$t('search.table.searchPlaceholder')"
             type="text"
+            @keydown.enter="tableSearch = tableSearchInput; currentPage = 1"
           />
+          <button
+            v-if="tableSearchInput"
+            aria-label="Clear search"
+            class="absolute right-2 text-outline hover:text-on-surface p-0.5 transition-colors"
+            type="button"
+            @click="tableSearchInput = ''; tableSearch = ''; currentPage = 1"
+          >
+            <span class="material-symbols-outlined text-[14px] block">close</span>
+          </button>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <select
@@ -1061,7 +1170,7 @@ function getWorkModeLabel(mode) {
           </thead>
           <tbody class="divide-y divide-border-subtle">
             <tr
-              v-for="job in filteredMatches"
+              v-for="job in paginatedMatches"
               :key="job.url"
               class="hover:bg-surface-container/50 transition-colors group"
             >
@@ -1280,12 +1389,54 @@ function getWorkModeLabel(mode) {
         </table>
       </div>
 
-      <!-- Pie de tabla / Resumen -->
+      <!-- Pie de tabla / Resumen y Paginación -->
       <div class="p-3 border-t border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-outline">
-        <div class="flex items-center gap-2">
-          <span>
-            {{ $t('search.table.showingFooter', { shown: filteredMatches.length, total: matches.length }) }}
+        <div class="flex items-center gap-3 flex-wrap">
+          <span v-if="totalMatchesCount > 0">
+            {{ $t('search.table.showingRange', { start: pageStartItem, end: pageEndItem, total: totalMatchesCount }) }}
           </span>
+          <span v-else>
+            {{ $t('search.table.showingFooter', { shown: 0, total: matches.length }) }}
+          </span>
+
+          <div v-if="totalMatchesCount > pageSizeOptions[0]" class="flex items-center gap-1.5">
+            <span class="text-[11px] text-outline">·</span>
+            <select
+              v-model.number="pageSize"
+              class="px-2 py-0.5 rounded bg-surface-container border border-border-subtle text-[11px] text-on-surface focus:outline-none cursor-pointer"
+            >
+              <option v-for="opt in pageSizeOptions" :key="opt" :value="opt">
+                {{ opt }} {{ $t('search.table.perPage') }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Controles de paginación -->
+        <div v-if="totalPages > 1" class="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            class="inline-flex items-center justify-center px-2.5 py-1 rounded bg-surface-container border border-border-subtle hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed text-on-surface transition-colors text-xs"
+            :disabled="currentPage <= 1"
+            type="button"
+            @click="prevPage"
+          >
+            <span class="material-symbols-outlined text-[14px]">chevron_left</span>
+            <span class="ml-0.5">{{ $t('search.table.prevPage') }}</span>
+          </button>
+
+          <span class="font-mono text-[11px] text-on-surface px-1">
+            {{ $t('search.table.pageInfo', { page: currentPage, total: totalPages }) }}
+          </span>
+
+          <button
+            class="inline-flex items-center justify-center px-2.5 py-1 rounded bg-surface-container border border-border-subtle hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed text-on-surface transition-colors text-xs"
+            :disabled="currentPage >= totalPages"
+            type="button"
+            @click="nextPage"
+          >
+            <span class="mr-0.5">{{ $t('search.table.nextPage') }}</span>
+            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+          </button>
         </div>
       </div>
     </section>

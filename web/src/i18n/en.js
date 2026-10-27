@@ -205,6 +205,11 @@ export default {
       emptyTitleIdle: 'No openings in this view',
       emptyDescIdle: 'Start a new scan from the top button or widen your search filters.',
       showingFooter: 'Showing {shown} of {total} openings',
+      showingRange: 'Showing {start} to {end} of {total} openings',
+      pageInfo: 'Page {page} of {total}',
+      prevPage: 'Previous',
+      nextPage: 'Next',
+      perPage: 'per page',
     },
     toasts: {
       profileLoadError: 'Could not load profile: ',

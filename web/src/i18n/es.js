@@ -205,6 +205,11 @@ export default {
       emptyTitleIdle: 'No hay vacantes en esta vista',
       emptyDescIdle: 'Inicia un nuevo escaneo desde el botón superior o amplía tus filtros de búsqueda.',
       showingFooter: 'Mostrando {shown} de {total} vacantes',
+      showingRange: 'Mostrando {start} a {end} de {total} vacantes',
+      pageInfo: 'Pág. {page} de {total}',
+      prevPage: 'Anterior',
+      nextPage: 'Siguiente',
+      perPage: 'por pág.',
     },
     toasts: {
       profileLoadError: 'No se pudo cargar el perfil: ',

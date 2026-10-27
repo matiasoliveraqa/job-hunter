@@ -78,10 +78,26 @@ export const errorCount = ref(0)
 export const logs = ref([])
 export const lastScanTime = ref(localStorage.getItem('job_hunter_last_scan_time') || null)
 
-function saveMatches() {
-  try {
-    localStorage.setItem('job_hunter_matches', JSON.stringify(matches.value))
-  } catch {}
+let saveMatchesTimer = null
+function saveMatches(immediate = false) {
+  if (immediate) {
+    if (saveMatchesTimer) {
+      clearTimeout(saveMatchesTimer)
+      saveMatchesTimer = null
+    }
+    try {
+      localStorage.setItem('job_hunter_matches', JSON.stringify(matches.value))
+    } catch {}
+    return
+  }
+  if (!saveMatchesTimer) {
+    saveMatchesTimer = setTimeout(() => {
+      saveMatchesTimer = null
+      try {
+        localStorage.setItem('job_hunter_matches', JSON.stringify(matches.value))
+      } catch {}
+    }, 400)
+  }
 }
 
 export async function loadPersistedResults(existingApps = []) {
@@ -309,8 +325,59 @@ export function calculateMatchScore(posting, profile) {
   return Math.min(98, Math.max(78, score))
 }
 
+let pendingProgress = null
+let pendingLogs = []
+let pendingMatches = []
+let progressFlushTimer = null
+
+export function flushBufferedEvents(existingApps = []) {
+  if (progressFlushTimer) {
+    clearTimeout(progressFlushTimer)
+    progressFlushTimer = null
+  }
+  if (pendingProgress) {
+    scanning.value = true
+    progress.checked = pendingProgress.checked
+    progress.total = pendingProgress.total
+    progress.platform = pendingProgress.platform
+    progress.company = pendingProgress.company
+    pendingProgress = null
+  }
+  if (pendingLogs.length > 0) {
+    logs.value.unshift(...pendingLogs)
+    if (logs.value.length > 100) logs.value.length = 100
+    pendingLogs = []
+  }
+  if (pendingMatches.length > 0) {
+    const apps = Array.isArray(existingApps) && existingApps.length ? existingApps : currentExistingApps
+    for (const p of pendingMatches) {
+      if (!matches.value.some((m) => m.url === p.url)) {
+        p.matchScore = calculateMatchScore(p)
+        const matchedApp = apps.find(
+          (a) => a.url === p.url || (a.company?.toLowerCase() === p.company?.toLowerCase() && a.role?.toLowerCase() === p.title?.toLowerCase())
+        )
+        if (matchedApp?.cv) {
+          p.cv = matchedApp.cv
+        }
+        matches.value.unshift(p)
+      }
+    }
+    pendingMatches = []
+    saveMatches(false)
+  }
+}
+
+function scheduleFlush(existingApps) {
+  if (!progressFlushTimer) {
+    progressFlushTimer = setTimeout(() => {
+      flushBufferedEvents(existingApps)
+    }, 80)
+  }
+}
+
 export function handleEvent(evt, existingApps = []) {
   if (evt.type === 'sync') {
+    flushBufferedEvents(existingApps)
     if (evt.scanState) {
       scanning.value = Boolean(evt.scanState.isScanning)
       progress.checked = evt.scanState.checked || 0
@@ -330,50 +397,48 @@ export function handleEvent(evt, existingApps = []) {
           matches.value.unshift(p)
         }
       }
-      saveMatches()
+      saveMatches(true)
     }
   } else if (evt.type === 'start') {
+    flushBufferedEvents(existingApps)
     scanning.value = true
     errorCount.value = 0
     Object.assign(progress, { checked: 0, total: 0, platform: '', company: '' })
   } else if (evt.type === 'progress') {
     scanning.value = true
-    progress.checked = evt.checked
-    progress.total = evt.total
-    progress.platform = evt.platform
-    progress.company = formatCompanyName(evt.company)
+    pendingProgress = {
+      checked: evt.checked,
+      total: evt.total,
+      platform: evt.platform,
+      company: formatCompanyName(evt.company),
+    }
+    scheduleFlush(existingApps)
   } else if (evt.type === 'match') {
     const p = evt.posting
     p.company = formatCompanyName(p.company)
-    if (!matches.value.some((m) => m.url === p.url)) {
-      p.matchScore = calculateMatchScore(p)
-      const matchedApp = existingApps.find(
-        (a) => a.url === p.url || (a.company?.toLowerCase() === p.company?.toLowerCase() && a.role?.toLowerCase() === p.title?.toLowerCase())
-      )
-      if (matchedApp?.cv) {
-        p.cv = matchedApp.cv
-      }
-      matches.value.unshift(p)
-      saveMatches()
-    }
+    pendingMatches.push(p)
+    scheduleFlush(existingApps)
   } else if (evt.type === 'board_error') {
     errorCount.value++
-    logs.value.unshift(`[${evt.platform}] ${evt.company}: ${evt.error}`)
-    if (logs.value.length > 100) logs.value.pop()
+    pendingLogs.unshift(`[${evt.platform}] ${evt.company}: ${evt.error}`)
+    scheduleFlush(existingApps)
   } else if (evt.type === 'log') {
-    logs.value.unshift(evt.message)
-    if (logs.value.length > 100) logs.value.pop()
+    pendingLogs.unshift(evt.message)
+    scheduleFlush(existingApps)
   } else if (evt.type === 'done' || evt.type === 'exit') {
+    flushBufferedEvents(existingApps)
     scanning.value = false
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     lastScanTime.value = timeStr
     try {
       localStorage.setItem('job_hunter_last_scan_time', timeStr)
     } catch {}
-    saveMatches()
+    saveMatches(true)
   } else if (evt.type === 'error') {
+    flushBufferedEvents(existingApps)
     scanning.value = false
     logs.value.unshift(`[Error] ${evt.error}`)
+    saveMatches(true)
   }
 }
 
@@ -389,9 +454,10 @@ export async function startScan(existingApps = []) {
     currentExistingApps = existingApps
   }
 
+  flushBufferedEvents(existingApps)
   scanning.value = true
   matches.value = []
-  saveMatches()
+  saveMatches(true)
   logs.value = []
   errorCount.value = 0
   Object.assign(progress, { checked: 0, total: 0, platform: '', company: '' })
@@ -429,5 +495,7 @@ export async function stopScan() {
   try {
     await api.stopScan()
   } catch {}
+  flushBufferedEvents()
   scanning.value = false
+  saveMatches(true)
 }
