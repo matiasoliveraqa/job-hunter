@@ -262,6 +262,8 @@ async def answer_form_question(
     years = getattr(p_info, "years_of_experience", None) or 5
     keywords = getattr(search_crit, "keywords", None)
     skills_context = f"CORE SKILLS: {', '.join(keywords)}." if keywords else ""
+    target_role = job_title or (search_crit.target_roles[0] if (search_crit and getattr(search_crit, "target_roles", None)) else "Software Professional")
+    job_desc_summary = job_context[:800] if job_context else f"Role at {company or 'the company'}."
 
     req_clause = ""
     if is_required:
@@ -269,16 +271,16 @@ async def answer_form_question(
 
     prompt = f"""{SYSTEM_RULES}
 
-CANDIDATE: {candidate_name} ({years}+ years of professional engineering experience).
+CANDIDATE: {candidate_name} ({years}+ years of professional experience).
 {skills_context}
 TARGET COMPANY: {company or "Target Company"}
-TARGET ROLE: {job_title or "QA Automation Engineer"}
+TARGET ROLE: {target_role}
 
 QUESTION:
 "{question_text}"
 
 ADDITIONAL CONTEXT FROM JOB POSTING:
-{job_context[:800] if job_context else "QA automation and software testing role."}
+{job_desc_summary}
 
 TASK:
 Write a direct, factual answer in English for this specific question based on the candidate's profile.{req_clause}
@@ -322,19 +324,25 @@ async def choose_radio_option(
     p_info = getattr(candidate_profile, "personal_info", None)
     search_crit = getattr(candidate_profile, "search_criteria", None)
     candidate_name = getattr(p_info, "full_name", None) or "Candidate"
-    years = getattr(p_info, "years_of_experience", None) or 7
-    location = getattr(p_info, "location", None) or "Montevideo, Uruguay"
+    years = getattr(p_info, "years_of_experience", None) or 5
+    location = getattr(p_info, "location", None) or ""
     keywords = getattr(search_crit, "keywords", None)
-    skills_context = f"CORE SKILLS: {', '.join(keywords)}." if keywords else "CORE SKILLS: QA Automation, Playwright, Cypress, Selenium, API Testing, CI/CD, Python, TypeScript."
+    skills_context = f"CORE SKILLS: {', '.join(keywords)}." if keywords else ""
+    target_role = job_title or (search_crit.target_roles[0] if (search_crit and getattr(search_crit, "target_roles", None)) else "Software Professional")
+    oq = getattr(candidate_profile, "open_questions", None)
+    exp_summary = getattr(oq, "experience_summary", None) if oq else None
+    exp_context = f"CANDIDATE BACKGROUND: {exp_summary}." if exp_summary else ""
 
     options_list_str = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(valid_options))
+    loc_str = f", based in {location}" if location else ""
 
     prompt = f"""{SYSTEM_RULES}
 
-CANDIDATE: {candidate_name} ({years}+ years of QA / software testing experience, based in {location}).
+CANDIDATE: {candidate_name} ({years}+ years of professional experience{loc_str}).
 {skills_context}
+{exp_context}
 TARGET COMPANY: {company or "Target Company"}
-TARGET ROLE: {job_title or "QA Automation Engineer"}
+TARGET ROLE: {target_role}
 
 QUESTION:
 "{question_text}"

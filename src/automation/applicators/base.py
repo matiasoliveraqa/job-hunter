@@ -1699,28 +1699,14 @@ class BaseApplicator(ABC):
                 picked_label = None
                 picked_el = None
 
-                # 1. Deterministic check: Years of experience ranges
-                candidate_years = getattr(self.p_info, "years_of_experience", None) or 7
-                if re.search(r"\b(years?\s+of\s+experience|years?\s+in\s+(?:qa|software|testing|test|engineering)|años\s+de\s+experiencia)\b", q_text, re.IGNORECASE):
+                # 1. Deterministic check: Numeric years of experience ranges (generic for any candidate)
+                candidate_years = getattr(self.p_info, "years_of_experience", None)
+                if candidate_years is not None and re.search(r"\b(years?\s+of\s+experience|years?\s+in\s+|años\s+de\s+experiencia)\b", q_text, re.IGNORECASE):
                     matched_exp = self.match_experience_range(candidate_years, option_labels)
                     if matched_exp:
                         picked_label = matched_exp
 
-                # 2. Deterministic check: Primary or sole QA owner
-                if not picked_label and re.search(r"\b(primary\s+or\s+sole\s+qa|sole\s+qa|solo\s+qa|primary\s+qa|qa\s+owner)\b", q_text, re.IGNORECASE):
-                    for o in option_labels:
-                        if o.lower() in ("yes", "sí", "si"):
-                            picked_label = o
-                            break
-
-                # 3. Deterministic check: Recent QA work
-                if not picked_label and re.search(r"\b(recent\s+qa\s+work|describe\s+your\s+(?:recent\s+)?qa)\b", q_text, re.IGNORECASE):
-                    for o in option_labels:
-                        if any(w in o.lower() for w in ("hands-on", "testing, investigation", "automation")):
-                            picked_label = o
-                            break
-
-                # 4. Deterministic check: Standard desired dropdown/radio choices
+                # 2. Deterministic check: Standard compliance and profile dropdown/radio choices
                 if not picked_label:
                     choices = self._desired_dropdown_choice(q_text)
                     if choices:

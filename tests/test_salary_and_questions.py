@@ -478,28 +478,26 @@ async def test_choose_radio_option_mocked(dummy_profile, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fill_radio_groups_qa_questions(dummy_profile):
-    page = MagicMock()
-    app = DummyApplicator(page, dummy_profile)
+async def test_choose_radio_option_generic_role(dummy_profile, monkeypatch):
+    from src.automation import agent_adapter
 
-    # 1. Experience range question: 7 years -> "6-9 years"
-    opts_exp = ["Less than 3", "3-5 years", "6-9 years", "10+ years"]
-    matched_exp = app.match_experience_range(dummy_profile.personal_info.years_of_experience, opts_exp)
-    assert matched_exp == "6-9 years"
+    async def mock_query(prompt, preferred_provider="auto", timeout=35):
+        assert "TARGET ROLE: Backend Engineer" in prompt
+        assert "CORE SKILLS: Python, Go, Docker." in prompt
+        return "Option 2"
 
-    # 2. Sole QA owner question -> "Yes"
-    q_sole = "Have you worked as the primary or sole QA owner on a project or team?*"
-    assert any(re.search(r"\b(primary\s+or\s+sole\s+qa|sole\s+qa|solo\s+qa|primary\s+qa|qa\s+owner)\b", q_sole, re.IGNORECASE) for _ in [1])
+    monkeypatch.setattr(agent_adapter, "query_model", mock_query)
 
-    # 3. Recent QA work question -> hands-on
-    opts_work = [
-        "Primarily hands-on testing, investigation, and automation",
-        "Mix of hands-on QA and QA leadership/mentoring",
-        "Primarily QA leadership, mentoring, or people management",
-        "Primarily project/product management with some QA involvement"
-    ]
-    picked_work = next(o for o in opts_work if any(w in o.lower() for w in ("hands-on", "automation")))
-    assert picked_work == "Primarily hands-on testing, investigation, and automation"
+    dummy_profile.search_criteria.keywords = ["Python", "Go", "Docker"]
+    chosen = await agent_adapter.choose_radio_option(
+        question_text="Have you worked as the primary owner on an architecture migration?",
+        options=["No", "Yes", "Not sure"],
+        job_title="Backend Engineer",
+        company="Acme",
+        candidate_profile=dummy_profile,
+    )
+    assert chosen == "Yes"
+
 
 
 
