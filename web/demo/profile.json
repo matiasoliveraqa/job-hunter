@@ -54,7 +54,11 @@
     "enabled_platforms": [
       "ashby",
       "greenhouse",
-      "lever"
+      "lever",
+      "workable",
+      "breezy",
+      "recruitee",
+      "bamboohr"
     ],
     "auto_upload_resume": true,
     "stealth_mode": true

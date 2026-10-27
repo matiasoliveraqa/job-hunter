@@ -100,9 +100,11 @@ address to use. Keep that terminal open, since it is running the server. Set
 ### 3. Set Up Your Profile
 
 1. Open `http://127.0.0.1:3100` in your browser.
-2. Go to the **Mi perfil** tab and fill in your contact info, target compensation, years of experience, and target roles.
-3. Go to **Buscar vacantes**: choose a preset (`QA / SDET`, `Backend`, `Frontend`, ...) or enter your target roles as tags.
-4. Click **Buscar vacantes** to watch opportunities stream in real time.
+2. Go to the **My Profile** tab and fill in your contact info, target compensation, years of experience, and target roles.
+3. Go to **Search Jobs**: choose a preset (`QA / SDET`, `Backend`, `Frontend`, ...) or enter your target roles as tags.
+4. Click **Start Scan** to watch matching opportunities stream in real time.
+
+> 📖 **Need a complete visual walkthrough? Read the [Step-by-Step User Guide (docs/HOW_TO_USE.md)](docs/HOW_TO_USE.md)** for screenshots, filter explanations, and application workflows.
 
 ---
 
