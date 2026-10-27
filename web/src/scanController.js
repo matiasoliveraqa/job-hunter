@@ -87,14 +87,91 @@ export async function loadPersistedResults(existingApps = []) {
   }
 }
 
+export const LATAM_COUNTRIES = [
+  'Argentina',
+  'Bolivia',
+  'Brasil',
+  'Chile',
+  'Colombia',
+  'Costa Rica',
+  'Cuba',
+  'Ecuador',
+  'El Salvador',
+  'Guatemala',
+  'Honduras',
+  'México',
+  'Nicaragua',
+  'Panamá',
+  'Paraguay',
+  'Perú',
+  'Puerto Rico',
+  'República Dominicana',
+  'Uruguay',
+  'Venezuela',
+]
+
+export const NORTH_AMERICA_COUNTRIES = [
+  'Canadá',
+  'Estados Unidos',
+]
+
+export const WORLDWIDE_COUNTRIES = [
+  ...LATAM_COUNTRIES,
+  ...NORTH_AMERICA_COUNTRIES,
+  'Alemania',
+  'Australia',
+  'Austria',
+  'Bélgica',
+  'China',
+  'Corea del Sur',
+  'Dinamarca',
+  'Emiratos Árabes Unidos',
+  'España',
+  'Filipinas',
+  'Finlandia',
+  'Francia',
+  'India',
+  'Irlanda',
+  'Israel',
+  'Italia',
+  'Japón',
+  'Noruega',
+  'Nueva Zelanda',
+  'Países Bajos',
+  'Polonia',
+  'Portugal',
+  'Reino Unido',
+  'República Checa',
+  'Rumania',
+  'Singapur',
+  'Sudáfrica',
+  'Suecia',
+  'Suiza',
+  'Ucrania',
+]
+
+export function getAvailableCountries(geoScope) {
+  if (geoScope === 'latam') return [...LATAM_COUNTRIES]
+  if (geoScope === 'latam_na') return [...LATAM_COUNTRIES, ...NORTH_AMERICA_COUNTRIES]
+  return [...WORLDWIDE_COUNTRIES]
+}
+
 export const form = reactive({
   roles: [],
-  platforms: ['ashby', 'greenhouse', 'lever'],
-  locationScope: 'latam_global',
-  maxYears: null,
+  platforms: ['ashby', 'greenhouse', 'lever', 'workable', 'breezy', 'recruitee', 'bamboohr'],
+  geoScope: 'latam',
+  countries: [],
+  workModes: ['remote'],
+  maxYears: 0,
   allowCaptcha: false,
   concurrency: 50,
 })
+
+export function setGeoScope(newScope) {
+  form.geoScope = newScope
+  const allowed = getAvailableCountries(newScope)
+  form.countries = form.countries.filter((c) => allowed.includes(c))
+}
 
 let eventSource = null
 let currentExistingApps = []
@@ -297,22 +374,24 @@ export async function startScan(existingApps = []) {
 
   const parsedMaxYears = (form.maxYears !== '' && form.maxYears !== null && !isNaN(Number(form.maxYears)))
     ? Number(form.maxYears)
-    : null
+    : 0
 
   let locations = []
-  if (form.locationScope === 'latam_only') {
-    locations = ['latam', 'latin america', 'south america', 'uruguay']
-  } else if (form.locationScope === 'any') {
-    locations = ['any']
+  if (form.geoScope === 'latam') {
+    locations = ['latam', 'latin america', 'south america']
+  } else if (form.geoScope === 'latam_na') {
+    locations = ['latam', 'latin america', 'south america', 'americas', 'north america']
   } else {
-    locations = ['remote', 'latam', 'latin america', 'worldwide', 'global', 'anywhere', 'americas', 'uruguay']
+    locations = ['remote', 'worldwide', 'global', 'anywhere']
   }
 
   const payload = {
     roles: form.roles,
     platforms: form.platforms,
     locations,
-    locationScope: form.locationScope,
+    geoScope: form.geoScope,
+    countries: form.countries,
+    workModes: form.workModes,
     maxYears: parsedMaxYears,
     allowCaptcha: form.allowCaptcha,
     concurrency: Number(form.concurrency) || 50,

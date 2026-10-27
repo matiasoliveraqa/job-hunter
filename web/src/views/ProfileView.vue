@@ -15,7 +15,7 @@ const snack = reactive({ show: false, text: '', color: 'success' })
 const activeTab = ref('profile') // 'profile' | 'questions' | 'ai'
 
 const yesNo = ['Yes', 'No']
-const platforms = ['ashby', 'greenhouse', 'lever']
+const platforms = ['ashby', 'greenhouse', 'lever', 'workable', 'breezy', 'recruitee', 'bamboohr']
 
 const newRoleInput = ref('')
 const newKeywordInput = ref('')
@@ -31,6 +31,8 @@ function adopt(data) {
   data.personal_info.email ??= ''
   data.personal_info.phone ??= ''
   data.personal_info.location ??= ''
+  data.personal_info.city ??= ''
+  data.personal_info.country ??= ''
   data.personal_info.linkedin_url ??= ''
   data.personal_info.github_url ??= ''
   data.personal_info.portfolio_url ??= ''
@@ -90,7 +92,7 @@ function adopt(data) {
   data.preferences.legally_authorized_to_work ??= 'Yes'
 
   data.ats_settings ??= {}
-  data.ats_settings.enabled_platforms ??= ['ashby', 'greenhouse', 'lever']
+  data.ats_settings.enabled_platforms ??= ['ashby', 'greenhouse', 'lever', 'workable', 'breezy', 'recruitee', 'bamboohr']
   data.ats_settings.auto_upload_resume ??= true
   data.ats_settings.stealth_mode ??= true
 
@@ -339,6 +341,60 @@ function removeLocation(idx) {
   profile.value?.search_criteria?.location_keywords?.splice(idx, 1)
 }
 
+const LOCATION_SUGGESTIONS = [
+  { label: 'Montevideo, Uruguay', city: 'Montevideo', country: 'Uruguay' },
+  { label: 'Punta del Este, Uruguay', city: 'Punta del Este', country: 'Uruguay' },
+  { label: 'Buenos Aires, Argentina', city: 'Buenos Aires', country: 'Argentina' },
+  { label: 'Córdoba, Argentina', city: 'Córdoba', country: 'Argentina' },
+  { label: 'Rosario, Argentina', city: 'Rosario', country: 'Argentina' },
+  { label: 'Santiago, Chile', city: 'Santiago', country: 'Chile' },
+  { label: 'São Paulo, Brasil', city: 'São Paulo', country: 'Brasil' },
+  { label: 'Río de Janeiro, Brasil', city: 'Río de Janeiro', country: 'Brasil' },
+  { label: 'Bogotá, Colombia', city: 'Bogotá', country: 'Colombia' },
+  { label: 'Medellín, Colombia', city: 'Medellín', country: 'Colombia' },
+  { label: 'Lima, Perú', city: 'Lima', country: 'Perú' },
+  { label: 'Ciudad de México, México', city: 'Ciudad de México', country: 'México' },
+  { label: 'Guadalajara, México', city: 'Guadalajara', country: 'México' },
+  { label: 'Madrid, España', city: 'Madrid', country: 'España' },
+  { label: 'Barcelona, España', city: 'Barcelona', country: 'España' },
+  { label: 'Berlín, Alemania', city: 'Berlín', country: 'Alemania' },
+  { label: 'Múnich, Alemania', city: 'Múnich', country: 'Alemania' },
+  { label: 'Frankfurt, Alemania', city: 'Frankfurt', country: 'Alemania' },
+  { label: 'Londres, Reino Unido', city: 'Londres', country: 'Reino Unido' },
+  { label: 'París, Francia', city: 'París', country: 'Francia' },
+  { label: 'Ámsterdam, Países Bajos', city: 'Ámsterdam', country: 'Países Bajos' },
+  { label: 'Lisboa, Portugal', city: 'Lisboa', country: 'Portugal' },
+  { label: 'Roma, Italia', city: 'Roma', country: 'Italia' },
+  { label: 'Dublín, Irlanda', city: 'Dublín', country: 'Irlanda' },
+  { label: 'Varsovia, Polonia', city: 'Varsovia', country: 'Polonia' },
+  { label: 'Estocolmo, Suecia', city: 'Estocolmo', country: 'Suecia' },
+  { label: 'Zúrich, Suiza', city: 'Zúrich', country: 'Suiza' },
+  { label: 'Nueva York, Estados Unidos', city: 'New York', country: 'Estados Unidos' },
+  { label: 'San Francisco, Estados Unidos', city: 'San Francisco', country: 'Estados Unidos' },
+  { label: 'Miami, Estados Unidos', city: 'Miami', country: 'Estados Unidos' },
+  { label: 'Toronto, Canadá', city: 'Toronto', country: 'Canadá' },
+  { label: 'Sídney, Australia', city: 'Sydney', country: 'Australia' },
+  { label: 'Tokio, Japón', city: 'Tokyo', country: 'Japón' },
+]
+
+const isLocationDropdownOpen = ref(false)
+
+const filteredLocationSuggestions = computed(() => {
+  const q = (profile.value?.personal_info?.location || '').trim().toLowerCase()
+  if (!q) return LOCATION_SUGGESTIONS.slice(0, 8)
+  return LOCATION_SUGGESTIONS.filter(
+    (item) => item.label.toLowerCase().includes(q) || item.city.toLowerCase().includes(q) || item.country.toLowerCase().includes(q)
+  ).slice(0, 8)
+})
+
+function selectLocationSuggestion(item) {
+  if (!profile.value?.personal_info) return
+  profile.value.personal_info.location = item.label
+  profile.value.personal_info.city = item.city
+  profile.value.personal_info.country = item.country
+  isLocationDropdownOpen.value = false
+}
+
 function togglePlatform(pl) {
   const list = profile.value?.ats_settings?.enabled_platforms
   if (!list) return
@@ -506,7 +562,7 @@ onMounted(async () => {
               <span class="material-symbols-outlined text-emerald-400 text-[18px]">verified</span>
               <div class="flex flex-col min-w-0">
                 <span class="text-xs font-medium text-on-surface truncate">
-                  {{ baseCv?.filename || 'Matias_Olivera_QA_CV.pdf' }}
+                  {{ baseCv?.filename || 'Master_Resume.pdf' }}
                 </span>
                 <span class="font-mono text-[10px] text-outline">
                   {{ baseCv?.exists ? `${Math.round((baseCv.sizeBytes || 0) / 1024)} KB` : $t('profile.sections.notUploadedYet') }} • my_cv/
@@ -603,7 +659,7 @@ onMounted(async () => {
                   />
                 </div>
               </div>
-              <div class="flex flex-col gap-1.5">
+              <div class="flex flex-col gap-1.5 relative">
                 <label class="text-xs text-on-surface-variant font-medium">
                   {{ $t('profile.sections.currentLocation') }} <span class="text-accent">*</span>
                 </label>
@@ -612,10 +668,34 @@ onMounted(async () => {
                   <input
                     v-model="profile.personal_info.location"
                     class="h-9 pl-8 pr-3 w-full rounded-lg bg-surface-container text-on-surface text-xs border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-                    :placeholder="$t('profile.placeholders.location')"
+                    :placeholder="$t('profile.sections.locationSearchPlaceholder')"
                     type="text"
+                    @blur="setTimeout(() => { isLocationDropdownOpen = false }, 200)"
+                    @focus="isLocationDropdownOpen = true"
                   />
+                  <!-- Dropdown asistido de sugerencias de ubicación estilo LinkedIn -->
+                  <div
+                    v-if="isLocationDropdownOpen && filteredLocationSuggestions.length"
+                    class="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg bg-surface-container-highest border border-border-muted shadow-xl z-50 py-1"
+                  >
+                    <button
+                      v-for="item in filteredLocationSuggestions"
+                      :key="item.label"
+                      class="w-full text-left px-3 py-1.5 text-xs text-on-surface hover:bg-surface-container flex items-center justify-between transition-colors"
+                      type="button"
+                      @mousedown.prevent="selectLocationSuggestion(item)"
+                    >
+                      <span class="flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[14px] text-outline">location_city</span>
+                        <span>{{ item.label }}</span>
+                      </span>
+                      <span class="text-[10px] text-outline font-mono">{{ item.country }}</span>
+                    </button>
+                  </div>
                 </div>
+                <p class="text-[11px] text-outline leading-tight">
+                  {{ $t('profile.sections.locationHelper') }}
+                </p>
               </div>
             </div>
 
@@ -1090,7 +1170,7 @@ onMounted(async () => {
           <!-- ATS Engine Checklist -->
           <div class="flex flex-col gap-2">
             <label class="text-xs text-on-surface-variant font-medium">{{ $t('profile.sections.enabledPlatforms') }}</label>
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               <label
                 v-for="pl in platforms"
                 :key="pl"
@@ -1102,7 +1182,7 @@ onMounted(async () => {
                   type="checkbox"
                   @change="togglePlatform(pl)"
                 />
-                <span class="font-mono text-xs text-on-surface capitalize">{{ pl }}</span>
+                <span class="font-mono text-xs text-on-surface capitalize">{{ pl === 'bamboohr' ? 'BambooHR' : (pl === 'breezy' ? 'Breezy HR' : pl) }}</span>
               </label>
             </div>
           </div>

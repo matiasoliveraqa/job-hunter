@@ -209,5 +209,123 @@ def test_location_empty_loc_and_empty_description():
     assert scanner.matches_location("QA Engineer", "Austin, TX", kw, description="", home_terms=HOME) is False
 
 
+def test_new_scanners_and_orchestrator():
+    from src.core.models import ATSPlatform, CandidateProfile, PersonalInfo, SearchCriteria
+    from src.scanners.orchestrator import ScannerOrchestrator
+    from src.scanners.workable import WorkableScanner
+    from src.scanners.breezy import BreezyScanner
+    from src.scanners.recruitee import RecruiteeScanner
+    from src.scanners.bamboohr import BambooHRScanner
+
+    scanners = [WorkableScanner(), BreezyScanner(), RecruiteeScanner(), BambooHRScanner()]
+    expected = [ATSPlatform.WORKABLE, ATSPlatform.BREEZY, ATSPlatform.RECRUITEE, ATSPlatform.BAMBOOHR]
+    for s, p in zip(scanners, expected):
+        assert s.platform == p
+        assert s.matches_keywords("QA Engineer", ["QA"]) is True
+
+    profile = CandidateProfile(
+        personal_info=PersonalInfo(full_name="Test", email="test@example.com", location="Montevideo, Uruguay", linkedin_url="https://linkedin.com/in/test"),
+        search_criteria=SearchCriteria(target_roles=["QA"]),
+    )
+    orch = ScannerOrchestrator(profile)
+    for plat in ["ashby", "greenhouse", "lever", "workable", "breezy", "recruitee", "bamboohr"]:
+        assert plat in orch.scanners
+
+
+def test_dynamic_geo_scope_and_filters():
+    scanner = AshbyScanner()
+    kw = ["remote", "latam", "worldwide", "global", "anywhere"]
+
+    # 1. Scope LATAM
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="latam") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="latam") is False
+    assert scanner.matches_location("QA Engineer", "Remote - US", kw, geo_scope="latam") is False
+
+    # 2. Scope LATAM + North America
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="latam_na") is True
+    assert scanner.matches_location("QA Engineer", "Remote - United States", kw, geo_scope="latam_na") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Canada", kw, geo_scope="latam_na") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="latam_na") is False
+
+    # 3. Scope Global (Worldwide)
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="global") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="global") is True
+    assert scanner.matches_location("QA Engineer", "Remote - China", kw, geo_scope="global") is True
+
+    # 4. Custom Countries filter (e.g. Germany)
+    assert scanner.matches_location("QA Engineer", "Berlin, Germany", kw, geo_scope="global", custom_countries=["Alemania", "Germany"], work_modes=["remote", "onsite"]) is True
+    assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="global", custom_countries=["Alemania", "Germany"]) is False
+
+    # 5. Work modes: On-site in Global scope allows onsite from any country
+    assert scanner.matches_location("QA Engineer", "Beijing, China", kw, geo_scope="global", work_modes=["onsite"]) is True
+
+    # 6. Experience filter: None (resulting from max_years == 0) does not filter out experience
+    # 7. Discard false positives where 'Global' is part of the job title/product (e.g. C6bank)
+    assert scanner.matches_location(
+        "Senior Quality Assurance Engineer | Hélix Conta Global",
+        "São Paulo, Brazil",
+        kw,
+        geo_scope="latam",
+        custom_countries=["Uruguay"],
+        work_modes=["remote", "hybrid", "onsite"],
+    ) is False
+
+    # 8. Accept real unconstrained worldwide remote jobs when country whitelist is active
+    assert scanner.matches_location(
+        "Lead QA Engineer (AI native)",
+        "Worldwide (Remote)",
+        kw,
+        geo_scope="latam",
+        custom_countries=["Uruguay"],
+        work_modes=["remote", "hybrid", "onsite"],
+    ) is True
+
+    # 9. Discard on-site positions in a different country when a country filter is selected
+    assert scanner.matches_location(
+        "QA Engineer",
+        "São Paulo, Brazil (On-site)",
+        kw,
+        geo_scope="latam",
+        custom_countries=["Uruguay"],
+        work_modes=["remote", "hybrid", "onsite"],
+    ) is False
+
+
+def test_detect_work_mode():
+    scanner = AshbyScanner()
+
+    # Remote detection
+    assert scanner.detect_work_mode("Frontend Engineer", "Remote") == "remote"
+    assert scanner.detect_work_mode("QA Automation Engineer", "Montevideo, Uruguay (Remote)") == "remote"
+    assert scanner.detect_work_mode("Full Stack Developer", "Worldwide") == "remote"
+    assert scanner.detect_work_mode("Backend Engineer (Remote)", "Buenos Aires, Argentina") == "remote"
+    assert scanner.detect_work_mode("Software Engineer", "") == "remote"
+
+    # Hybrid detection
+    assert scanner.detect_work_mode("Frontend Engineer", "CDMX, Mexico (Hybrid)") == "hybrid"
+    assert scanner.detect_work_mode("Hybrid QA Lead", "Montevideo, Uruguay") == "hybrid"
+
+    # Onsite detection
+    assert scanner.detect_work_mode("Frontend Engineer", "Ciudad de Mexico") == "onsite"
+    assert scanner.detect_work_mode("Software Engineer", "São Paulo, Brazil") == "onsite"
+    assert scanner.detect_work_mode("QA Engineer (On-site)", "Bogota, Colombia") == "onsite"
+
+    # JobPosting serialization test
+    from src.core.models import JobPosting, ATSPlatform
+    jp = JobPosting(
+        ats=ATSPlatform.ASHBY,
+        company="test-co",
+        title="Frontend Engineer",
+        location="CDMX, Mexico",
+        url="https://jobs.ashbyhq.com/test-co/1",
+        work_mode=scanner.detect_work_mode("Frontend Engineer", "CDMX, Mexico"),
+    )
+    assert jp.work_mode == "onsite"
+    dump = jp.model_dump()
+    assert dump["work_mode"] == "onsite"
+
+
+
+
 
 

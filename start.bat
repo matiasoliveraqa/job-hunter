@@ -47,6 +47,9 @@ if exist "venv\Scripts\activate.bat" (
     call venv\Scripts\activate.bat
 )
 
+REM 1.5. Check for updates from remote repository
+python -m src.updater
+
 REM 2. Install Python dependencies if missing
 python -c "import aiohttp, rich, playwright, jinja2" 2>nul
 if %errorlevel% neq 0 (

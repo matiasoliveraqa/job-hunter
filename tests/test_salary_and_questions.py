@@ -1,3 +1,4 @@
+import re
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from src.core.models import CandidateProfile, PersonalInfo, SearchCriteria, CandidatePreferences, OpenQuestionTemplates
@@ -440,6 +441,64 @@ def test_regression_controls_eeo(dummy_profile):
 
     # 4. Spanish decline fallback: [Femenino, No binario, Prefiero no responder] with male returns 'Prefiero no responder'
     assert app.match_dropdown_option(["Femenino", "No binario", "Prefiero no responder"], choices_no_male or [], is_sensitive=True) == "Prefiero no responder"
+
+
+def test_match_experience_range():
+    # 7 years QA experience (Matías Olivera)
+    opts_1 = ["Less than 3", "3-5 years", "6-9 years", "10+ years"]
+    assert BaseApplicator.match_experience_range(7, opts_1) == "6-9 years"
+    assert BaseApplicator.match_experience_range(2, opts_1) == "Less than 3"
+    assert BaseApplicator.match_experience_range(4, opts_1) == "3-5 years"
+    assert BaseApplicator.match_experience_range(11, opts_1) == "10+ years"
+
+    opts_2 = ["0-2 years", "3-5 years", "5+ years"]
+    assert BaseApplicator.match_experience_range(7, opts_2) == "5+ years"
+
+    opts_3 = ["1 to 3", "4 to 6", "7 to 9", "10 or more"]
+    assert BaseApplicator.match_experience_range(7, opts_3) == "7 to 9"
+
+
+@pytest.mark.asyncio
+async def test_choose_radio_option_mocked(dummy_profile, monkeypatch):
+    from src.automation import agent_adapter
+
+    async def mock_query(prompt, preferred_provider="auto", timeout=35):
+        return "6-9 years"
+
+    monkeypatch.setattr(agent_adapter, "query_model", mock_query)
+
+    chosen = await agent_adapter.choose_radio_option(
+        question_text="How many years of experience in QA?",
+        options=["Less than 3", "3-5 years", "6-9 years", "10+ years"],
+        job_title="QA Engineer",
+        company="Acme",
+        candidate_profile=dummy_profile,
+    )
+    assert chosen == "6-9 years"
+
+
+@pytest.mark.asyncio
+async def test_choose_radio_option_generic_role(dummy_profile, monkeypatch):
+    from src.automation import agent_adapter
+
+    async def mock_query(prompt, preferred_provider="auto", timeout=35):
+        assert "TARGET ROLE: Backend Engineer" in prompt
+        assert "CORE SKILLS: Python, Go, Docker." in prompt
+        return "Option 2"
+
+    monkeypatch.setattr(agent_adapter, "query_model", mock_query)
+
+    dummy_profile.search_criteria.keywords = ["Python", "Go", "Docker"]
+    chosen = await agent_adapter.choose_radio_option(
+        question_text="Have you worked as the primary owner on an architecture migration?",
+        options=["No", "Yes", "Not sure"],
+        job_title="Backend Engineer",
+        company="Acme",
+        candidate_profile=dummy_profile,
+    )
+    assert chosen == "Yes"
+
+
 
 
 

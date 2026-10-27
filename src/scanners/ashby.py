@@ -19,6 +19,9 @@ class AshbyScanner(BaseScanner):
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
         home_terms: Optional[List[str]] = None,
+        geo_scope: Optional[str] = None,
+        custom_countries: Optional[List[str]] = None,
+        work_modes: Optional[List[str]] = None,
     ) -> List[JobPosting]:
         url = f"https://api.ashbyhq.com/posting-api/job-board/{company_slug}"
         postings: List[JobPosting] = []
@@ -39,7 +42,8 @@ class AshbyScanner(BaseScanner):
                     if j.get("isRemote") is False and not any(
                         r in loc.lower() for r in ("remote", "worldwide", "global", *home_lower)
                     ):
-                        continue
+                        if not work_modes or ("onsite" not in work_modes and "hybrid" not in work_modes):
+                            continue
 
                     if j.get("isRemote") and "remote" not in loc.lower():
                         loc = f"{loc} (Remote)".strip()
@@ -49,7 +53,16 @@ class AshbyScanner(BaseScanner):
                         f"{j.get('descriptionPlain') or ''} "
                         f"{j.get('descriptionHtml') or ''}"
                     )
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc, location_keywords, description=desc, home_terms=home_terms):
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(
+                        title,
+                        loc,
+                        location_keywords,
+                        description=desc,
+                        home_terms=home_terms,
+                        geo_scope=geo_scope,
+                        custom_countries=custom_countries,
+                        work_modes=work_modes,
+                    ):
                         if self.has_residency_restriction(desc, location_keywords, home_terms=home_terms):
                             continue
                         if not self.matches_experience(desc, max_years_experience):
@@ -63,7 +76,8 @@ class AshbyScanner(BaseScanner):
                             title=title,
                             location=loc,
                             url=job_url,
-                            required_years=req_years
+                            required_years=req_years,
+                            work_mode=self.detect_work_mode(title, loc, desc),
                         ))
         except Exception:
             pass

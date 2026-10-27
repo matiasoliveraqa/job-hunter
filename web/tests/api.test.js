@@ -60,6 +60,10 @@ test('isAllowedAtsHost strictly validates ATS domains and prevents query paramet
   assert.strictEqual(isAllowedAtsHost('https://boards.greenhouse.io/corp/jobs/1'), true)
   assert.strictEqual(isAllowedAtsHost('https://jobs.ashbyhq.com/corp/1'), true)
   assert.strictEqual(isAllowedAtsHost('https://jobs.lever.co/corp/1'), true)
+  assert.strictEqual(isAllowedAtsHost('https://apply.workable.com/corp/j/123/'), true)
+  assert.strictEqual(isAllowedAtsHost('https://corp.breezy.hr/p/123-job'), true)
+  assert.strictEqual(isAllowedAtsHost('https://corp.recruitee.com/o/job-slug'), true)
+  assert.strictEqual(isAllowedAtsHost('https://corp.bamboohr.com/careers/123'), true)
 
   // Query parameter bypass attempts on arbitrary domains
   assert.strictEqual(isAllowedAtsHost('https://evil.com/phish?gh_jid=1'), false)
@@ -351,6 +355,53 @@ test('Web server host authorization and API endpoints', async (t) => {
       headers: { host: `127.0.0.1:${port}` },
     })
     assert.strictEqual(delRes.status, 204)
+  })
+
+  await t.test('POST /api/system/update runs updater and returns JSON status', async () => {
+    const updateRes = await makeRequest({
+      port,
+      path: '/api/system/update',
+      method: 'POST',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(updateRes.status, 200)
+    assert.strictEqual(updateRes.json?.ok, true)
+    assert.ok(typeof updateRes.json?.output === 'string')
+  })
+
+  await t.test('PUT /api/profile accepts all 7 enabled platforms', async () => {
+    const profileRes = await makeRequest({
+      port,
+      path: '/api/profile',
+      method: 'GET',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(profileRes.status, 200)
+    const existing = profileRes.json || {}
+    existing.ats_settings = {
+      ...(existing.ats_settings || {}),
+      enabled_platforms: ['ashby', 'greenhouse', 'lever', 'workable', 'breezy', 'recruitee', 'bamboohr'],
+    }
+    const putRes = await makeRequest({
+      port,
+      path: '/api/profile',
+      method: 'PUT',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: existing,
+    })
+    assert.strictEqual(putRes.status, 200)
+    assert.deepStrictEqual(putRes.json?.ats_settings?.enabled_platforms, [
+      'ashby',
+      'greenhouse',
+      'lever',
+      'workable',
+      'breezy',
+      'recruitee',
+      'bamboohr',
+    ])
   })
 })
 

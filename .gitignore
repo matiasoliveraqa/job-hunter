@@ -53,6 +53,7 @@ resumes/
 # UI assets are part of the build, unlike screenshots which may carry personal data
 !web/public/*.png
 !web/src/assets/*.png
+!docs/images/*.png
 *.db
 *.sqlite*
 

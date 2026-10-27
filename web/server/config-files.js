@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const YES_NO = ['Yes', 'No']
 const PERIODS = ['monthly', 'annual']
-const PLATFORMS = ['ashby', 'greenhouse', 'lever']
+const PLATFORMS = ['ashby', 'greenhouse', 'lever', 'workable', 'breezy', 'recruitee', 'bamboohr']
 const BACKUPS_KEPT = 5
 
 export class ValidationError extends Error {}

@@ -14,6 +14,10 @@ from src.core.config import DATA_DIR, OUTPUT_DIR, get_exclusion_checker
 from src.scanners.ashby import AshbyScanner
 from src.scanners.greenhouse import GreenhouseScanner
 from src.scanners.lever import LeverScanner
+from src.scanners.workable import WorkableScanner
+from src.scanners.breezy import BreezyScanner
+from src.scanners.recruitee import RecruiteeScanner
+from src.scanners.bamboohr import BambooHRScanner
 
 class ScannerOrchestrator:
     def __init__(self, profile: CandidateProfile):
@@ -22,7 +26,11 @@ class ScannerOrchestrator:
         self.scanners = {
             "ashby": AshbyScanner(),
             "greenhouse": GreenhouseScanner(),
-            "lever": LeverScanner()
+            "lever": LeverScanner(),
+            "workable": WorkableScanner(),
+            "breezy": BreezyScanner(),
+            "recruitee": RecruiteeScanner(),
+            "bamboohr": BambooHRScanner(),
         }
 
     def _load_company_slugs(self, platform: str) -> List[str]:
@@ -57,6 +65,9 @@ class ScannerOrchestrator:
         concurrency_limit: int = 200,
         max_years_experience: Optional[int] = None,
         allow_captcha: bool = False,
+        geo_scope: Optional[str] = None,
+        custom_countries: Optional[List[str]] = None,
+        work_modes: Optional[List[str]] = None,
         on_match: Optional[Callable[[JobPosting], Any]] = None,
         on_progress: Optional[Callable[[int, int, str, str], Any]] = None,
         on_error: Optional[Callable[[str, str, str], Any]] = None,
@@ -73,9 +84,9 @@ class ScannerOrchestrator:
             ) if t and str(t).strip()
         ]
         max_years = (
-            max_years_experience
-            if max_years_experience is not None
-            else self.profile.effective_max_years
+            None
+            if max_years_experience == 0
+            else (max_years_experience if max_years_experience is not None else self.profile.effective_max_years)
         )
 
         items = []
@@ -115,6 +126,9 @@ class ScannerOrchestrator:
                         locations,
                         max_years_experience=max_years,
                         home_terms=home_terms,
+                        geo_scope=geo_scope,
+                        custom_countries=custom_countries,
+                        work_modes=work_modes,
                     )
                     if not allow_captcha:
                         postings = [p for p in postings if not p.has_captcha]

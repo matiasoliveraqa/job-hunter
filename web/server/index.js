@@ -113,7 +113,7 @@ app.post('/api/applications', async (req, res) => {
   if (wantsDemo === true && !isDemoUrl) return res.status(400).json({ error: 'La demo solo admite publicaciones de prueba' })
   if (url && !isDemoUrl && !isAllowedAtsHost(url)) {
     return res.status(400).json({
-      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite registrar postulaciones en dominios oficiales de Greenhouse, Ashby o Lever.',
+      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite registrar postulaciones en dominios oficiales de plataformas ATS soportadas.',
     })
   }
   const { item, created } = await store.create({
@@ -333,6 +333,23 @@ app.post('/api/open-folder', async (req, res) => {
   }
 })
 
+// ---- Cross-platform system updater (Linux, macOS, Windows) ----
+app.post('/api/system/update', (_req, res) => {
+  const child = spawn(PYTHON_BIN, ['-m', 'src.updater'], {
+    cwd: ROOT,
+    env: process.env,
+  })
+  let output = ''
+  child.stdout.on('data', (d) => { output += d.toString() })
+  child.stderr.on('data', (d) => { output += d.toString() })
+  child.on('close', (code) => {
+    res.json({
+      ok: code === 0,
+      output: output.trim(),
+    })
+  })
+})
+
 // ---- Application form launcher (headed browser, user submits manually) ----
 const launches = new Map()
 const ALLOWED_ATS_DOMAINS = [
@@ -343,6 +360,11 @@ const ALLOWED_ATS_DOMAINS = [
   'jobs.ashbyhq.com',
   'lever.co',
   'jobs.lever.co',
+  'workable.com',
+  'apply.workable.com',
+  'breezy.hr',
+  'recruitee.com',
+  'bamboohr.com',
 ]
 
 export function isAllowedAtsHost(urlString) {
@@ -365,7 +387,7 @@ app.post('/api/apply', async (req, res) => {
 
   if (!isDemoUrl && !isAllowedAtsHost(url)) {
     return res.status(400).json({
-      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite autocompletar en dominios oficiales de Greenhouse, Ashby o Lever.',
+      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite autocompletar en dominios oficiales de plataformas ATS soportadas.',
     })
   }
 
@@ -515,7 +537,7 @@ app.get('/api/scan/events', (req, res) => {
   })
 })
 
-function launchScanProcess({ roles, platforms, locations, maxYears, concurrency, allowCaptcha }) {
+function launchScanProcess({ roles, platforms, locations, maxYears, concurrency, allowCaptcha, geoScope, countries, workModes }) {
   if (activeScanChild) {
     try { activeScanChild.kill('SIGTERM') } catch {}
     activeScanChild = null
@@ -539,6 +561,15 @@ function launchScanProcess({ roles, platforms, locations, maxYears, concurrency,
   }
   if (allowCaptcha === true) {
     args.push('--allow-captcha')
+  }
+  if (geoScope) {
+    args.push('--geo-scope', String(geoScope))
+  }
+  if (Array.isArray(countries) && countries.length) {
+    args.push('--countries', countries.join(','))
+  }
+  if (Array.isArray(workModes) && workModes.length) {
+    args.push('--work-modes', workModes.join(','))
   }
 
   latestScanMatches = []

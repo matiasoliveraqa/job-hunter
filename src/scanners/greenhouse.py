@@ -19,6 +19,9 @@ class GreenhouseScanner(BaseScanner):
         location_keywords: List[str],
         max_years_experience: Optional[int] = None,
         home_terms: Optional[List[str]] = None,
+        geo_scope: Optional[str] = None,
+        custom_countries: Optional[List[str]] = None,
+        work_modes: Optional[List[str]] = None,
     ) -> List[JobPosting]:
         url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs?content=true"
         postings: List[JobPosting] = []
@@ -42,7 +45,16 @@ class GreenhouseScanner(BaseScanner):
                     loc_name = loc_obj.get("name") if isinstance(loc_obj, dict) else str(loc_obj) or ""
 
                     desc_text = f"{title} {j.get('content') or ''}"
-                    if self.matches_keywords(title, role_keywords) and self.matches_location(title, loc_name, location_keywords, description=desc_text, home_terms=home_terms):
+                    if self.matches_keywords(title, role_keywords) and self.matches_location(
+                        title,
+                        loc_name,
+                        location_keywords,
+                        description=desc_text,
+                        home_terms=home_terms,
+                        geo_scope=geo_scope,
+                        custom_countries=custom_countries,
+                        work_modes=work_modes,
+                    ):
                         job_id = j.get("id")
 
                         if self.has_residency_restriction(desc_text, location_keywords, home_terms=home_terms):
@@ -65,7 +77,8 @@ class GreenhouseScanner(BaseScanner):
                             title=title,
                             location=loc_name,
                             url=job_url,
-                            required_years=req_years
+                            required_years=req_years,
+                            work_mode=self.detect_work_mode(title, loc_name, desc_text),
                         ))
         except aiohttp.ClientResponseError as e:
             if e.status in (406, 429):

@@ -633,6 +633,38 @@ class BaseApplicator(ABC):
             cleaned = (cleaned.split("*")[0] + "*").strip()
         return cleaned.strip()
 
+    @staticmethod
+    def match_experience_range(years: int, options: List[str]) -> Optional[str]:
+        """Match candidate's numeric years of experience to a discrete radio/select option."""
+        if not options:
+            return None
+        # 1. Exact range (e.g., "3-5 years", "6-9 years", "6 to 9")
+        for opt in options:
+            text = opt.lower().strip()
+            m_range = re.search(r"(\d+)\s*(?:-|to|a)\s*(\d+)", text)
+            if m_range:
+                low = int(m_range.group(1))
+                high = int(m_range.group(2))
+                if low <= years <= high:
+                    return opt
+        # 2. Plus/more range (e.g., "10+ years", "5+ years", "more than 5")
+        for opt in options:
+            text = opt.lower().strip()
+            m_plus = re.search(r"(\d+)\s*(?:\+|plus|\s+or\s+more|\s+o\s+m[aá]s)", text)
+            if m_plus:
+                min_y = int(m_plus.group(1))
+                if years >= min_y:
+                    return opt
+        # 3. Less/under range (e.g., "Less than 3", "under 3", "< 3")
+        for opt in options:
+            text = opt.lower().strip()
+            m_less = re.search(r"(?:less\s+than|under|menos\s+de|<)\s*(\d+)", text)
+            if m_less:
+                max_y = int(m_less.group(1))
+                if years < max_y:
+                    return opt
+        return None
+
     def match_dropdown_option(
         self,
         options: List[str],
@@ -1570,7 +1602,7 @@ class BaseApplicator(ABC):
             pass
 
     async def _fill_radio_groups(self) -> None:
-        """Inspect radio button groups and select matching answers."""
+        """Inspect radio button groups and select matching answers using deterministic rules and AI."""
         try:
             radios = self.page.locator("input[type='radio']")
             count = await radios.count()
@@ -1600,10 +1632,31 @@ class BaseApplicator(ABC):
 
                 q_text = await group.first.evaluate(
                     """(node) => {
-                        const wrapper = node.closest('.application-question, [class*="question"], fieldset, [class*="field"], .section');
+                        const fieldset = node.closest('fieldset');
+                        if (fieldset) {
+                            const leg = fieldset.querySelector('legend');
+                            if (leg && leg.innerText && leg.innerText.trim()) return leg.innerText.trim();
+                        }
+                        const rg = node.closest('[role="radiogroup"], .application-question, [class*="question"], [class*="field"], .section');
+                        if (rg) {
+                            const ariaLabel = rg.getAttribute('aria-label');
+                            if (ariaLabel && ariaLabel.trim()) return ariaLabel.trim();
+                            const ariaBy = rg.getAttribute('aria-labelledby');
+                            if (ariaBy) {
+                                const el = document.getElementById(ariaBy);
+                                if (el && el.innerText && el.innerText.trim()) return el.innerText.trim();
+                            }
+                            const titles = rg.querySelectorAll('legend, h2, h3, h4, h5, [class*="title"], [class*="label"], [class*="questionText"], p, label');
+                            for (const t of titles) {
+                                if (t.querySelector('input[type="radio"]')) continue;
+                                const forAttr = t.getAttribute('for');
+                                if (forAttr && document.getElementById(forAttr)?.type === 'radio') continue;
+                                const txt = (t.innerText || '').trim();
+                                if (txt && txt.length > 3) return txt;
+                            }
+                        }
+                        const wrapper = node.closest('.application-question, [class*="question"], [class*="field"], .section');
                         if (wrapper) {
-                            const lbl = wrapper.querySelector('.application-label, legend, label, h3, h4, [class*="label"]');
-                            if (lbl) return lbl.innerText.trim();
                             return wrapper.innerText.slice(0, 200).trim();
                         }
                         return '';
@@ -1612,43 +1665,99 @@ class BaseApplicator(ABC):
                 if not q_text:
                     continue
 
+                q_text = re.sub(r"\s+", " ", q_text).strip()
                 is_req = "*" in q_text or "required" in q_text.lower()
-                choices = self._desired_dropdown_choice(q_text)
-
-                picked = None
-                if choices:
-                    for wanted in choices:
-                        for j in range(g_count):
-                            radio_el = group.nth(j)
-                            label_text = await radio_el.evaluate(
-                                """(node) => {
-                                    if (node.id) {
-                                        const lbl = document.querySelector(`label[for="${CSS.escape(node.id)}"]`);
-                                        if (lbl) return lbl.innerText.trim();
-                                    }
-                                    const parent = node.closest('label');
-                                    if (parent) return parent.innerText.trim();
-                                    const sibling = node.nextElementSibling;
-                                    if (sibling && sibling.tagName === 'LABEL') return sibling.innerText.trim();
-                                    return node.getAttribute('value') || '';
-                                }"""
-                            )
-                            if wanted.lower() == label_text.lower() or wanted.lower() in label_text.lower():
-                                await radio_el.check(force=True)
-                                picked = label_text
-                                break
-                        if picked:
-                            break
-
-                is_sensitive = self.is_sensitive_field(q_text)
-                if not picked and is_req and g_count > 0 and not is_sensitive:
-                    await group.first.check(force=True)
-                    picked = "Opción predeterminada"
-
                 short_q = (q_text[:50] + "...") if len(q_text) > 50 else q_text
-                if picked:
-                    self.filled_fields[f"Radio ({short_q})"] = picked
-                    print(f"  [OK] Selected radio '{picked}' for '{short_q}'{' (*)' if is_req else ''}")
+
+                # Extract each option in this group
+                options_data = []
+                for j in range(g_count):
+                    radio_el = group.nth(j)
+                    label_text = await radio_el.evaluate(
+                        """(node) => {
+                            if (node.id) {
+                                const lbl = document.querySelector(`label[for="${CSS.escape(node.id)}"]`);
+                                if (lbl && lbl.innerText && lbl.innerText.trim()) return lbl.innerText.trim();
+                            }
+                            const parent = node.closest('label');
+                            if (parent && parent.innerText && parent.innerText.trim()) return parent.innerText.trim();
+                            let sib = node.nextElementSibling;
+                            while (sib) {
+                                if (sib.tagName === 'LABEL' || sib.tagName === 'SPAN' || sib.tagName === 'DIV') {
+                                    const txt = (sib.innerText || '').trim();
+                                    if (txt) return txt;
+                                }
+                                sib = sib.nextElementSibling;
+                            }
+                            return node.getAttribute('aria-label') || node.getAttribute('value') || '';
+                        }"""
+                    )
+                    options_data.append({"el": radio_el, "label": (label_text or "").strip()})
+
+                option_labels = [o["label"] for o in options_data if o["label"]]
+
+                picked_label = None
+                picked_el = None
+
+                # 1. Deterministic check: Numeric years of experience ranges (generic for any candidate)
+                candidate_years = getattr(self.p_info, "years_of_experience", None)
+                if candidate_years is not None and re.search(r"\b(years?\s+of\s+experience|years?\s+in\s+|años\s+de\s+experiencia)\b", q_text, re.IGNORECASE):
+                    matched_exp = self.match_experience_range(candidate_years, option_labels)
+                    if matched_exp:
+                        picked_label = matched_exp
+
+                # 2. Deterministic check: Standard compliance and profile dropdown/radio choices
+                if not picked_label:
+                    choices = self._desired_dropdown_choice(q_text)
+                    if choices:
+                        for wanted in choices:
+                            for o in option_labels:
+                                if wanted.lower() == o.lower() or wanted.lower() in o.lower():
+                                    picked_label = o
+                                    break
+                            if picked_label:
+                                break
+
+                # 5. AI / LLM selection for open-ended custom radio questions
+                is_sensitive = self.is_sensitive_field(q_text)
+                if not picked_label and not is_sensitive and option_labels:
+                    try:
+                        from src.automation.agent_adapter import choose_radio_option
+                        body_ctx = await self.page.evaluate("() => (document.body ? document.body.innerText.slice(0, 1500) : '')")
+                        ai_choice = await choose_radio_option(
+                            question_text=q_text,
+                            options=option_labels,
+                            job_title=self.role,
+                            company=self.company,
+                            job_context=body_ctx,
+                            candidate_profile=self.profile,
+                        )
+                        if ai_choice:
+                            picked_label = ai_choice
+                    except Exception as err:
+                        print(f"  [!] AI radio option evaluation error for '{short_q}': {err}")
+
+                # 6. Apply check on matching radio element
+                if picked_label:
+                    for o in options_data:
+                        if o["label"].lower() == picked_label.lower():
+                            picked_el = o["el"]
+                            break
+                    if not picked_el:
+                        for o in options_data:
+                            if picked_label.lower() in o["label"].lower() or o["label"].lower() in picked_label.lower():
+                                picked_el = o["el"]
+                                break
+
+                if picked_el:
+                    await picked_el.check(force=True)
+                    self.filled_fields[f"Radio ({short_q})"] = picked_label
+                    print(f"  [OK] Selected radio '{picked_label}' for '{short_q}'{' (*)' if is_req else ''}")
+                elif is_req and g_count > 0 and not is_sensitive:
+                    await group.first.check(force=True)
+                    first_label = options_data[0]["label"] or "Primera opción"
+                    self.filled_fields[f"Radio ({short_q})"] = first_label
+                    print(f"  [OK] Selected default radio '{first_label}' for '{short_q}' (*)")
                 elif is_sensitive:
                     self.filled_fields[f"Radio ({short_q})"] = "Pending manual review"
                     if self.is_location_field(q_text):

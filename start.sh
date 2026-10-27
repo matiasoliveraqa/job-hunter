@@ -45,6 +45,9 @@ elif [ -f "venv/Scripts/activate" ]; then
     source venv/Scripts/activate
 fi
 
+# 1.5. Check for updates from remote repository
+python3 -m src.updater || true
+
 # 2. Install Python dependencies if missing
 if ! python3 -c "import aiohttp, rich, playwright, jinja2" 2>/dev/null; then
     echo "[*] Installing Python dependencies from requirements.txt..."
@@ -71,6 +74,6 @@ if [ ! -d "dist" ]; then
 fi
 
 echo "[*] Starting local web server..."
-# Start Express server
+# Start Express server with auto-reload on file changes
 cd "$SCRIPT_DIR"
-node web/server/index.js
+node --watch web/server/index.js
