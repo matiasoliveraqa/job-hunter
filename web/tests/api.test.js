@@ -356,6 +356,18 @@ test('Web server host authorization and API endpoints', async (t) => {
     })
     assert.strictEqual(delRes.status, 204)
   })
+
+  await t.test('POST /api/system/update runs updater and returns JSON status', async () => {
+    const updateRes = await makeRequest({
+      port,
+      path: '/api/system/update',
+      method: 'POST',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(updateRes.status, 200)
+    assert.strictEqual(updateRes.json?.ok, true)
+    assert.ok(typeof updateRes.json?.output === 'string')
+  })
 })
 
 test('Dynamic port fallback EADDRINUSE binds to next port and authorizes Host', async () => {

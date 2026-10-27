@@ -444,6 +444,9 @@ def main():
     cv_parser.add_argument("--company", required=False, help="Company name to create dedicated application folder")
     cv_parser.add_argument("--role", required=False, help="Role title for dedicated application folder")
 
+    # update
+    subparsers.add_parser("update", help="Check and apply updates from remote git repository")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -454,6 +457,9 @@ def main():
         apply_command(args)
     elif args.command == "build-cv":
         build_cv_command(args)
+    elif args.command == "update":
+        from src.updater import check_and_apply_updates
+        check_and_apply_updates()
     else:
         parser.print_help()
 
