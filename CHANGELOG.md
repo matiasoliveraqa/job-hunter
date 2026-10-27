@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-10-27
+
+### Added
+- Bidirectional role acronym expansions (`QA`, `QC`, `QE`, `QIA`, `SDET`) in `BaseScanner.matches_keywords` mapping abbreviations to expanded role titles and vice versa.
+- Tokenized single-word matching with boundary checks to prevent false negatives caused by rigid multi-word matching.
+- Preset search chips updated in `QA / SDET` and `Todos` with flexible tags: `QA`, `SDET`, `QA Automation`, `Test Engineer`, `Automation Engineer`, `QA Analyst`, `Quality Engineer`, `QE`, `QC`, `QIA`, `Software Tester`.
+- Match score relevance boost in `scanController.js` for `QE`, `QC`, `QIA`, and `Test` roles.
+
+### Fixed
+- BambooHR `atsLocation` parser to read `city`, `state`, `province`, and `country` alongside `location`, preventing non-LATAM postings from falling back to generic remote.
+- Delimiter regex in `RESTRICTED_LOCATION_RE` to detect space-delimited `Remote US` strings.
+
 ## [1.3.0] - 2026-10-27
 
 ### Added
