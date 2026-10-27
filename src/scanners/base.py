@@ -29,7 +29,7 @@ EXPERIENCE_PATTERNS = [
 # Explicit LATAM / Global keywords that override regional restrictions in location strings
 LATAM_OR_GLOBAL_RE = re.compile(
     r"\b("
-    r"latam|latin\s+america|south\s+america|"
+    r"latam|latin\s+america|south\s+america|americas|"
     r"argentina|bolivia|brazil|brasil|chile|colombia|costa\s+rica|ecuador|el\s+salvador|guatemala|"
     r"honduras|mexico|m\u00e9xico|nicaragua|panama|panam\u00e1|paraguay|peru|per\u00fa|"
     r"dominican\s+republic|uruguay|venezuela|"
@@ -90,10 +90,12 @@ RESTRICTED_LOCATION_RE = re.compile(
 
 # Phrases inside the job description or application form questions that restrict the role to specific residents/citizens
 RESIDENCY_RESTRICTION_RE = re.compile(
-    r"(state\s+of\s+residence\s+within\s+the\s+united\s+states|"
-    r"(?:must\s+)?(?:reside|live|be\s+located|be\s+based)\s+in\s+(?:the\s+)?(?:united\s+states|usa|uk|canada|europe|eu|brazil|brasil|india|\bu\.?\s?s\.?(?!\w))|"
-    r"only\s+(?:hiring|open\s+to\s+candidates|able\s+to\s+hire)\s+in\s+(?:the\s+)?(?:united\s+states|usa|brazil|brasil|\bu\.?\s?s\.?(?!\w))|"
-    r"candidates\s+must\s+be\s+(?:located|based|residing)\s+in\s+(?:the\s+)?(?:united\s+states|usa|brazil|brasil|\bu\.?\s?s\.?(?!\w))|"
+    r"(?:"
+    r"state\s+of\s+residence\s+within\s+the\s+united\s+states|"
+    r"(?:must\s+(?:be\s+)?(?:reside|live|located|based)\s+in)\s+(?:the\s+)?(?:united\s+states|usa|uk|canada|europe|eu|brazil|brasil|india|north\s+america|\bu\.?\s?s\.?(?!\w))|"
+    r"(?:candidates?|applicants?)\s+(?:who\s+)?(?:must\s+be\s+)?(?:reside|residing|live|living|located|based)\s+in\s+(?:the\s+)?(?:united\s+states|usa|uk|canada|europe|eu|brazil|brasil|india|north\s+america|\bu\.?\s?s\.?(?!\w))|"
+    r"(?:role|position)\s+(?:requires\s+(?:you\s+to\s+be\s+)?(?:located|based|residing|living)\s+in|is\s+only\s+open\s+to\s+(?:candidates\s+in)?)\s+(?:the\s+)?(?:united\s+states|usa|uk|canada|europe|eu|brazil|brasil|\bu\.?\s?s\.?(?!\w))|"
+    r"only\s+(?:hiring|open\s+to\s+candidates|able\s+to\s+hire|consider\s+candidates)\b|"
     r"residir\s+(?:en|no)\s+(?:brasil|brazil)|"
     r"contrato\s+clt|regime\s+clt|vaga\s+exclusiva\s+para\s+residentes|"
     r"requires?\s+on-site\s+availability|"
@@ -102,16 +104,15 @@ RESIDENCY_RESTRICTION_RE = re.compile(
     r"\b(?:anywhere|everywhere)\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
     r"\b(?:united\s+states|\bu\.?\s?s\.?(?!\w))\s+(?:only|residents?\s+only|based\s+candidates\s+only|citizens?\s+only)\b|"
     r"\b(?:open|available)\s+(?:only\s+to|to)\s+(?:candidates\s+(?:based|located)\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
-    r"\b(?:position|role)\s+is\s+(?:only\s+)?(?:open\s+to|available\s+to)\s+(?:candidates\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
-    r"\b(?:located|based|residing)\s+(?:within|in)\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
     r"\b(?:remote\s+within\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
-    r"\b(?:remote\s*[-–,/|]\s*(?:anywhere\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))))|"
+    r"\b(?:remote\s*[-–,/|]\s*(?:anywhere\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|\(?us\s+only\)?))|"
     r"(?:location|workplace)\s*[:\s–-]+\s*(?:anywhere\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))\s+remote|remote\s*[,–-]\s*(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w)))|"
     r"(?:authorized|eligible|legally\s+(?:authorized|eligible|able))\s+to\s+work\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
+    r"work\s+in\s+the\s+us\s+without\s+sponsorship|"
+    r"contingent\s+on\s+us\s+work\s+authorization|"
     r"\bu\.?\s?s\.?(?!\w)[-\s]based\s+(?:employees|candidates|applicants|workers|team|only)|"
-    r"(?:reside|residing|located|based)\s+in\s+(?:the\s+)?(?:united\s+states|usa|\bu\.?\s?s\.?(?!\w))|"
-    r"\bu\.?\s?s\.?(?!\w)\s+work\s+authorization|"
-    r"based\s+in\s+north\s+america)",
+    r"\bu\.?\s?s\.?(?!\w)\s+work\s+authorization"
+    r")",
     re.IGNORECASE,
 )
 
@@ -333,9 +334,9 @@ class BaseScanner(ABC):
             if scope == "latam":
                 has_remote_indicator = bool(
                     re.search(r"\b(remote|remoto)\b", combined, re.IGNORECASE)
-                    or re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE)
+                    or re.search(r"\b(worldwide|global|anywhere|americas)\b", loc_str, re.IGNORECASE)
                 )
-                is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america)\s*$", loc_str, re.IGNORECASE))
+                is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america|americas)\s*$", loc_str, re.IGNORECASE))
                 # For remote roles, reject physical non-local onsite
                 if loc_str and not is_home and not has_remote_indicator and not is_distributed_latam and not (is_onsite and work_modes and "onsite" in work_modes):
                     return False
@@ -344,21 +345,24 @@ class BaseScanner(ABC):
                     if desc_str:
                         if self.has_residency_restriction(desc_str, loc_keywords, home_terms=home_terms):
                             return False
-                        return bool(LATAM_RE.search(f"{t_str} {desc_str}"))
-                    return bool(LATAM_RE.search(t_str))
+                        return bool(LATAM_RE.search(f"{t_str} {desc_str}")) or bool(re.search(r"\b(remote|remoto|worldwide|global|anywhere|americas)\b", f"{t_str} {desc_str}", re.IGNORECASE))
+                    return bool(LATAM_RE.search(t_str)) or "remote" in t_lower
 
                 if RESTRICTED_LOCATION_RE.search(loc_str) or RESTRICTED_LOCATION_RE.search(t_str):
                     if not LATAM_RE.search(combined):
                         return False
 
-                return bool(LATAM_RE.search(combined)) or is_home
+                if self.has_residency_restriction(desc_str, loc_keywords, home_terms=home_terms):
+                    return False
+
+                return bool(LATAM_RE.search(combined)) or is_home or has_remote_indicator
 
             if scope == "latam_na":
                 has_remote_indicator = bool(
                     re.search(r"\b(remote|remoto)\b", combined, re.IGNORECASE)
                     or re.search(r"\b(worldwide|global|anywhere|americas)\b", loc_str, re.IGNORECASE)
                 )
-                is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america)\s*$", loc_str, re.IGNORECASE))
+                is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america|americas)\s*$", loc_str, re.IGNORECASE))
                 if loc_str and not is_home and not has_remote_indicator and not is_distributed_latam and not (is_onsite and work_modes and "onsite" in work_modes):
                     return False
 

@@ -378,9 +378,9 @@ export async function startScan(existingApps = []) {
 
   let locations = []
   if (form.geoScope === 'latam') {
-    locations = ['latam', 'latin america', 'south america']
+    locations = ['remote', 'latam', 'latin america', 'south america', 'worldwide', 'global', 'anywhere', 'americas']
   } else if (form.geoScope === 'latam_na') {
-    locations = ['latam', 'latin america', 'south america', 'americas', 'north america']
+    locations = ['remote', 'latam', 'latin america', 'south america', 'americas', 'north america', 'worldwide', 'global', 'anywhere']
   } else {
     locations = ['remote', 'worldwide', 'global', 'anywhere']
   }

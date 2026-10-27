@@ -236,16 +236,26 @@ def test_dynamic_geo_scope_and_filters():
     scanner = AshbyScanner()
     kw = ["remote", "latam", "worldwide", "global", "anywhere"]
 
-    # 1. Scope LATAM
+    # 1. Scope LATAM: accepts LATAM and unconstrained remote, rejects restricted regions and residency locks
     assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="latam") is True
     assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="latam") is False
     assert scanner.matches_location("QA Engineer", "Remote - US", kw, geo_scope="latam") is False
+    assert scanner.matches_location("QA Engineer", "Remote", kw, geo_scope="latam") is True
+    assert scanner.matches_location("QA Engineer", "Remote - Worldwide", kw, geo_scope="latam") is True
+    assert scanner.matches_location("QA Engineer", "Worldwide (Remote)", kw, geo_scope="latam") is True
+    assert scanner.matches_location("QA Engineer", "Remote", kw, geo_scope="latam", description="We are an AI company based in the United States. This is a 100% remote position.") is True
+    assert scanner.matches_location("QA Engineer", "Remote", kw, geo_scope="latam", description="Must reside in the United States.") is False
+    assert scanner.matches_location("QA Engineer", "Remote", kw, geo_scope="latam", description="Candidates must be authorized to work in the United States.") is False
 
-    # 2. Scope LATAM + North America
+    # 2. Scope LATAM + North America: accepts LATAM, NA, and unconstrained remote; rejects other regions and residency locks
     assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="latam_na") is True
     assert scanner.matches_location("QA Engineer", "Remote - United States", kw, geo_scope="latam_na") is True
     assert scanner.matches_location("QA Engineer", "Remote - Canada", kw, geo_scope="latam_na") is True
+    assert scanner.matches_location("QA Engineer", "Remote", kw, geo_scope="latam_na") is True
     assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="latam_na") is False
+    assert scanner.matches_location("QA Engineer", "London, UK (Remote)", kw, geo_scope="latam_na") is False
+    assert scanner.matches_location("QA Engineer", "Remote - United States", kw, geo_scope="latam_na", description="Must reside in the United States.") is False
+    assert scanner.matches_location("QA Engineer", "Remote - United States", kw, geo_scope="latam_na", description="We are based in the US. Hiring contractors globally.") is True
 
     # 3. Scope Global (Worldwide)
     assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="global") is True
