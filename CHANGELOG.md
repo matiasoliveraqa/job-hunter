@@ -7,9 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- Radio button discrete option selection (`choose_radio_option`) connected to local LLM agent to answer non-standard application questions dynamically based on candidate CV and profile.
-- Deterministic experience range matcher (`match_experience_range`) for radio groups, mapping candidate experience years to option ranges such as `6-9 years`.
-- Improved question title and option label extraction for radio button groups across ATS platforms.
+- Modality column (`Modalidad` / `Modality`) in the search results table with distinct indicators and badges for Remote, Hybrid, and On-site positions.
+- Work mode classification (`detect_work_mode`) across all 7 ATS scanners (Ashby, Greenhouse, Lever, Workable, Breezy HR, Recruitee, BambooHR) and stored on `JobPosting.work_mode`.
+- Mode column in the CLI search results table output (`python -m src.cli scan`).
+- Discrete radio button option selection (`choose_radio_option`) using local LLM agents to answer non-standard form questions based on the candidate profile.
+- Deterministic experience range matcher (`match_experience_range`) for radio groups, mapping candidate experience years to options like `6-9 years`.
+- Question title and option label extraction for radio button groups across ATS platforms.
+
+### Changed
+- Generalized radio button selection to remain fully role-agnostic without hardcoded job titles.
+
+### Fixed
+- Restricted global remote indicators (`worldwide`, `global`, `anywhere`) to the location field to prevent title false positives (e.g., "Conta Global").
+- Enforced country whitelist on physical on-site and hybrid positions when specific country tags are selected.
+- Eliminated hardcoded candidate CV file names from web views and translation dictionaries.
+- Resolved branch identification in GitHub Actions CI pull request workflows operating in detached HEAD mode.
 
 ## [1.3.0] - 2026-10-26
 
