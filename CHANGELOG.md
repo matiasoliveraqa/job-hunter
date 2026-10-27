@@ -7,7 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- Ongoing company seeds expansion for BambooHR, Breezy HR, Recruitee, and Workable.
+- Expanded company registry across all 7 ATS platforms to 20,000+ companies.
+- Prioritized Uruguayan tech companies at the head of every platform scanning queue.
 
 ## [1.3.0] - 2026-10-26
 

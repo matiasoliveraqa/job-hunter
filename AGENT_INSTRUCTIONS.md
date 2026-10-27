@@ -11,7 +11,7 @@ Follow this cycle continuously **without stopping after the scan to ask for perm
 
 ```mermaid
 flowchart TD
-    A["1. Ingest Candidate CV & Profile"] --> B["2. Scan ATS Databases (Ashby, Greenhouse, Lever)"]
+    A["1. Ingest Candidate CV & Profile"] --> B["2. Scan ATS Databases (7 Platforms: Ashby, Greenhouse, Lever, Workable, BambooHR, Breezy, Recruitee)"]
     B --> C["3. Filter Roles (Location, Exclusions, <= Candidate Years of Exp)"]
     C --> D["4. Create Folder output/applications/YYYY-MM_Company_Role/"]
     D --> E["5. Tailor HTML CV in Folder & Compile 1-Page PDF"]

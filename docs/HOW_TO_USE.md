@@ -7,7 +7,7 @@ This guide walks you through every step of Job Hunter, from initial setup to sub
 ## 1. Core Philosophy: Human-in-the-Loop
 
 Job Hunter does not spray generic resumes across the web. Instead, it handles the repetitive parts of the job search:
-- Scanning official ATS endpoints directly (Ashby, Greenhouse, Lever).
+- Scanning official ATS endpoints directly (Ashby, Greenhouse, Lever, Workable, BambooHR, Breezy HR, Recruitee) across 20,000+ companies.
 - Filtering out positions that require work authorization or location criteria you do not meet.
 - Generating a tailored 1-page ATS resume formatted specifically for the target job description.
 - Pre-filling your personal details, links, salary expectations, and open-ended questions in a visible Chromium browser.

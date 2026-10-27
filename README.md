@@ -11,7 +11,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Node 22+](https://img.shields.io/badge/node-22+-green.svg)](https://nodejs.org/)
 [![Playwright](https://img.shields.io/badge/playwright-stealth-blueviolet.svg)](https://playwright.dev/)
-[![ATS Support](https://img.shields.io/badge/ATS-Ashby%20%7C%20Greenhouse%20%7C%20Lever-purple.svg)](#supported-ats-platforms)
+[![ATS Support](https://img.shields.io/badge/ATS-7%20Platforms%20%7C%2020%2C000%2B%20Companies-purple.svg)](#supported-ats-platforms)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -29,7 +29,7 @@ The modern tech job search is broken:
 
 **Job Hunter takes a fundamentally different, human-in-the-loop approach:**
 
-1. **Direct Public ATS APIs:** Queries official endpoints across **15,000+ top tech companies** on **Ashby**, **Greenhouse**, and **Lever** in seconds using semaphore-bounded concurrency.
+1. **Direct Public ATS APIs:** Queries official endpoints across **20,000+ top tech companies** on **Ashby**, **Greenhouse**, **Lever**, **Workable**, **BambooHR**, **Breezy HR**, and **Recruitee** in seconds using semaphore-bounded concurrency, with prioritized coverage for Uruguayan and LATAM tech companies.
 2. **Experience & Modality Aware:** Filters out roles demanding more years of experience than you have, and automatically switches between your **dependent employee salary** (default) and **contractor salary** based on the job posting.
 3. **Dedicated Folder & Tailored 1-Page CV per Role:** Generates an isolated folder for each application (`output/applications/<YYYY-MM>_<Company>_<Role>/`) containing your tailored 1-page ATS PDF, HTML source, and a standalone `open_application.py` script with the application URL and all completed field values.
 4. **Stealth Headed Pre-Filling & Human Review:** Launches a persistent Chromium/Chrome instance with native OS fingerprint that switches to the Application tab, splits First/Last Name accurately, attaches your tailored CV, and pauses on your desktop so you retain 100% control to review and click **Submit**.
@@ -116,12 +116,12 @@ sequenceDiagram
     actor You as Candidate
     participant UI as Web Dashboard (Vue 3)
     participant Server as Local Server (Node.js / Python)
-    participant ATS as Ashby / Greenhouse / Lever
+    participant ATS as 7 ATS Platforms (Ashby, Greenhouse, Lever, Workable, BambooHR, Breezy, Recruitee)
     participant Agent as Sandboxed LLM (Claude / AGY / Codex)
     participant Browser as Headed Playwright Browser
 
     UI->>Server: Start live SSE search (Roles, LATAM/Global, Max Years)
-    Server->>ATS: Scan 15,000+ public boards (Concurrent, TLS verified)
+    Server->>ATS: Scan 20,000+ public boards (Concurrent, TLS verified)
     ATS-->>Server: Filtered postings (Location & Experience verified)
     Server-->>UI: Real-time SSE stream of qualified jobs
 
@@ -140,7 +140,7 @@ sequenceDiagram
 ### Security & Privacy Guarantees
 
 - **Prompt Injection Defense:** LLM providers (`claude`, `agy`, `codex`) execute in pure text-to-text mode with zero tools (`--tools ""` and no shell access). Untrusted job descriptions cannot execute shell commands or exfiltrate local files.
-- **Strict ATS Domain Allowlist:** Autofill only launches against verified platform domains (`greenhouse.io`, `ashbyhq.com`, `lever.co`). Arbitrary external URLs are rejected to protect personal information.
+- **Strict ATS Domain Allowlist:** Autofill only launches against verified platform domains (`greenhouse.io`, `ashbyhq.com`, `lever.co`, `workable.com`, `bamboohr.com`, `breezy.hr`, `recruitee.com`). Arbitrary external URLs are rejected to protect personal information.
 - **Local Only:** The web server binds to `127.0.0.1` and rejects foreign `Host` and `Origin` headers, so no external site can reach it.
 - **Offline PDF Rendering:** CV compilation blocks all outbound HTTP(S) requests, so a tailored CV cannot phone home.
 - **Human-in-the-Loop:** Applications remain `pending` until you verify and confirm them.
@@ -150,11 +150,15 @@ sequenceDiagram
 
 ## Supported ATS Platforms
 
-| Platform | Scanning | Autofill |
-|---|---|---|
-| Ashby | Yes | Yes |
-| Greenhouse | Yes | Yes |
-| Lever | Yes | Yes |
+| Platform | Scanning | Autofill | Target Registry |
+|---|---|---|---|
+| Ashby | Yes | Yes | 3,500+ companies |
+| Greenhouse | Yes | Yes | 8,500+ companies |
+| Lever | Yes | Yes | 4,400+ companies |
+| Workable | Yes | Yes | 750+ companies |
+| BambooHR | Yes | Yes | 2,400+ companies |
+| Breezy HR | Yes | Yes | 80+ companies |
+| Recruitee | Yes | Yes | 360+ companies |
 
 ---
 
