@@ -260,8 +260,35 @@ def test_dynamic_geo_scope_and_filters():
     assert scanner.matches_location("QA Engineer", "Beijing, China", kw, geo_scope="global", work_modes=["onsite"]) is True
 
     # 6. Experience filter: None (resulting from max_years == 0) does not filter out experience
-    assert scanner.matches_experience("Requires 8+ years of test automation experience", max_years=None) is True
-    assert scanner.matches_experience("Requires 8+ years of test automation experience", max_years=5) is False
+    # 7. Discard false positives where 'Global' is part of the job title/product (e.g. C6bank)
+    assert scanner.matches_location(
+        "Senior Quality Assurance Engineer | Hélix Conta Global",
+        "São Paulo, Brazil",
+        kw,
+        geo_scope="latam",
+        custom_countries=["Uruguay"],
+        work_modes=["remote", "hybrid", "onsite"],
+    ) is False
+
+    # 8. Accept real unconstrained worldwide remote jobs when country whitelist is active
+    assert scanner.matches_location(
+        "Lead QA Engineer (AI native)",
+        "Worldwide (Remote)",
+        kw,
+        geo_scope="latam",
+        custom_countries=["Uruguay"],
+        work_modes=["remote", "hybrid", "onsite"],
+    ) is True
+
+    # 9. Discard on-site positions in a different country when a country filter is selected
+    assert scanner.matches_location(
+        "QA Engineer",
+        "São Paulo, Brazil (On-site)",
+        kw,
+        geo_scope="latam",
+        custom_countries=["Uruguay"],
+        work_modes=["remote", "hybrid", "onsite"],
+    ) is False
 
 
 

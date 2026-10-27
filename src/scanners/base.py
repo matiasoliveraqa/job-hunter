@@ -227,7 +227,10 @@ class BaseScanner(ABC):
         loc_lower = loc_str.lower()
         t_lower = t_str.lower()
 
-        has_remote_indicator = bool(re.search(r"\b(remote|remoto|worldwide|global|anywhere)\b", combined, re.IGNORECASE))
+        has_remote_indicator = bool(
+            re.search(r"\b(remote|remoto)\b", combined, re.IGNORECASE)
+            or re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE)
+        )
         is_explicit_onsite = bool(ONSITE_RE.search(t_str) or ONSITE_RE.search(loc_str))
         is_hybrid = bool(HYBRID_RE.search(t_str) or HYBRID_RE.search(loc_str))
         is_onsite = is_explicit_onsite or (bool(loc_str) and not has_remote_indicator and not is_hybrid)
@@ -240,24 +243,37 @@ class BaseScanner(ABC):
             if is_onsite:
                 if "onsite" not in modes:
                     return False
-                # If scope is global, onsite is accepted anywhere. Otherwise check scope/home
-                if scope != "global" and not is_home:
+                # If custom_countries is specified, only accept onsite in those specific countries
+                if custom_countries:
+                    clean_countries = [c.strip().lower() for c in custom_countries if c and c.strip()]
+                    country_patterns = [re.escape(c).replace(r"\ ", r"\s+") for c in clean_countries]
+                    c_re = re.compile(r"\b(" + "|".join(country_patterns) + r")\b", re.IGNORECASE)
+                    if not c_re.search(combined):
+                        return False
+                elif scope != "global" and not is_home:
                     if scope == "latam" and not LATAM_RE.search(combined):
                         return False
                     elif scope == "latam_na" and not (LATAM_RE.search(combined) or NORTH_AMERICA_RE.search(combined)):
                         return False
-                    elif not scope and not custom_countries:
+                    elif not scope:
                         return False
 
             if is_hybrid:
                 if "hybrid" not in modes:
                     return False
-                if scope != "global" and not is_home:
+                # If custom_countries is specified, only accept hybrid in those specific countries
+                if custom_countries:
+                    clean_countries = [c.strip().lower() for c in custom_countries if c and c.strip()]
+                    country_patterns = [re.escape(c).replace(r"\ ", r"\s+") for c in clean_countries]
+                    c_re = re.compile(r"\b(" + "|".join(country_patterns) + r")\b", re.IGNORECASE)
+                    if not c_re.search(combined):
+                        return False
+                elif scope != "global" and not is_home:
                     if scope == "latam" and not LATAM_RE.search(combined):
                         return False
                     elif scope == "latam_na" and not (LATAM_RE.search(combined) or NORTH_AMERICA_RE.search(combined)):
                         return False
-                    elif not scope and not custom_countries:
+                    elif not scope:
                         return False
 
             if not is_onsite and not is_hybrid:
@@ -280,8 +296,8 @@ class BaseScanner(ABC):
                     return True
                 if not loc_str and desc_str and custom_re.search(desc_str):
                     return True
-                # Accept unconstrained global remote jobs
-                has_global_indicator = bool(re.search(r"\b(worldwide|global|anywhere)\b", combined, re.IGNORECASE))
+                # Accept unconstrained global remote jobs (only if location field specifies global/worldwide)
+                has_global_indicator = bool(re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE))
                 if has_global_indicator and not RESTRICTED_LOCATION_RE.search(loc_str):
                     return True
                 return False
@@ -292,7 +308,10 @@ class BaseScanner(ABC):
                 return "remote" in t_lower or "remote" in loc_lower or not (ONSITE_RE.search(t_str) or ONSITE_RE.search(loc_str))
 
             if scope == "latam":
-                has_remote_indicator = bool(re.search(r"\b(remote|remoto|worldwide|global|anywhere)\b", combined, re.IGNORECASE))
+                has_remote_indicator = bool(
+                    re.search(r"\b(remote|remoto)\b", combined, re.IGNORECASE)
+                    or re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE)
+                )
                 is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america)\s*$", loc_str, re.IGNORECASE))
                 # For remote roles, reject physical non-local onsite
                 if loc_str and not is_home and not has_remote_indicator and not is_distributed_latam and not (is_onsite and work_modes and "onsite" in work_modes):
@@ -312,7 +331,10 @@ class BaseScanner(ABC):
                 return bool(LATAM_RE.search(combined)) or is_home
 
             if scope == "latam_na":
-                has_remote_indicator = bool(re.search(r"\b(remote|remoto|worldwide|global|anywhere|americas)\b", combined, re.IGNORECASE))
+                has_remote_indicator = bool(
+                    re.search(r"\b(remote|remoto)\b", combined, re.IGNORECASE)
+                    or re.search(r"\b(worldwide|global|anywhere|americas)\b", loc_str, re.IGNORECASE)
+                )
                 is_distributed_latam = bool(re.search(r"^\s*(?:latam|latin\s+america|south\s+america)\s*$", loc_str, re.IGNORECASE))
                 if loc_str and not is_home and not has_remote_indicator and not is_distributed_latam and not (is_onsite and work_modes and "onsite" in work_modes):
                     return False
@@ -336,7 +358,10 @@ class BaseScanner(ABC):
                 return is_latam or is_na or is_home or has_remote_indicator
 
             if scope == "global":
-                has_remote_indicator = bool(re.search(r"\b(remote|remoto|worldwide|global|anywhere)\b", combined, re.IGNORECASE))
+                has_remote_indicator = bool(
+                    re.search(r"\b(remote|remoto)\b", combined, re.IGNORECASE)
+                    or re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE)
+                )
                 if loc_str and not is_home and not has_remote_indicator and not (is_onsite and work_modes and "onsite" in work_modes):
                     return False
 
