@@ -74,6 +74,6 @@ if [ ! -d "dist" ]; then
 fi
 
 echo "[*] Starting local web server..."
-# Start Express server
+# Start Express server with auto-reload on file changes
 cd "$SCRIPT_DIR"
-node web/server/index.js
+node --watch web/server/index.js

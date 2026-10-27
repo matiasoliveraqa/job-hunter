@@ -368,6 +368,41 @@ test('Web server host authorization and API endpoints', async (t) => {
     assert.strictEqual(updateRes.json?.ok, true)
     assert.ok(typeof updateRes.json?.output === 'string')
   })
+
+  await t.test('PUT /api/profile accepts all 7 enabled platforms', async () => {
+    const profileRes = await makeRequest({
+      port,
+      path: '/api/profile',
+      method: 'GET',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(profileRes.status, 200)
+    const existing = profileRes.json || {}
+    existing.ats_settings = {
+      ...(existing.ats_settings || {}),
+      enabled_platforms: ['ashby', 'greenhouse', 'lever', 'workable', 'breezy', 'recruitee', 'bamboohr'],
+    }
+    const putRes = await makeRequest({
+      port,
+      path: '/api/profile',
+      method: 'PUT',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: existing,
+    })
+    assert.strictEqual(putRes.status, 200)
+    assert.deepStrictEqual(putRes.json?.ats_settings?.enabled_platforms, [
+      'ashby',
+      'greenhouse',
+      'lever',
+      'workable',
+      'breezy',
+      'recruitee',
+      'bamboohr',
+    ])
+  })
 })
 
 test('Dynamic port fallback EADDRINUSE binds to next port and authorizes Host', async () => {

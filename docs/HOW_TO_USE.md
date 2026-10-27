@@ -32,7 +32,7 @@ When you first open `http://127.0.0.1:3100`, navigate to the **My Profile** (`Mi
 - **Contractor Salary (USD / month)**: B2B or contractor monthly rate. Job Hunter checks whether the job description specifies a contractor role and selects the appropriate rate.
 
 ### Base Resume
-- Upload your primary PDF resume in the **Base Resume** section (`Matias_Olivera_QA_CV.pdf`).
+- Upload your primary PDF resume in the **Base Resume** section (e.g. `Alex_Mercer_QA_Resume.pdf`).
 - The system extracts your work history, projects, and skills to provide the master template for application tailoring.
 
 Click **Save** (`Guardar`) at the bottom of the page to save your profile configuration to `config/profile.json`.
@@ -108,7 +108,7 @@ When you click **Tailor Resume** (`Adaptar CV`):
    ```
 2. The AI engine reads the job description requirements and adjusts your skills order and highlights without inventing tools, companies, or dates.
 3. The HTML is compiled into a 1-page PDF using headless Chromium.
-4. If you run Job Hunter without an AI engine configured, the system uses your standard master resume (`Matias_Olivera_QA_CV.pdf`) directly.
+4. If you run Job Hunter without an AI engine configured, the system uses your standard master resume directly.
 
 ---
 
