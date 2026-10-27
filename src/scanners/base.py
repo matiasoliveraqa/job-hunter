@@ -69,7 +69,7 @@ RESTRICTED_LOCATION_RE = re.compile(
     rf"\b(?:anywhere|everywhere|remote|based|located|resident)\s+in\s+(?:the\s+)?{US_VARIANTS}(?!\w)|"
     rf"\b(?:in|within)\s+(?:the\s+)?{US_VARIANTS}(?!\w)|"
     rf"\b(?:us|u\.?\s?s\.?|united\s+states)\s+(?:remote|only|based|resident|citizens?|nationwide)\b|"
-    rf"\b(?:remote\s*[-–,/|]\s*{US_VARIANTS})(?!\w)|"
+    rf"\b(?:remote\s*[-–,/|\s]\s*{US_VARIANTS})(?!\w)|"
     r"\b(?:north\s+america|americas)\b|"
     + US_STATES_DELIMITED + r"|"
     r"\b(uk|united\s+kingdom|england|london|manchester|scotland|"
@@ -166,6 +166,37 @@ def build_home_only_re(home_terms: Optional[List[str]] = None) -> re.Pattern:
     return re.compile(r"\b(" + "|".join(terms) + r")\b", re.IGNORECASE)
 
 
+ROLE_ACRONYM_MAP = {
+    "qa": re.compile(r"\b(qa|quality\s+assurance)\b", re.IGNORECASE),
+    "quality assurance": re.compile(r"\b(qa|quality\s+assurance)\b", re.IGNORECASE),
+    "qc": re.compile(r"\b(qc|quality\s+control)\b", re.IGNORECASE),
+    "quality control": re.compile(r"\b(qc|quality\s+control)\b", re.IGNORECASE),
+    "qe": re.compile(r"\b(qe|quality\s+engineer(?:ing)?)\b", re.IGNORECASE),
+    "quality engineer": re.compile(r"\b(qe|quality\s+engineer(?:ing)?)\b", re.IGNORECASE),
+    "quality engineering": re.compile(r"\b(qe|quality\s+engineer(?:ing)?)\b", re.IGNORECASE),
+    "qia": re.compile(r"\b(qia|quality\s+(?:ai|ia)|(?:ai|ia)\s+(?:qa|quality))\b", re.IGNORECASE),
+    "quality ai": re.compile(r"\b(qia|quality\s+(?:ai|ia)|(?:ai|ia)\s+(?:qa|quality))\b", re.IGNORECASE),
+    "quality ia": re.compile(r"\b(qia|quality\s+(?:ai|ia)|(?:ai|ia)\s+(?:qa|quality))\b", re.IGNORECASE),
+    "ai qa": re.compile(r"\b(qia|quality\s+(?:ai|ia)|(?:ai|ia)\s+(?:qa|quality))\b", re.IGNORECASE),
+    "sdet": re.compile(r"\b(sdet|software\s+(?:development\s+)?engineer\s+in\s+test)\b", re.IGNORECASE),
+    "software engineer in test": re.compile(r"\b(sdet|software\s+(?:development\s+)?engineer\s+in\s+test)\b", re.IGNORECASE),
+    "software development engineer in test": re.compile(r"\b(sdet|software\s+(?:development\s+)?engineer\s+in\s+test)\b", re.IGNORECASE),
+    "test": re.compile(r"\b(tests?|testers?|testing)\b", re.IGNORECASE),
+    "tester": re.compile(r"\b(tests?|testers?|testing)\b", re.IGNORECASE),
+    "testing": re.compile(r"\b(tests?|testers?|testing)\b", re.IGNORECASE),
+    "automation": re.compile(r"\b(automation|automated)\b", re.IGNORECASE),
+    "quality": re.compile(r"\bquality\b", re.IGNORECASE),
+}
+
+GENERIC_ROLE_WORDS = {
+    "engineer", "engineering", "senior", "sr", "junior", "jr", "lead", "staff",
+    "principal", "manager", "analyst", "specialist", "developer", "software",
+    "architect", "intern", "director", "vp", "head", "in", "and", "of", "for",
+    "to", "ii", "iii", "iv", "mid", "tech", "level", "team", "group", "associate",
+    "consultant", "expert",
+}
+
+
 class BaseScanner(ABC):
     def __init__(self, platform: ATSPlatform):
         self.platform = platform
@@ -187,21 +218,52 @@ class BaseScanner(ABC):
         pass
 
     def matches_keywords(self, title: str, keywords: List[str]) -> bool:
-        """Check if job title matches any of the target keywords."""
+        """
+        Check if job title matches target keywords, acronym expansions, or loose words.
+        Supports single words, compound phrases, and acronym variants (QA, QC, QE, QIA, SDET).
+        """
         if not keywords:
             return True
-        t_lower = (title or "").lower()
+        t_str = (title or "").strip()
+        t_lower = t_str.lower()
         for k in keywords:
-            k_lower = (k or "").lower().strip()
-            if not k_lower:
+            k_clean = (k or "").strip()
+            if not k_clean:
                 continue
+            k_lower = k_clean.lower()
+
+            # 1. Direct acronym expansions (e.g. QA, QC, QE, QIA, SDET, Quality Engineer, etc.)
+            if k_lower in ROLE_ACRONYM_MAP:
+                if ROLE_ACRONYM_MAP[k_lower].search(t_str):
+                    return True
+
+            # 2. Substring match
             if k_lower in t_lower:
                 return True
+
+            # 3. Tokenized matching (single words and compound phrases)
             k_words = [w for w in re.split(r"[\s/_\-]+", k_lower) if w]
-            if len(k_words) > 1 and all(w in t_lower for w in k_words):
-                return True
-            if len(k_words) == 1 and re.search(r"\b" + re.escape(k_words[0]) + r"\b", t_lower):
-                return True
+            if len(k_words) == 1:
+                w0 = k_words[0]
+                if w0 in ROLE_ACRONYM_MAP and ROLE_ACRONYM_MAP[w0].search(t_str):
+                    return True
+                if re.search(r"\b" + re.escape(w0) + r"\b", t_lower):
+                    return True
+            elif len(k_words) > 1:
+                # If compound chip contains a domain term (e.g. 'QA Automation', 'Test Engineer', 'Senior QA'),
+                # check if any constituent matches a role acronym regex
+                for w in k_words:
+                    if w in ROLE_ACRONYM_MAP and ROLE_ACRONYM_MAP[w].search(t_str):
+                        return True
+                # Check significant non-generic words without requiring rigid multi-word exactness
+                significant_words = [w for w in k_words if w not in GENERIC_ROLE_WORDS]
+                if significant_words:
+                    if all(w in t_lower for w in significant_words):
+                        return True
+                else:
+                    if all(w in t_lower for w in k_words):
+                        return True
+
         return False
 
     def detect_work_mode(self, title: str, location: str, description: str = "") -> str:

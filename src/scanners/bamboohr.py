@@ -39,11 +39,18 @@ class BambooHRScanner(BaseScanner):
                     job_id = str(j.get("id") or "")
 
                     loc_obj = j.get("location") or {}
+                    ats_loc_obj = j.get("atsLocation") or {}
+                    parts = []
                     if isinstance(loc_obj, dict):
-                        parts = [loc_obj.get("city"), loc_obj.get("state"), loc_obj.get("country")]
-                        loc = ", ".join(p for p in parts if p)
-                    else:
-                        loc = str(loc_obj)
+                        parts.extend([loc_obj.get("city"), loc_obj.get("state"), loc_obj.get("country")])
+                    elif loc_obj:
+                        parts.append(str(loc_obj))
+                    if isinstance(ats_loc_obj, dict):
+                        for k in ["city", "state", "province", "country"]:
+                            val = ats_loc_obj.get(k)
+                            if val and val not in parts:
+                                parts.append(val)
+                    loc = ", ".join(p for p in parts if p)
 
                     is_remote = (
                         bool(j.get("isRemote"))

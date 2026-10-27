@@ -16,6 +16,30 @@ def test_keyword_matching():
     assert scanner.matches_keywords("Lead QA", ["QA"]) is True
     assert scanner.matches_keywords("Software Quality Assurance Engineer", ["Quality Engineer"]) is True
 
+    # Acronym expansions and loose role words
+    assert scanner.matches_keywords("Senior QA Analyst", ["QA"]) is True
+    assert scanner.matches_keywords("Quality Assurance Specialist", ["QA"]) is True
+    assert scanner.matches_keywords("Senior QC Analyst", ["QC"]) is True
+    assert scanner.matches_keywords("Quality Control Specialist", ["QC"]) is True
+    assert scanner.matches_keywords("Software Quality Engineer", ["QE"]) is True
+    assert scanner.matches_keywords("Senior QE Lead", ["Quality Engineer"]) is True
+    assert scanner.matches_keywords("QIA Engineer", ["QIA"]) is True
+    assert scanner.matches_keywords("Quality AI Specialist", ["QIA"]) is True
+    assert scanner.matches_keywords("AI QA Engineer", ["QIA"]) is True
+    assert scanner.matches_keywords("Quality IA Specialist", ["QIA"]) is True
+    assert scanner.matches_keywords("Senior SDET", ["SDET"]) is True
+    assert scanner.matches_keywords("Software Development Engineer in Test", ["SDET"]) is True
+    assert scanner.matches_keywords("Lead Test Automation Specialist", ["Automation Engineer"]) is True
+    assert scanner.matches_keywords("Manual Tester", ["Software Tester"]) is True
+    assert scanner.matches_keywords("Lead Test Engineer", ["Test Engineer"]) is True
+
+    # Negative non-matching checks
+    qa_roles = ["QA", "SDET", "QE", "QC", "QIA", "Software Tester"]
+    assert scanner.matches_keywords("Backend Engineer", qa_roles) is False
+    assert scanner.matches_keywords("Frontend Engineer", qa_roles) is False
+    assert scanner.matches_keywords("Product Manager", qa_roles) is False
+    assert scanner.matches_keywords("DevOps Engineer", qa_roles) is False
+
 def test_location_matching():
     scanner = AshbyScanner()
     # Scope 1: Apto LATAM y Global (discards US/EU/Asia exclusives, accepts LATAM and worldwide)
@@ -333,6 +357,54 @@ def test_detect_work_mode():
     assert jp.work_mode == "onsite"
     dump = jp.model_dump()
     assert dump["work_mode"] == "onsite"
+
+
+def test_bamboohr_location_matching():
+    from src.scanners.bamboohr import BambooHRScanner
+    scanner = BambooHRScanner()
+    kw = ["remote", "latam", "worldwide", "global", "anywhere"]
+
+    # LATAM country via atsLocation
+    assert scanner.matches_location(
+        "QA Engineer",
+        "Lima, Peru (Remote)",
+        kw,
+        geo_scope="latam",
+        home_terms=HOME,
+    ) is True
+
+    # Europe/Asia via atsLocation -> rejected in LATAM and LATAM+NA
+    assert scanner.matches_location(
+        "QA Engineer",
+        "Warsaw, Poland (Remote)",
+        kw,
+        geo_scope="latam",
+        home_terms=HOME,
+    ) is False
+    assert scanner.matches_location(
+        "QA Engineer",
+        "Bengaluru, India (Remote)",
+        kw,
+        geo_scope="latam_na",
+        home_terms=HOME,
+    ) is False
+
+    # North America via atsLocation -> rejected in LATAM, accepted in LATAM+NA
+    assert scanner.matches_location(
+        "QA Engineer",
+        "Toronto, Canada (Remote)",
+        kw,
+        geo_scope="latam",
+        home_terms=HOME,
+    ) is False
+    assert scanner.matches_location(
+        "QA Engineer",
+        "Toronto, Canada (Remote)",
+        kw,
+        geo_scope="latam_na",
+        home_terms=HOME,
+    ) is True
+
 
 
 

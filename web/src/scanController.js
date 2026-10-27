@@ -5,18 +5,35 @@ export const PRESETS = [
   {
     name: 'QA / SDET',
     icon: 'mdi-shield-check',
-    roles: ['QA Automation Engineer', 'Senior QA Engineer', 'SDET', 'Software Engineer in Test', 'QA Engineer'],
+    roles: [
+      'QA',
+      'SDET',
+      'QA Automation',
+      'Test Engineer',
+      'Automation Engineer',
+      'QA Analyst',
+      'Quality Engineer',
+      'QE',
+      'QC',
+      'QIA',
+      'Software Tester',
+    ],
   },
   {
     name: 'Todos',
     icon: 'mdi-apps',
     roles: [
-      'QA Automation Engineer',
-      'Senior QA Engineer',
+      'QA',
       'SDET',
+      'QA Automation',
+      'Test Engineer',
+      'Automation Engineer',
+      'QA Analyst',
       'Quality Engineer',
-      'Software Engineer in Test',
-      'QA Engineer',
+      'QE',
+      'QC',
+      'QIA',
+      'Software Tester',
       'Backend Engineer',
       'Frontend Engineer',
       'Full Stack Engineer',
@@ -265,7 +282,14 @@ export function calculateMatchScore(posting, profile) {
   if (title.includes('senior') || title.includes('lead')) {
     score += 3
   }
-  if (title.includes('qa') || title.includes('quality')) {
+  if (
+    title.includes('qa') ||
+    title.includes('quality') ||
+    title.includes('qe') ||
+    title.includes('qc') ||
+    title.includes('qia') ||
+    title.includes('test')
+  ) {
     score += 3
   }
 
