@@ -562,7 +562,7 @@ onMounted(async () => {
               <span class="material-symbols-outlined text-emerald-400 text-[18px]">verified</span>
               <div class="flex flex-col min-w-0">
                 <span class="text-xs font-medium text-on-surface truncate">
-                  {{ baseCv?.filename || 'Matias_Olivera_QA_CV.pdf' }}
+                  {{ baseCv?.filename || 'Master_Resume.pdf' }}
                 </span>
                 <span class="font-mono text-[10px] text-outline">
                   {{ baseCv?.exists ? `${Math.round((baseCv.sizeBytes || 0) / 1024)} KB` : $t('profile.sections.notUploadedYet') }} • my_cv/

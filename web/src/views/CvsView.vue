@@ -91,7 +91,7 @@ function enrichFile(f, applications = []) {
       role = 'QA Automation Engineer'
     } else if (fileName.toLowerCase().includes('sdet')) {
       role = 'SDET'
-    } else if (f.dir === 'my_cv' || fileName.includes('Matias_Olivera_QA_CV')) {
+    } else if (f.dir === 'my_cv' || fileName.toLowerCase().includes('_cv') || fileName.toLowerCase().includes('resume')) {
       role = 'QA Automation / SDET'
     } else {
       role = 'QA Engineer'
@@ -114,7 +114,7 @@ function enrichFile(f, applications = []) {
     platform = 'Recruitee'
   } else if (appUrl.includes('bamboohr.com')) {
     platform = 'BambooHR'
-  } else if (f.dir === 'my_cv' || fileName.includes('Matias_Olivera_QA_CV')) {
+  } else if (f.dir === 'my_cv' || fileName.toLowerCase().includes('_cv') || fileName.toLowerCase().includes('resume')) {
     platform = 'Base'
   } else if (folder.toLowerCase().includes('greenhouse')) {
     platform = 'Greenhouse'

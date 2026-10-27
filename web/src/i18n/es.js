@@ -549,7 +549,7 @@ export default {
       aiTailorAvailable: 'Adaptación ATS disponible',
       aiBaseCvStandard: 'CV base estándar',
       aiConnectedDesc: 'El sistema adaptará el contenido del CV al perfil técnico de cada empresa y completará preguntas abiertas.',
-      aiDisconnectedDesc: 'No necesitas instalar nada si no deseas usar IA: Job Hunter utilizará directamente tu CV base PDF (Matias_Olivera_QA_CV.pdf) para todas las postulaciones.',
+      aiDisconnectedDesc: 'No necesitas instalar nada si no deseas usar IA: Job Hunter utilizará directamente tu CV base PDF para todas las postulaciones.',
       aiPreferredProvider: 'Proveedor preferido de IA',
       apiKeysDirectTitle: 'Claves de API directas (DeepSeek, Kimi, Anthropic, OpenAI, Gemini):',
       apiKeysDirectDesc: 'Puedes ingresar tus claves de API directamente aquí sin necesidad de instalar o iniciar herramientas de consola.',
