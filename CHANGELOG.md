@@ -6,13 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Added
-- Expanded company registry across all 7 ATS platforms to 20,000+ companies.
-- Prioritized Uruguayan tech companies at the head of every platform scanning queue.
-
 ## [1.3.0] - 2026-10-26
 
 ### Added
+- Expanded company registry across all 7 ATS platforms to 20,000+ companies.
+- Prioritized Uruguayan tech companies at the head of every platform scanning queue.
 - 4 additional ATS platform scanners: Workable, Breezy HR, Recruitee, and BambooHR, expanding the total supported platforms to 7.
 - Territorial scope selector with presets for Latin America, North America, Europe, Worldwide, and Country Whitelist.
 - Work mode filters (Remote, Hybrid, On-site) linked to the candidate profile residence location.
