@@ -56,7 +56,12 @@ def get_current_branch(root: Path) -> Optional[str]:
         )
         if res.returncode == 0:
             branch = res.stdout.strip()
-            return branch if branch != "HEAD" else None
+            if branch != "HEAD":
+                return branch
+            ci_branch = os.environ.get("GITHUB_HEAD_REF")
+            if ci_branch:
+                return ci_branch
+            return None
         return None
     except (subprocess.SubprocessError, OSError):
         return None

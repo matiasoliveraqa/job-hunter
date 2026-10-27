@@ -25,11 +25,21 @@ def test_is_git_repo(tmp_path):
     assert is_git_repo(tmp_path) is False
 
 
-def test_get_current_branch():
+def test_get_current_branch(tmp_path):
     root = Path(__file__).resolve().parent.parent
     branch = get_current_branch(root)
-    assert branch is not None
-    assert isinstance(branch, str)
+    assert branch is None or isinstance(branch, str)
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="feature/my-branch\n")
+        assert get_current_branch(tmp_path) == "feature/my-branch"
+
+        mock_run.return_value = MagicMock(returncode=0, stdout="HEAD\n")
+        with patch.dict("os.environ", {}, clear=True):
+            assert get_current_branch(tmp_path) is None
+        with patch.dict("os.environ", {"GITHUB_HEAD_REF": "feature/dynamic-location"}):
+            assert get_current_branch(tmp_path) == "feature/dynamic-location"
+
 
 
 def test_get_npm_executable_platform():
