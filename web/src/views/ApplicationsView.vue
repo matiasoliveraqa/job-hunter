@@ -94,7 +94,7 @@ function getAppAts(item) {
   if (u.includes('workable.com')) return { key: 'workable', label: 'Workable ATS' }
   if (u.includes('breezy.hr')) return { key: 'breezy', label: 'Breezy HR' }
   if (u.includes('recruitee.com')) return { key: 'recruitee', label: 'Recruitee ATS' }
-  if (u.includes('bamboohr.com')) return { key: 'bamboohr', label: 'BambooHR ATS' }
+  if (u.includes('bamboohr.com') || u.includes('bamboohr.co.uk')) return { key: 'bamboohr', label: 'BambooHR ATS' }
   return { key: 'direct', label: t('applications.toolbar.directApply') }
 }
 

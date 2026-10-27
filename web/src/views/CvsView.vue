@@ -112,7 +112,7 @@ function enrichFile(f, applications = []) {
     platform = 'Breezy'
   } else if (appUrl.includes('recruitee.com')) {
     platform = 'Recruitee'
-  } else if (appUrl.includes('bamboohr.com')) {
+  } else if (appUrl.includes('bamboohr.com') || appUrl.includes('bamboohr.co.uk')) {
     platform = 'BambooHR'
   } else if (f.dir === 'my_cv' || fileName.toLowerCase().includes('_cv') || fileName.toLowerCase().includes('resume')) {
     platform = 'Base'

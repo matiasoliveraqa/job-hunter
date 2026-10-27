@@ -41,7 +41,12 @@ class BaseApplicator(ABC):
             # 0. Check for embedded ATS form iframes ONLY if we are NOT already on an ATS domain
             current_url = self.page.url
             url_lower = current_url.lower()
-            is_on_ats = any(d in url_lower for d in ["greenhouse.io", "lever.co", "ashbyhq.com"])
+            ats_domains = [
+                "greenhouse.io", "lever.co", "ashbyhq.com",
+                "workable.com", "breezy.hr", "recruitee.com",
+                "bamboohr.com", "bamboohr.co.uk"
+            ]
+            is_on_ats = any(d in url_lower for d in ats_domains)
 
             if not is_on_ats:
                 from urllib.parse import urlparse
@@ -52,6 +57,10 @@ class BaseApplicator(ABC):
                     "iframe[src*='job-boards.greenhouse.io']",
                     "iframe[src*='jobs.lever.co']",
                     "iframe[src*='jobs.ashbyhq.com']",
+                    "iframe[src*='workable.com']",
+                    "iframe[src*='breezy.hr']",
+                    "iframe[src*='recruitee.com']",
+                    "iframe[src*='bamboohr.com']",
                 ]
                 for ifr_sel in iframe_selectors:
                     ifr = self.page.locator(ifr_sel)
@@ -60,7 +69,7 @@ class BaseApplicator(ABC):
                         if src and (src.startswith("http://") or src.startswith("https://") or src.startswith("//")):
                             full_src = ("https:" + src) if src.startswith("//") else src
                             parsed_host = urlparse(full_src).netloc.lower()
-                            if any(d in parsed_host for d in ["greenhouse.io", "lever.co", "ashbyhq.com"]):
+                            if any(d in parsed_host for d in ats_domains):
                                 print(f"  [OK] Found embedded ATS form iframe ({full_src[:65]}...). Navigating directly to form...")
                                 await self.page.goto(full_src, wait_until="domcontentloaded")
                                 await asyncio.sleep(2)
@@ -70,7 +79,7 @@ class BaseApplicator(ABC):
                     if f != self.page.main_frame:
                         f_url = f.url or ""
                         parsed_host = urlparse(f_url).netloc.lower()
-                        if any(d in parsed_host for d in ["job-boards.greenhouse.io", "boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com"]):
+                        if any(d in parsed_host for d in ats_domains):
                             print(f"  [OK] Found embedded ATS frame URL. Navigating directly to {f_url[:65]}...")
                             await self.page.goto(f_url, wait_until="domcontentloaded")
                             await asyncio.sleep(2)
@@ -116,6 +125,12 @@ class BaseApplicator(ABC):
                 "button:has-text('Apply for this job')",
                 "a:has-text('Apply Now')",
                 "button:has-text('Apply Now')",
+                "a:has-text('Apply to Position')",
+                "button:has-text('Apply to Position')",
+                "a:has-text('Apply for Position')",
+                "button:has-text('Apply for Position')",
+                "a:has-text('Postularme')",
+                "button:has-text('Postularme')",
                 "button:has-text('Apply')",
             ]
             for sel in tab_selectors:

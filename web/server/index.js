@@ -113,7 +113,7 @@ app.post('/api/applications', async (req, res) => {
   if (wantsDemo === true && !isDemoUrl) return res.status(400).json({ error: 'La demo solo admite publicaciones de prueba' })
   if (url && !isDemoUrl && !isAllowedAtsHost(url)) {
     return res.status(400).json({
-      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite registrar postulaciones en dominios oficiales de plataformas ATS soportadas.',
+      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite registrar postulaciones en dominios oficiales de plataformas ATS soportadas (Greenhouse, Ashby, Lever, Workable, Breezy, Recruitee, BambooHR).',
     })
   }
   const { item, created } = await store.create({
@@ -362,9 +362,12 @@ const ALLOWED_ATS_DOMAINS = [
   'jobs.lever.co',
   'workable.com',
   'apply.workable.com',
+  'jobs.workable.com',
   'breezy.hr',
   'recruitee.com',
+  'careers.recruitee.com',
   'bamboohr.com',
+  'bamboohr.co.uk',
 ]
 
 export function isAllowedAtsHost(urlString) {
@@ -387,7 +390,7 @@ app.post('/api/apply', async (req, res) => {
 
   if (!isDemoUrl && !isAllowedAtsHost(url)) {
     return res.status(400).json({
-      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite autocompletar en dominios oficiales de plataformas ATS soportadas.',
+      error: 'Dominio no permitido. Por seguridad de tus datos, solo se permite autocompletar en dominios oficiales de plataformas ATS soportadas (Greenhouse, Ashby, Lever, Workable, Breezy, Recruitee, BambooHR).',
     })
   }
 

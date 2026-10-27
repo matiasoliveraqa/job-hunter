@@ -61,9 +61,12 @@ test('isAllowedAtsHost strictly validates ATS domains and prevents query paramet
   assert.strictEqual(isAllowedAtsHost('https://jobs.ashbyhq.com/corp/1'), true)
   assert.strictEqual(isAllowedAtsHost('https://jobs.lever.co/corp/1'), true)
   assert.strictEqual(isAllowedAtsHost('https://apply.workable.com/corp/j/123/'), true)
+  assert.strictEqual(isAllowedAtsHost('https://jobs.workable.com/corp/123/'), true)
   assert.strictEqual(isAllowedAtsHost('https://corp.breezy.hr/p/123-job'), true)
   assert.strictEqual(isAllowedAtsHost('https://corp.recruitee.com/o/job-slug'), true)
+  assert.strictEqual(isAllowedAtsHost('https://careers.recruitee.com/o/job-slug'), true)
   assert.strictEqual(isAllowedAtsHost('https://corp.bamboohr.com/careers/123'), true)
+  assert.strictEqual(isAllowedAtsHost('https://corp.bamboohr.co.uk/careers/123'), true)
 
   // Query parameter bypass attempts on arbitrary domains
   assert.strictEqual(isAllowedAtsHost('https://evil.com/phish?gh_jid=1'), false)
