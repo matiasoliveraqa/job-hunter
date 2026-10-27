@@ -75,7 +75,8 @@ class BreezyScanner(BaseScanner):
                             title=title,
                             location=loc_name,
                             url=job_url,
-                            required_years=req_years
+                            required_years=req_years,
+                            work_mode=self.detect_work_mode(title, loc_name, desc),
                         ))
         except Exception:
             pass

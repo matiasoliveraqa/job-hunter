@@ -257,3 +257,4 @@ class JobPosting(BaseModel):
     required_years: Optional[int] = None
     created_at: Optional[str] = None
     has_captcha: bool = False
+    work_mode: Optional[str] = "remote"

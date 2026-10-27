@@ -77,7 +77,8 @@ class GreenhouseScanner(BaseScanner):
                             title=title,
                             location=loc_name,
                             url=job_url,
-                            required_years=req_years
+                            required_years=req_years,
+                            work_mode=self.detect_work_mode(title, loc_name, desc_text),
                         ))
         except aiohttp.ClientResponseError as e:
             if e.status in (406, 429):

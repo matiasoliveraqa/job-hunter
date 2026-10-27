@@ -83,6 +83,7 @@ class LeverScanner(BaseScanner):
                             url=j.get("hostedUrl") or f"https://jobs.lever.co/{company_slug}/{j.get('id')}",
                             required_years=req_years,
                             has_captcha=True,
+                            work_mode=self.detect_work_mode(title, loc.strip(), desc),
                         ))
         except Exception:
             pass

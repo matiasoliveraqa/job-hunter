@@ -203,6 +203,29 @@ class BaseScanner(ABC):
                 return True
         return False
 
+    def detect_work_mode(self, title: str, location: str, description: str = "") -> str:
+        """
+        Detect whether a vacancy is remote, hybrid, or onsite based on title and location.
+        Returns 'hybrid', 'onsite', or 'remote'.
+        """
+        t_str = (title or "").strip()
+        loc_str = (location or "").strip()
+        combined = f"{t_str} {loc_str}".strip()
+
+        if HYBRID_RE.search(t_str) or HYBRID_RE.search(loc_str):
+            return "hybrid"
+
+        has_remote = bool(
+            re.search(r"\b(remote|remoto)\b", combined, re.IGNORECASE)
+            or re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE)
+        )
+        is_explicit_onsite = bool(ONSITE_RE.search(t_str) or ONSITE_RE.search(loc_str))
+
+        if is_explicit_onsite or (bool(loc_str) and not has_remote):
+            return "onsite"
+
+        return "remote"
+
     def matches_location(
         self,
         title: str,

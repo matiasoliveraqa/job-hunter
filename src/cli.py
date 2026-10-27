@@ -245,11 +245,13 @@ def scan_command(args):
     table.add_column("Job Title", style="bold")
     table.add_column("Exp", justify="center", style="cyan")
     table.add_column("Location", style="yellow")
+    table.add_column("Mode", justify="center", style="green")
     table.add_column("URL", style="blue")
 
     for i, p in enumerate(postings[:args.limit], 1):
         exp_col = f"{p.required_years}+ yrs" if p.required_years else "-"
-        table.add_row(str(i), p.ats.value.upper(), p.company, p.title, exp_col, p.location or "Remote", p.url)
+        mode_col = (p.work_mode or "remote").capitalize()
+        table.add_row(str(i), p.ats.value.upper(), p.company, p.title, exp_col, p.location or "Remote", mode_col, p.url)
 
     console.print(table)
     console.print(f"\n[green][SAVED][/green] Results written to: {OUTPUT_DIR / 'scan_results.json'}")

@@ -85,7 +85,8 @@ class WorkableScanner(BaseScanner):
                             title=title,
                             location=loc,
                             url=job_url,
-                            required_years=req_years
+                            required_years=req_years,
+                            work_mode=self.detect_work_mode(title, loc, desc),
                         ))
         except Exception:
             pass

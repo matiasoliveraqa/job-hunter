@@ -291,6 +291,41 @@ def test_dynamic_geo_scope_and_filters():
     ) is False
 
 
+def test_detect_work_mode():
+    scanner = AshbyScanner()
+
+    # Remote detection
+    assert scanner.detect_work_mode("Frontend Engineer", "Remote") == "remote"
+    assert scanner.detect_work_mode("QA Automation Engineer", "Montevideo, Uruguay (Remote)") == "remote"
+    assert scanner.detect_work_mode("Full Stack Developer", "Worldwide") == "remote"
+    assert scanner.detect_work_mode("Backend Engineer (Remote)", "Buenos Aires, Argentina") == "remote"
+    assert scanner.detect_work_mode("Software Engineer", "") == "remote"
+
+    # Hybrid detection
+    assert scanner.detect_work_mode("Frontend Engineer", "CDMX, Mexico (Hybrid)") == "hybrid"
+    assert scanner.detect_work_mode("Hybrid QA Lead", "Montevideo, Uruguay") == "hybrid"
+
+    # Onsite detection
+    assert scanner.detect_work_mode("Frontend Engineer", "Ciudad de Mexico") == "onsite"
+    assert scanner.detect_work_mode("Software Engineer", "São Paulo, Brazil") == "onsite"
+    assert scanner.detect_work_mode("QA Engineer (On-site)", "Bogota, Colombia") == "onsite"
+
+    # JobPosting serialization test
+    from src.core.models import JobPosting, ATSPlatform
+    jp = JobPosting(
+        ats=ATSPlatform.ASHBY,
+        company="test-co",
+        title="Frontend Engineer",
+        location="CDMX, Mexico",
+        url="https://jobs.ashbyhq.com/test-co/1",
+        work_mode=scanner.detect_work_mode("Frontend Engineer", "CDMX, Mexico"),
+    )
+    assert jp.work_mode == "onsite"
+    dump = jp.model_dump()
+    assert dump["work_mode"] == "onsite"
+
+
+
 
 
 

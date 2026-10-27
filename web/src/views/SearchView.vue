@@ -368,6 +368,55 @@ function getPlatformBadgeClass(ats) {
   if (low === 'bamboohr') return 'bg-lime-500/10 text-lime-400 border-lime-500/20'
   return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
 }
+
+function resolveWorkMode(job) {
+  if (job?.work_mode) return String(job.work_mode).toLowerCase().trim()
+  if (job?.workMode) return String(job.workMode).toLowerCase().trim()
+  const loc = (job?.location || '').toLowerCase()
+  const title = (job?.title || '').toLowerCase()
+  const combined = `${title} ${loc}`
+  if (/hybrid|h[ií]brid[oa]/i.test(combined)) return 'hybrid'
+  if (/\b(remote|remoto|worldwide|global|anywhere)\b/i.test(combined)) return 'remote'
+  if (/\b(onsite|on-site|presencial)\b/i.test(combined)) return 'onsite'
+  return loc ? 'onsite' : 'remote'
+}
+
+function getWorkModeBadgeClass(mode) {
+  switch (mode) {
+    case 'remote':
+      return 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+    case 'hybrid':
+      return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+    case 'onsite':
+      return 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+    default:
+      return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+  }
+}
+
+function getWorkModeIcon(mode) {
+  switch (mode) {
+    case 'remote':
+      return 'wifi'
+    case 'hybrid':
+      return 'sync_alt'
+    case 'onsite':
+      return 'business'
+    default:
+      return 'work'
+  }
+}
+
+function getWorkModeLabel(mode) {
+  switch (mode) {
+    case 'hybrid':
+      return t('search.table.modeHybrid')
+    case 'onsite':
+      return t('search.table.modeOnsite')
+    default:
+      return t('search.table.modeRemote')
+  }
+}
 </script>
 
 <template>
@@ -1004,6 +1053,7 @@ function getPlatformBadgeClass(ats) {
               <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colCompany') }}</th>
               <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colRole') }}</th>
               <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colLocation') }}</th>
+              <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colWorkMode') }}</th>
               <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colExp') }}</th>
               <th class="py-2.5 px-3 font-medium">{{ $t('search.table.colMatch') }}</th>
               <th class="py-2.5 px-3 font-medium text-right pr-4">{{ $t('search.table.colActions') }}</th>
@@ -1056,6 +1106,17 @@ function getPlatformBadgeClass(ats) {
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[11px]">
                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                   {{ job.location || $t('common.remote') }}
+                </span>
+              </td>
+
+              <!-- Modalidad -->
+              <td class="py-3 px-3">
+                <span
+                  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-mono text-[10.5px] border capitalize"
+                  :class="getWorkModeBadgeClass(resolveWorkMode(job))"
+                >
+                  <span class="material-symbols-outlined text-[13px] leading-none">{{ getWorkModeIcon(resolveWorkMode(job)) }}</span>
+                  <span>{{ getWorkModeLabel(resolveWorkMode(job)) }}</span>
                 </span>
               </td>
 
@@ -1203,7 +1264,7 @@ function getPlatformBadgeClass(ats) {
 
             <!-- Estado vacío -->
             <tr v-if="!filteredMatches.length">
-              <td class="py-12 px-4 text-center text-outline" colspan="7">
+              <td class="py-12 px-4 text-center text-outline" colspan="8">
                 <div class="flex flex-col items-center justify-center gap-2">
                   <span class="material-symbols-outlined text-[36px] text-outline opacity-60">search_off</span>
                   <p class="text-xs font-medium text-on-surface">
