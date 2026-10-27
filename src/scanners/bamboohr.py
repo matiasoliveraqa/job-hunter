@@ -45,9 +45,13 @@ class BambooHRScanner(BaseScanner):
                     else:
                         loc = str(loc_obj)
 
-                    is_remote = j.get("isRemote", False) or j.get("is_remote", False)
+                    is_remote = (
+                        bool(j.get("isRemote"))
+                        or bool(j.get("is_remote"))
+                        or str(j.get("locationType", "")) in ("1", "remote")
+                    )
                     if is_remote and "remote" not in loc.lower():
-                        loc = f"{loc} (Remote)".strip()
+                        loc = f"{loc} (Remote)".strip() if loc else "Remote"
 
                     desc = f"{title} {j.get('description', '')}"
 
