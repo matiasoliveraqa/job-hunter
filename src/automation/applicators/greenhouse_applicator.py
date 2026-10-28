@@ -14,9 +14,9 @@ class GreenhouseApplicator(BaseApplicator):
         # 0. Switch to Application tab if separated
         await self.ensure_application_tab_open()
 
-        # 1. Resume Upload
+        # 1. Resume Upload (strictly targets Resume and excludes Cover Letter)
         if cv_pdf_path:
-            await self.safe_upload("input[type='file']#resume, input[type='file']", cv_pdf_path, "CV PDF")
+            await self.safe_upload_resume(cv_pdf_path)
 
         # 2. First Name & Last Name (smart detection prevents putting Full Name into First Name)
         await self.fill_name_fields()

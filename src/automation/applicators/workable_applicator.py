@@ -13,13 +13,9 @@ class WorkableApplicator(BaseApplicator):
         # 0. Ensure application tab / section is open
         await self.ensure_application_tab_open()
 
-        # 1. Resume Upload
+        # 1. Resume Upload (strictly targets Resume and excludes Cover Letter)
         if cv_pdf_path:
-            await self.safe_upload(
-                "input[type='file'][data-ui='resume'], input[data-ui='file-input'], input[type='file']",
-                cv_pdf_path,
-                "CV PDF",
-            )
+            await self.safe_upload_resume(cv_pdf_path)
 
         # 2. Smart Name Filling (first/last or full name)
         await self.fill_name_fields()

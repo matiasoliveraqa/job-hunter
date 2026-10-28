@@ -114,11 +114,13 @@ class BaseApplicator(ABC):
                     await asyncio.sleep(1.5)
                     return
 
-            # 2. Ashby / Greenhouse / Generic: look for 'Application' tab or 'Apply' button
+            # 2. Ashby / Greenhouse / Generic / BambooHR: look for 'Application' tab or 'Apply' button
             tab_selectors = [
                 "[role='tab']:has-text('Application')",
                 "a:has-text('Application')",
                 "button:has-text('Application')",
+                "a:has-text('Apply for This Job')",
+                "button:has-text('Apply for This Job')",
                 "a:has-text('Apply for this Job')",
                 "button:has-text('Apply for this Job')",
                 "a:has-text('Apply for this job')",
@@ -133,12 +135,25 @@ class BaseApplicator(ABC):
                 "button:has-text('Postularme')",
                 "button:has-text('Apply')",
             ]
+            combined_tab_selector = ", ".join(tab_selectors)
+            try:
+                await self.page.wait_for_selector(combined_tab_selector, timeout=6000, state="visible")
+            except Exception:
+                pass
+
             for sel in tab_selectors:
                 loc = self.page.locator(sel)
                 if await loc.count() > 0 and await loc.first.is_visible():
                     await loc.first.click()
                     print(f"  [OK] Switched to Application form view ({sel})")
-                    await asyncio.sleep(1.5)
+                    try:
+                        await self.page.wait_for_selector(
+                            "input[type='file'], input[type='email'], input#first_name, input#firstName, input[name*='name' i]",
+                            timeout=8000,
+                            state="visible",
+                        )
+                    except Exception:
+                        await asyncio.sleep(1.5)
                     break
 
             # 3. Ashby fallback: if still no inputs on ashbyhq.com, append /application
@@ -580,7 +595,28 @@ class BaseApplicator(ABC):
                 except Exception:
                     pass
 
-        # 3. Automatically fill custom & open-ended questions (textareas and text inputs)
+        # 3. Date Available / Start Date
+        date_inputs = self.page.locator(
+            "input:not([type='hidden'])[name*='available' i], "
+            "input:not([type='hidden'])[id*='available' i], "
+            "input:not([type='hidden'])[name*='start_date' i], "
+            "input:not([type='hidden'])[placeholder*='dd/mm' i], "
+            "input:not([type='hidden'])[placeholder*='mm/dd' i]"
+        )
+        if await date_inputs.count() > 0 and await date_inputs.first.is_visible():
+            try:
+                inp = date_inputs.first
+                ph = (await inp.get_attribute("placeholder") or "").lower()
+                from datetime import datetime, timedelta
+                target_dt = datetime.now() + timedelta(days=14)
+                dt_str = target_dt.strftime("%d/%m/%Y") if ("dd/mm" in ph or "dd-mm" in ph) else target_dt.strftime("%m/%d/%Y")
+                await inp.fill(dt_str)
+                self.filled_fields["Date Available"] = dt_str
+                print(f"  [OK] Filled Date Available: {dt_str}")
+            except Exception:
+                pass
+
+        # 4. Automatically fill custom & open-ended questions (textareas and text inputs)
         await self.fill_custom_questions(salary_str=salary_str, salary_num=salary_num)
 
     @staticmethod
@@ -603,6 +639,10 @@ class BaseApplicator(ABC):
             re.compile(r"\b(email|phone|telephone|mobile|cell|correo\s+electr[oó]nico|correo|tel[eé]fono|m[oó]vil|celular)\b", re.IGNORECASE),
             # Location / Residence / City / State / Country (English & Spanish)
             re.compile(r"\b(location|city|country|state|province|office|region|country\s+of\s+residence|city\s+of\s+residence|where\s+are\s+you\s+based|ubicaci[oó]n|pa[ií]s|provincia|departamento|ciudad|oficina|sede|regi[oó]n|donde\s+vives|donde\s+resides|residencia)\b", re.IGNORECASE),
+            # Postal / ZIP Code (English & Spanish)
+            re.compile(r"\b(zip(\s*code)?|postal(\s*code)?|c[oó]digo\s*postal)\b", re.IGNORECASE),
+            # Date Available / Start Date (English & Spanish)
+            re.compile(r"\b(date\s+available|available\s+date|earliest\s+start|start\s+date|fecha\s+disponible)\b", re.IGNORECASE),
             # Authorization / Visa (English & Spanish)
             re.compile(r"\b(authorized\s+to\s+work|work\s+authorization|legally\s+authorized|visa\s+sponsorship|require\s+sponsorship|autorizaci[oó]n\s+para\s+trabajar|autorizacion\s+para\s+trabajar|autorizado\s+para\s+trabajar|patrocinio\s+de\s+visa|patrocinio)\b", re.IGNORECASE),
         ]
@@ -790,8 +830,15 @@ class BaseApplicator(ABC):
                 return self.p_info.phone
             if re.search(r"\b(city)\b", attr_tokens) or meta.get("autocomplete") == "address-level2":
                 return self.p_info.city or self.p_info.location
+            if re.search(r"\b(state|province|region)\b", attr_tokens) or meta.get("autocomplete") == "address-level1":
+                return getattr(self.p_info, "resolved_state", self.p_info.city)
             if re.search(r"\b(country)\b", attr_tokens) or meta.get("autocomplete") == "country-name":
                 return self.p_info.country
+            if re.search(r"\b(zip|postal|postal_code|zip_code)\b", attr_tokens) or meta.get("autocomplete") == "postal-code":
+                return getattr(self.p_info, "resolved_postal_code", "")
+            if re.search(r"\b(date_available|available_date|start_date)\b", attr_tokens):
+                from datetime import datetime, timedelta
+                return (datetime.now() + timedelta(days=14)).strftime("%d/%m/%Y")
 
         q = (question_text or "").strip().lower()
         if not q or len(q) < 3:
@@ -806,7 +853,20 @@ class BaseApplicator(ABC):
             or self.is_deterministic_field(first_chunk)
             or self.is_deterministic_field(first_tokens)
         ):
-            if not any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["where are you based", "current location", "country of residence", "city and country"]):
+            if not any(re.search(rf"\b{re.escape(k)}\b", q) for k in [
+                "where are you based",
+                "current location",
+                "country of residence",
+                "city and country",
+                "zip",
+                "postal",
+                "código postal",
+                "codigo postal",
+                "date available",
+                "available date",
+                "start date",
+                "fecha disponible",
+            ]):
                 return None
 
         # Preferred name check before standard contact fields
@@ -857,6 +917,13 @@ class BaseApplicator(ABC):
 
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["notice period", "when can you start", "earliest start", "availability to start", "how soon can you"]):
             return self.prefs.notice_period or "2 weeks"
+        if re.search(r"\b(zip(\s*code)?|postal(\s*code)?|c[oó]digo\s*postal)\b", q):
+            return getattr(self.p_info, "resolved_postal_code", "11000") or "11000"
+        if re.search(r"\b(state|province|provincia|departamento)\b", q):
+            return getattr(self.p_info, "resolved_state", self.p_info.city)
+        if re.search(r"\b(date\s+available|available\s+date|earliest\s+start\s+date|start\s+date|fecha\s+disponible)\b", q):
+            from datetime import datetime, timedelta
+            return (datetime.now() + timedelta(days=14)).strftime("%d/%m/%Y")
         if re.search(r"\b(years\s+of\s+experience|how\s+many\s+years)\b", q):
             return str(self.p_info.years_of_experience) if getattr(self.p_info, "years_of_experience", None) is not None else None
         if any(re.search(rf"\b{re.escape(k)}\b", q) for k in ["current company", "current employer", "present employer"]):
@@ -1826,6 +1893,127 @@ class BaseApplicator(ABC):
                     return True
         except Exception:
             pass
+        return False
+
+    async def safe_upload_resume(self, file_path: Path) -> bool:
+        """
+        Safely upload candidate's CV/Resume PDF to the application form.
+        Strictly targets inputs designated for Resume/CV and excludes Cover Letter inputs.
+        """
+        if not file_path or not file_path.exists():
+            return False
+
+        try:
+            # 1. First check explicit selectors that strictly specify Resume/CV
+            explicit_selectors = [
+                # BambooHR specific: container containing 'Resume'
+                "div[data-fabric-component='Flex']:has-text('Resume') input[type='file']",
+                "div:has(> p:has-text('Resume')) input[type='file']",
+                # Standard ATS explicit resume attributes
+                "input[type='file'][name*='resume' i]",
+                "input[type='file'][id*='resume' i]",
+                "input[type='file'][data-qa*='resume' i]",
+                "input[type='file'][aria-label*='resume' i]",
+                "input[type='file'][name*='cv' i]",
+                "input[type='file'][id*='cv' i]",
+                "input[type='file'][aria-label*='cv' i]",
+                "input[type='file']#resume-upload-input",
+                "input[type='file']#resume",
+                "[data-testid*='resume' i] input[type='file']",
+            ]
+            for sel in explicit_selectors:
+                loc = self.page.locator(sel)
+                if await loc.count() > 0:
+                    await loc.first.set_input_files(str(file_path.resolve()))
+                    self.filled_fields["CV PDF"] = str(file_path.resolve())
+                    print(f"  [OK] Uploaded Resume via explicit selector ({sel}): {file_path.name}")
+                    await asyncio.sleep(1.5)
+                    return True
+
+            # 2. Inspect all file inputs on the page to identify Resume and reject Cover Letter
+            file_inputs = await self.page.locator("input[type='file']").all()
+            if not file_inputs:
+                return False
+
+            if len(file_inputs) == 1:
+                # Only one file input on the page. Ensure it's not explicitly a cover letter.
+                is_cover = await file_inputs[0].evaluate('''el => {
+                    let curr = el;
+                    while (curr && curr !== document.body) {
+                        const t = (curr.innerText || '').toLowerCase();
+                        if (t.includes('cover letter') || t.includes('carta de presentación') || t.includes('cover_letter')) return true;
+                        curr = curr.parentElement;
+                    }
+                    return false;
+                }''')
+                if not is_cover:
+                    await file_inputs[0].set_input_files(str(file_path.resolve()))
+                    self.filled_fields["CV PDF"] = str(file_path.resolve())
+                    print(f"  [OK] Uploaded Resume to single file input: {file_path.name}")
+                    await asyncio.sleep(1.5)
+                    return True
+
+            # Multiple file inputs: score each input based on context
+            best_input = None
+            for inp in file_inputs:
+                score = await inp.evaluate('''el => {
+                    let curr = el;
+                    let text = '';
+                    while (curr && curr !== document.body) {
+                        const t = (curr.innerText || '').toLowerCase();
+                        if (t.includes('resume') || t.includes('curriculum') || t.includes('cv') || t.includes('hoja de vida') || t.includes('cover')) {
+                            text += ' ' + t;
+                        }
+                        curr = curr.parentElement;
+                    }
+                    const attrs = `${el.name || ''} ${el.id || ''} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
+                    const combined = (text + ' ' + attrs).toLowerCase();
+
+                    // If it specifically mentions cover letter, strongly reject (-100)
+                    if (combined.includes('cover letter') || combined.includes('cover_letter') || combined.includes('carta de presentación') || combined.includes('carta de presentacion') || combined.includes('coverletter') || combined.includes('cover')) {
+                        return -100;
+                    }
+
+                    // If it specifically mentions resume or cv, positive score (+10)
+                    if (combined.includes('resume') || combined.includes('curriculum') || combined.includes('cv') || combined.includes('hoja de vida')) {
+                        return 10;
+                    }
+
+                    return 0;
+                }''')
+
+                if score > 0:
+                    best_input = inp
+                    break
+
+            if best_input:
+                await best_input.set_input_files(str(file_path.resolve()))
+                self.filled_fields["CV PDF"] = str(file_path.resolve())
+                print(f"  [OK] Uploaded Resume to contextual Resume input: {file_path.name}")
+                await asyncio.sleep(1.5)
+                return True
+
+            # If no input had positive score, pick the first one that is NOT a cover letter
+            for inp in file_inputs:
+                is_cover = await inp.evaluate('''el => {
+                    let curr = el;
+                    while (curr && curr !== document.body) {
+                        const t = (curr.innerText || '').toLowerCase();
+                        if (t.includes('cover letter') || t.includes('cover') || t.includes('carta')) return true;
+                        curr = curr.parentElement;
+                    }
+                    return false;
+                }''')
+                if not is_cover:
+                    await inp.set_input_files(str(file_path.resolve()))
+                    self.filled_fields["CV PDF"] = str(file_path.resolve())
+                    print(f"  [OK] Uploaded Resume to non-cover file input: {file_path.name}")
+                    await asyncio.sleep(1.5)
+                    return True
+
+        except Exception as e:
+            print(f"  [!] Failed to upload Resume: {e}")
+
         return False
 
     async def safe_upload(self, selector: str, file_path: Path, description: str = "CV/Resume") -> bool:

@@ -499,6 +499,70 @@ async def test_choose_radio_option_generic_role(dummy_profile, monkeypatch):
     assert chosen == "Yes"
 
 
+def test_zip_postal_code_deterministic(dummy_profile):
+    page = MagicMock()
+    app = DummyApplicator(page, dummy_profile)
+
+    assert BaseApplicator.is_deterministic_field("ZIP") is True
+    assert BaseApplicator.is_deterministic_field("Postal Code") is True
+    assert BaseApplicator.is_deterministic_field("Código Postal") is True
+
+    # Ensure deterministic answer returns 11000 and never generates an essay
+    ans = app._generate_deterministic_answer("ZIP Code")
+    assert ans == "11000"
+
+    ans_attr = app._generate_deterministic_answer("", field_meta={"name": "zip.value"})
+    assert ans_attr == "11000"
+
+
+def test_date_available_deterministic(dummy_profile):
+    page = MagicMock()
+    app = DummyApplicator(page, dummy_profile)
+
+    assert BaseApplicator.is_deterministic_field("Date Available") is True
+    assert BaseApplicator.is_deterministic_field("Fecha disponible") is True
+
+    ans = app._generate_deterministic_answer("Date Available")
+    assert ans is not None
+    assert re.match(r"\d{2}/\d{2}/\d{4}", ans)
+
+
+@pytest.mark.asyncio
+async def test_safe_upload_resume_avoids_cover_letter(dummy_profile, tmp_path):
+    page = MagicMock()
+    app = DummyApplicator(page, dummy_profile)
+
+    fake_pdf = tmp_path / "resume.pdf"
+    fake_pdf.write_text("dummy")
+
+    cover_input = MagicMock()
+    cover_input.evaluate = AsyncMock(return_value=-100)
+    cover_input.set_input_files = AsyncMock()
+
+    resume_input = MagicMock()
+    resume_input.evaluate = AsyncMock(return_value=10)
+    resume_input.set_input_files = AsyncMock()
+
+    explicit_mock = MagicMock()
+    explicit_mock.count = AsyncMock(return_value=0)
+
+    all_inputs_mock = MagicMock()
+    all_inputs_mock.count = AsyncMock(return_value=0)
+    all_inputs_mock.all = AsyncMock(return_value=[cover_input, resume_input])
+
+    def locator_side_effect(sel):
+        if sel == "input[type='file']":
+            return all_inputs_mock
+        return explicit_mock
+
+    page.locator.side_effect = locator_side_effect
+
+    res = await app.safe_upload_resume(fake_pdf)
+    assert res is True
+    resume_input.set_input_files.assert_awaited_once_with(str(fake_pdf.resolve()))
+    cover_input.set_input_files.assert_not_awaited()
+
+
 
 
 

@@ -27,10 +27,43 @@ class PersonalInfo(BaseModel):
     current_company: Optional[str] = Field(None, description="Current employer or 'Freelance'")
     years_of_experience: Optional[int] = Field(None, description="Total years of professional experience")
     requires_us_visa_sponsorship: str = Field("No", description="'Yes' or 'No'")
+    address: Optional[str] = Field(None, description="Street address or neighborhood")
+    state: Optional[str] = Field(None, description="Candidate state, province, or department")
+    province: Optional[str] = Field(None, description="Candidate province (alias for state)")
+    postal_code: Optional[str] = Field(None, description="Candidate postal or zip code")
     gender: Optional[str] = Field(None, description="Canonical gender code ('male', 'female', 'non_binary', 'decline')")
     race: Optional[str] = Field(None, description="Canonical race/ethnicity code ('hispanic_latino', 'white', 'black', 'asian', 'two_or_more', 'decline')")
     veteran_status: Optional[str] = Field(None, description="Canonical veteran status code ('not_veteran', 'veteran', 'decline')")
     disability_status: Optional[str] = Field(None, description="Canonical disability status code ('no', 'yes', 'decline')")
+
+    @property
+    def resolved_state(self) -> str:
+        if self.state and self.state.strip():
+            return self.state.strip()
+        if self.province and self.province.strip():
+            return self.province.strip()
+        if not self.location:
+            return ""
+        parts = [p.strip() for p in self.location.split(",") if p.strip()]
+        if len(parts) >= 3:
+            return parts[1]
+        if len(parts) == 2:
+            return parts[0]
+        return self.city or ""
+
+    @property
+    def resolved_postal_code(self) -> str:
+        if self.postal_code and self.postal_code.strip():
+            return self.postal_code.strip()
+        if self.country.lower() == "uruguay" and self.city.lower() == "montevideo":
+            return "11000"
+        return ""
+
+    @property
+    def resolved_address(self) -> str:
+        if self.address and self.address.strip():
+            return self.address.strip()
+        return self.city or ""
 
     @field_validator("gender", mode="before")
     @classmethod

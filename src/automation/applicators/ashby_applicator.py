@@ -14,20 +14,9 @@ class AshbyApplicator(BaseApplicator):
         # 0. Switch from 'Overview' tab to 'Application' tab if needed
         await self.ensure_application_tab_open()
 
-        # 1. Resume Upload (target the main resume input, avoiding Ashby's 'Autofill from resume' banner if two exist)
+        # 1. Resume Upload (strictly targets Resume and excludes Cover Letter)
         if cv_pdf_path:
-            file_inputs = self.page.locator("input[type='file']")
-            count = await file_inputs.count()
-            if count > 1:
-                try:
-                    await file_inputs.nth(1).set_input_files(str(cv_pdf_path))
-                    self.filled_fields["CV PDF"] = str(cv_pdf_path.resolve())
-                    print(f"  [OK] Uploaded CV PDF: {cv_pdf_path.name}")
-                    await asyncio.sleep(1.5)
-                except Exception:
-                    await self.safe_upload("input[type='file']", cv_pdf_path, "CV PDF")
-            else:
-                await self.safe_upload("input[type='file']", cv_pdf_path, "CV PDF")
+            await self.safe_upload_resume(cv_pdf_path)
 
         # 2. Smart Name Filling (handles both split First/Last Name and single Full Name)
         await self.fill_name_fields()
