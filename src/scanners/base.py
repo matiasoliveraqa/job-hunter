@@ -3,6 +3,7 @@ Base Scanner Interface for Applicant Tracking Systems.
 """
 
 import re
+import unicodedata
 from abc import ABC, abstractmethod
 from typing import List, Optional
 import aiohttp
@@ -145,6 +146,96 @@ OTHER_REGIONS_RESTRICTED_RE = re.compile(
     r"philippines|manila|apac|vietnam|japan|tokyo|singapore|taiwan|south\s+korea|korea|pangyo|malaysia|kuala\s+lumpur|australia|sydney|melbourne|new\s+zealand|auckland)\b",
     re.IGNORECASE,
 )
+
+COUNTRY_SYNONYMS = {
+    "alemania": ["alemania", "germany", "deutschland", "berlin", "munich"],
+    "germany": ["alemania", "germany", "deutschland", "berlin", "munich"],
+    "japon": ["japon", "japón", "japan", "tokyo"],
+    "japón": ["japon", "japón", "japan", "tokyo"],
+    "japan": ["japon", "japón", "japan", "tokyo"],
+    "espana": ["españa", "espana", "spain", "madrid", "barcelona"],
+    "españa": ["españa", "espana", "spain", "madrid", "barcelona"],
+    "spain": ["españa", "espana", "spain", "madrid", "barcelona"],
+    "estados unidos": ["estados unidos", "united states", "usa", "us"],
+    "united states": ["estados unidos", "united states", "usa", "us"],
+    "reino unido": ["reino unido", "united kingdom", "uk", "great britain", "england", "london"],
+    "united kingdom": ["reino unido", "united kingdom", "uk", "great britain", "england", "london"],
+    "paises bajos": ["paises bajos", "países bajos", "netherlands", "holland", "amsterdam"],
+    "países bajos": ["paises bajos", "países bajos", "netherlands", "holland", "amsterdam"],
+    "netherlands": ["paises bajos", "países bajos", "netherlands", "holland", "amsterdam"],
+    "brasil": ["brasil", "brazil", "sao paulo", "rio"],
+    "brazil": ["brasil", "brazil", "sao paulo", "rio"],
+    "mexico": ["mexico", "méxico"],
+    "méxico": ["mexico", "méxico"],
+    "canada": ["canada", "canadá", "toronto", "vancouver", "montreal"],
+    "canadá": ["canada", "canadá", "toronto", "vancouver", "montreal"],
+    "italia": ["italia", "italy", "rome", "milan"],
+    "italy": ["italia", "italy", "rome", "milan"],
+    "francia": ["francia", "france", "paris"],
+    "france": ["francia", "france", "paris"],
+    "suecia": ["suecia", "sweden", "stockholm"],
+    "sweden": ["suecia", "sweden", "stockholm"],
+    "suiza": ["suiza", "switzerland", "zurich", "geneva"],
+    "switzerland": ["suiza", "switzerland", "zurich", "geneva"],
+    "irlanda": ["irlanda", "ireland", "dublin"],
+    "ireland": ["irlanda", "ireland", "dublin"],
+    "polonia": ["polonia", "poland", "warsaw"],
+    "poland": ["polonia", "poland", "warsaw"],
+    "portugal": ["portugal", "lisbon", "porto"],
+    "noruega": ["noruega", "norway", "oslo"],
+    "norway": ["noruega", "norway", "oslo"],
+    "dinamarca": ["dinamarca", "denmark", "copenhagen"],
+    "denmark": ["dinamarca", "denmark", "copenhagen"],
+    "finlandia": ["finlandia", "finland", "helsinki"],
+    "finland": ["finlandia", "finland", "helsinki"],
+    "belgica": ["bélgica", "belgica", "belgium", "brussels"],
+    "bélgica": ["bélgica", "belgica", "belgium", "brussels"],
+    "belgium": ["bélgica", "belgica", "belgium", "brussels"],
+    "austria": ["austria", "vienna"],
+    "republica checa": ["república checa", "republica checa", "czech republic", "czechia", "prague"],
+    "república checa": ["república checa", "republica checa", "czech republic", "czechia", "prague"],
+    "czech republic": ["república checa", "republica checa", "czech republic", "czechia", "prague"],
+    "corea del sur": ["corea del sur", "south korea", "korea", "seoul"],
+    "south korea": ["corea del sur", "south korea", "korea", "seoul"],
+    "emiratos arabes unidos": ["emiratos árabes unidos", "emiratos arabes unidos", "united arab emirates", "uae", "dubai", "abu dhabi"],
+    "emiratos árabes unidos": ["emiratos árabes unidos", "emiratos arabes unidos", "united arab emirates", "uae", "dubai", "abu dhabi"],
+    "united arab emirates": ["emiratos árabes unidos", "emiratos arabes unidos", "united arab emirates", "uae", "dubai", "abu dhabi"],
+    "nueva zelanda": ["nueva zelanda", "new zealand", "auckland"],
+    "new zealand": ["nueva zelanda", "new zealand", "auckland"],
+    "sudafrica": ["sudáfrica", "sudafrica", "south africa", "cape town", "johannesburg"],
+    "sudáfrica": ["sudáfrica", "sudafrica", "south africa", "cape town", "johannesburg"],
+    "south africa": ["sudáfrica", "sudafrica", "south africa", "cape town", "johannesburg"],
+    "singapur": ["singapur", "singapore"],
+    "singapore": ["singapur", "singapore"],
+    "filipinas": ["filipinas", "philippines", "manila"],
+    "philippines": ["filipinas", "philippines", "manila"],
+    "ucrania": ["ucrania", "ukraine", "kyiv"],
+    "ukraine": ["ucrania", "ukraine", "kyiv"],
+    "peru": ["perú", "peru", "lima"],
+    "perú": ["perú", "peru", "lima"],
+    "uruguay": ["uruguay", "montevideo"],
+    "argentina": ["argentina", "buenos aires"],
+    "chile": ["chile", "santiago"],
+    "colombia": ["colombia", "bogota", "bogotá", "medellin", "medellín"],
+}
+
+def expand_country_terms(countries: Optional[List[str]]) -> List[str]:
+    """Expands country names into bilingual search terms."""
+    if not countries:
+        return []
+    result = set()
+    for c in countries:
+        if not c or not c.strip():
+            continue
+        cleaned = c.strip().lower()
+        result.add(cleaned)
+        if cleaned in COUNTRY_SYNONYMS:
+            result.update(COUNTRY_SYNONYMS[cleaned])
+        else:
+            unaccented = unicodedata.normalize("NFKD", cleaned).encode("ascii", "ignore").decode("utf-8")
+            if unaccented in COUNTRY_SYNONYMS:
+                result.update(COUNTRY_SYNONYMS[unaccented])
+    return list(result)
 
 def build_home_region_re(home_terms: Optional[List[str]] = None) -> re.Pattern:
     """Regex matching candidate's region: LATAM terms plus candidate city/country from profile."""
@@ -322,6 +413,7 @@ class BaseScanner(ABC):
         is_onsite = is_explicit_onsite or (bool(loc_str) and not has_remote_indicator and not is_hybrid)
         is_home = bool(home_only_re.search(combined))
         scope = (geo_scope or "").lower().strip()
+        clean_countries = expand_country_terms(custom_countries) if custom_countries else []
 
         # 1. Work Mode Filtering (remote, hybrid, onsite)
         if work_modes is not None:
@@ -330,8 +422,7 @@ class BaseScanner(ABC):
                 if "onsite" not in modes:
                     return False
                 # If custom_countries is specified, only accept onsite in those specific countries
-                if custom_countries:
-                    clean_countries = [c.strip().lower() for c in custom_countries if c and c.strip()]
+                if clean_countries:
                     country_patterns = [re.escape(c).replace(r"\ ", r"\s+") for c in clean_countries]
                     c_re = re.compile(r"\b(" + "|".join(country_patterns) + r")\b", re.IGNORECASE)
                     if not c_re.search(combined):
@@ -348,8 +439,7 @@ class BaseScanner(ABC):
                 if "hybrid" not in modes:
                     return False
                 # If custom_countries is specified, only accept hybrid in those specific countries
-                if custom_countries:
-                    clean_countries = [c.strip().lower() for c in custom_countries if c and c.strip()]
+                if clean_countries:
                     country_patterns = [re.escape(c).replace(r"\ ", r"\s+") for c in clean_countries]
                     c_re = re.compile(r"\b(" + "|".join(country_patterns) + r")\b", re.IGNORECASE)
                     if not c_re.search(combined):
@@ -373,20 +463,18 @@ class BaseScanner(ABC):
                 return False
 
         # 2. Custom Countries (if user selected specific country tags)
-        if custom_countries:
-            clean_countries = [c.strip().lower() for c in custom_countries if c and c.strip()]
-            if clean_countries:
-                country_patterns = [re.escape(c).replace(r"\ ", r"\s+") for c in clean_countries]
-                custom_re = re.compile(r"\b(" + "|".join(country_patterns) + r")\b", re.IGNORECASE)
-                if custom_re.search(combined):
-                    return True
-                if not loc_str and desc_str and custom_re.search(desc_str):
-                    return True
-                # Accept unconstrained global remote jobs (only if location field specifies global/worldwide)
-                has_global_indicator = bool(re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE))
-                if has_global_indicator and not RESTRICTED_LOCATION_RE.search(loc_str):
-                    return True
-                return False
+        if clean_countries:
+            country_patterns = [re.escape(c).replace(r"\ ", r"\s+") for c in clean_countries]
+            custom_re = re.compile(r"\b(" + "|".join(country_patterns) + r")\b", re.IGNORECASE)
+            if custom_re.search(combined):
+                return True
+            if not loc_str and desc_str and custom_re.search(desc_str):
+                return True
+            # Accept unconstrained global remote jobs (only if location field specifies global/worldwide)
+            has_global_indicator = bool(re.search(r"\b(worldwide|global|anywhere)\b", loc_str, re.IGNORECASE))
+            if has_global_indicator and not RESTRICTED_LOCATION_RE.search(loc_str):
+                return True
+            return False
 
         # 3. Geo Scope Resolution (when explicit geo_scope is specified)
         if geo_scope:

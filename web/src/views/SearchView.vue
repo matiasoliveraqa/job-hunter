@@ -15,9 +15,11 @@ import {
   stopScan,
   initScanSync,
   getAvailableCountries,
+  normalizeCountryCode,
+  getCountryName,
   setGeoScope,
 } from '../scanController.js'
-import { t } from '../i18n/index.js'
+import { currentLang, t } from '../i18n/index.js'
 
 const profile = ref(null)
 const loadingProfile = ref(true)
@@ -52,14 +54,23 @@ const countrySearch = ref('')
 const isCountryDropdownOpen = ref(false)
 
 const availableScopeCountries = computed(() => {
-  return getAvailableCountries(form.geoScope)
+  return getAvailableCountries(form.geoScope, currentLang.value)
 })
 
 const filteredCountries = computed(() => {
   const q = countrySearch.value.trim().toLowerCase()
-  return availableScopeCountries.value.filter(
-    (c) => !form.countries.includes(c) && (!q || c.toLowerCase().includes(q))
-  )
+  return availableScopeCountries.value.filter((item) => {
+    const isAdded = form.countries.some((c) => (normalizeCountryCode(c) || c) === item.code)
+    if (isAdded) return false
+    if (!q) return true
+    return (
+      item.name.toLowerCase().includes(q) ||
+      item.code.toLowerCase().includes(q) ||
+      item.es.toLowerCase().includes(q) ||
+      item.en.toLowerCase().includes(q) ||
+      item.aliases?.some((a) => a.toLowerCase().includes(q))
+    )
+  })
 })
 
 const currentScopeLabel = computed(() => {
@@ -183,29 +194,37 @@ function handleCountryEnter() {
   const val = countrySearch.value.trim()
   if (!val) {
     if (filteredCountries.value.length > 0) {
-      addCountry(filteredCountries.value[0])
+      addCountry(filteredCountries.value[0].code)
     }
     return
   }
-  const match = filteredCountries.value.find(
-    (c) => c.toLowerCase() === val.toLowerCase()
+  const match = filteredCountries.value.find((c) =>
+    c.name.toLowerCase() === val.toLowerCase() ||
+    c.en.toLowerCase() === val.toLowerCase() ||
+    c.es.toLowerCase() === val.toLowerCase() ||
+    c.code.toLowerCase() === val.toLowerCase() ||
+    c.aliases?.some((a) => a.toLowerCase() === val.toLowerCase())
   ) || filteredCountries.value[0]
+
   if (match) {
-    addCountry(match)
+    addCountry(match.code)
   } else {
     notify(t('search.countries.notInScope'), 'warning')
   }
 }
 
-function addCountry(country) {
-  if (!country) return
-  if (!availableScopeCountries.value.includes(country)) {
+function addCountry(countryOrCode) {
+  if (!countryOrCode) return
+  const code = normalizeCountryCode(countryOrCode) || countryOrCode
+  const allowedCodes = availableScopeCountries.value.map((c) => c.code)
+  if (!allowedCodes.includes(code)) {
     return notify(t('search.countries.notInScope'), 'warning')
   }
-  if (form.countries.includes(country)) {
+  const isAdded = form.countries.some((c) => (normalizeCountryCode(c) || c) === code)
+  if (isAdded) {
     return notify(t('search.countries.alreadyAdded'), 'warning')
   }
-  form.countries.push(country)
+  form.countries.push(code)
   countrySearch.value = ''
   isCountryDropdownOpen.value = false
 }
@@ -216,6 +235,10 @@ function removeCountry(idx) {
 
 function clearCountries() {
   form.countries = []
+}
+
+function getCountryLabel(codeOrName) {
+  return getCountryName(codeOrName, currentLang.value)
 }
 
 watch(
@@ -977,14 +1000,14 @@ function getWorkModeLabel(mode) {
           >
             <button
               v-for="country in filteredCountries.slice(0, 8)"
-              :key="country"
+              :key="country.code"
               class="w-full text-left px-3 py-1.5 text-xs text-on-surface hover:bg-surface-container flex items-center justify-between transition-colors"
               type="button"
-              @mousedown.prevent="addCountry(country)"
+              @mousedown.prevent="addCountry(country.code)"
             >
               <span class="flex items-center gap-1.5">
                 <span class="material-symbols-outlined text-[14px] text-outline">flag</span>
-                <span>{{ country }}</span>
+                <span>{{ country.name }}</span>
               </span>
               <span class="text-[10px] text-outline font-mono">{{ currentScopeLabel }}</span>
             </button>
@@ -999,7 +1022,7 @@ function getWorkModeLabel(mode) {
             class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container text-xs text-on-surface border border-accent/30 text-accent font-medium shadow-sm"
           >
             <span class="material-symbols-outlined text-[13px]">location_on</span>
-            <span>{{ c }}</span>
+            <span>{{ getCountryLabel(c) }}</span>
             <button
               :aria-label="$t('search.countries.deleteAria')"
               class="text-outline hover:text-on-surface p-0.5 transition-colors ml-0.5"

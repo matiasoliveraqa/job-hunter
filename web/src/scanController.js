@@ -120,74 +120,22 @@ export async function loadPersistedResults(existingApps = []) {
   }
 }
 
-export const LATAM_COUNTRIES = [
-  'Argentina',
-  'Bolivia',
-  'Brasil',
-  'Chile',
-  'Colombia',
-  'Costa Rica',
-  'Cuba',
-  'Ecuador',
-  'El Salvador',
-  'Guatemala',
-  'Honduras',
-  'México',
-  'Nicaragua',
-  'Panamá',
-  'Paraguay',
-  'Perú',
-  'Puerto Rico',
-  'República Dominicana',
-  'Uruguay',
-  'Venezuela',
-]
-
-export const NORTH_AMERICA_COUNTRIES = [
-  'Canadá',
-  'Estados Unidos',
-]
-
-export const WORLDWIDE_COUNTRIES = [
-  ...LATAM_COUNTRIES,
-  ...NORTH_AMERICA_COUNTRIES,
-  'Alemania',
-  'Australia',
-  'Austria',
-  'Bélgica',
-  'China',
-  'Corea del Sur',
-  'Dinamarca',
-  'Emiratos Árabes Unidos',
-  'España',
-  'Filipinas',
-  'Finlandia',
-  'Francia',
-  'India',
-  'Irlanda',
-  'Israel',
-  'Italia',
-  'Japón',
-  'Noruega',
-  'Nueva Zelanda',
-  'Países Bajos',
-  'Polonia',
-  'Portugal',
-  'Reino Unido',
-  'República Checa',
-  'Rumania',
-  'Singapur',
-  'Sudáfrica',
-  'Suecia',
-  'Suiza',
-  'Ucrania',
-]
-
-export function getAvailableCountries(geoScope) {
-  if (geoScope === 'latam') return [...LATAM_COUNTRIES]
-  if (geoScope === 'latam_na') return [...LATAM_COUNTRIES, ...NORTH_AMERICA_COUNTRIES]
-  return [...WORLDWIDE_COUNTRIES]
-}
+export {
+  COUNTRIES,
+  COUNTRY_BY_CODE,
+  LATAM_COUNTRIES,
+  NORTH_AMERICA_COUNTRIES,
+  WORLDWIDE_COUNTRIES,
+  getAvailableCountries,
+  normalizeCountryCode,
+  getCountryName,
+  getCountrySearchTerms,
+} from './countries.js'
+import {
+  getAvailableCountries,
+  normalizeCountryCode,
+  getCountrySearchTerms,
+} from './countries.js'
 
 export const form = reactive({
   roles: [],
@@ -203,7 +151,11 @@ export const form = reactive({
 export function setGeoScope(newScope) {
   form.geoScope = newScope
   const allowed = getAvailableCountries(newScope)
-  form.countries = form.countries.filter((c) => allowed.includes(c))
+  const allowedCodes = new Set(allowed.map((c) => c.code))
+  form.countries = form.countries.filter((c) => {
+    const code = normalizeCountryCode(c) || c
+    return allowedCodes.has(code)
+  })
 }
 
 let eventSource = null
@@ -475,12 +427,14 @@ export async function startScan(existingApps = []) {
     locations = ['remote', 'worldwide', 'global', 'anywhere']
   }
 
+  const expandedCountries = form.countries.flatMap((c) => getCountrySearchTerms(c))
+
   const payload = {
     roles: form.roles,
     platforms: form.platforms,
     locations,
     geoScope: form.geoScope,
-    countries: form.countries,
+    countries: expandedCountries.length ? expandedCountries : form.countries,
     workModes: form.workModes,
     maxYears: parsedMaxYears,
     allowCaptcha: form.allowCaptcha,

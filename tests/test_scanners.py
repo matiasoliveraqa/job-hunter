@@ -286,8 +286,11 @@ def test_dynamic_geo_scope_and_filters():
     assert scanner.matches_location("QA Engineer", "Remote - Germany", kw, geo_scope="global") is True
     assert scanner.matches_location("QA Engineer", "Remote - China", kw, geo_scope="global") is True
 
-    # 4. Custom Countries filter (e.g. Germany)
+    # 4. Custom Countries filter (e.g. Germany, Japan)
     assert scanner.matches_location("QA Engineer", "Berlin, Germany", kw, geo_scope="global", custom_countries=["Alemania", "Germany"], work_modes=["remote", "onsite"]) is True
+    assert scanner.matches_location("QA Engineer", "Berlin, Germany", kw, geo_scope="global", custom_countries=["Alemania"], work_modes=["remote", "onsite"]) is True
+    assert scanner.matches_location("QA Engineer", "Tokyo, Japan", kw, geo_scope="global", custom_countries=["Japón"], work_modes=["remote", "onsite"]) is True
+    assert scanner.matches_location("QA Engineer", "Remote - Tokyo, Japan", kw, geo_scope="global", custom_countries=["Japón"]) is True
     assert scanner.matches_location("QA Engineer", "Remote - Argentina", kw, geo_scope="global", custom_countries=["Alemania", "Germany"]) is False
 
     # 5. Work modes: On-site in Global scope allows onsite from any country
