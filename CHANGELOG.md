@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-10-28
+
+### Fixed
+- BambooHR SPA cold-start synchronization: `ensure_application_tab_open` and `BambooHRApplicator` wait for client-side JavaScript elements (`Apply for This Job` button and form inputs) to mount before field filling begins.
+- BambooHR Province field completion: maps `input[name='state.value']` when the platform switches the US state dropdown into a required `Province *` text input for non-US countries.
+- Resume upload routing: added `safe_upload_resume` across all 7 ATS applicators (BambooHR, Greenhouse, Lever, Ashby, Workable, Breezy, Recruitee). Evaluates parent container text to reject Cover Letter file inputs and attach the CV strictly to Resume inputs.
+- Generic location resolution: `city`, `country`, `resolved_state`, and `resolved_address` in `PersonalInfo` dynamically parse multi-part location strings without hardcoded city defaults.
+- Deterministic handling for ZIP / postal codes and Date Available: added factual resolvers to prevent open-ended essay generation for structured form inputs.
+
 ## [1.3.2] - 2026-10-27
 
 ### Added
