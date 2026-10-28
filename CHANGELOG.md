@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2026-10-28
+
+### Added
+- Bilingual country registry (`web/src/countries.js`) with 52 countries, ISO 3166-1 alpha-2 codes, Spanish names, English names, territorial scopes, and aliases.
+- Frontend and scanner test coverage for country normalization, translation, and filtering (`web/tests/countries.test.js` and `tests/test_scanners.py`).
+
+### Fixed
+- Specific countries filter language synchronization: dropdown options, autocomplete matching, and selected country chips update when the active language changes in `SearchView.vue`.
+- Cross-lingual ATS location matching: `getCountrySearchTerms` in `scanController.js` and `expand_country_terms` in `BaseScanner` expand selected countries into bilingual search terms. Postings written as `Tokyo, Japan` or `Berlin, Germany` match when filters are selected in Spanish.
+
 ## [1.3.3] - 2026-10-28
 
 ### Fixed
