@@ -180,6 +180,24 @@ class BaseApplicator(ABC):
                 pass
         return None
 
+    async def handle_turnstile_if_present(self) -> bool:
+        """
+        Detects Cloudflare Turnstile iframe and clicks the challenge checkbox if visible.
+        """
+        try:
+            cf_frames = [
+                f for f in self.page.frames
+                if "challenges.cloudflare.com" in f.url or "turnstile" in f.url
+            ]
+            for frame in cf_frames:
+                checkbox = frame.locator("input[type='checkbox'], #challenge-stage input, .ctp-checkbox-label, div#cf-stage")
+                if await checkbox.count() > 0 and await checkbox.first.is_visible():
+                    await checkbox.first.click()
+                    return True
+        except Exception:
+            pass
+        return False
+
     async def fill_name_fields(self) -> bool:
         """
         Smartly detect whether the application form splits Name into First Name + Last Name
@@ -1906,6 +1924,12 @@ class BaseApplicator(ABC):
         try:
             # 1. First check explicit selectors that strictly specify Resume/CV
             explicit_selectors = [
+                # Workable specific: data-ui resume containers
+                "[data-ui*='resume' i] input[type='file']",
+                "div[data-ui='file-upload'] input[type='file']",
+                "div:has(> label:has-text('Resume')) input[type='file']",
+                "div:has(label:has-text('Resume')) input[type='file']",
+                "section:has-text('Resume') input[type='file']",
                 # BambooHR specific: container containing 'Resume'
                 "div[data-fabric-component='Flex']:has-text('Resume') input[type='file']",
                 "div:has(> p:has-text('Resume')) input[type='file']",
@@ -1936,57 +1960,65 @@ class BaseApplicator(ABC):
                 return False
 
             if len(file_inputs) == 1:
-                # Only one file input on the page. Ensure it's not explicitly a cover letter.
-                is_cover = await file_inputs[0].evaluate('''el => {
+                # Only one file input on the page. Only reject if it is strictly and exclusively a cover letter.
+                is_strict_cover = await file_inputs[0].evaluate(r'''el => {
+                    const attrs = `${el.name || ''} ${el.id || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('data-ui') || ''}`.toLowerCase();
                     let curr = el;
-                    while (curr && curr !== document.body) {
-                        const t = (curr.innerText || '').toLowerCase();
-                        if (t.includes('cover letter') || t.includes('carta de presentación') || t.includes('cover_letter')) return true;
+                    let depth = 0;
+                    let localText = '';
+                    while (curr && curr !== document.body && depth < 3) {
+                        const tag = (curr.tagName || '').toLowerCase();
+                        if (tag === 'form' || tag === 'main' || tag === 'body') break;
+                        localText += ' ' + (curr.innerText || '').toLowerCase();
                         curr = curr.parentElement;
+                        depth++;
                     }
-                    return false;
+                    const combined = (attrs + ' ' + localText).toLowerCase();
+                    const hasCover = /cover[\s_-]?letter|carta de presentaci/i.test(combined);
+                    const hasResume = /resume|curriculum|cv\b|hoja de vida/i.test(combined);
+                    return hasCover && !hasResume;
                 }''')
-                if not is_cover:
+                if not is_strict_cover:
                     await file_inputs[0].set_input_files(str(file_path.resolve()))
                     self.filled_fields["CV PDF"] = str(file_path.resolve())
                     print(f"  [OK] Uploaded Resume to single file input: {file_path.name}")
                     await asyncio.sleep(1.5)
                     return True
 
-            # Multiple file inputs: score each input based on context
-            best_input = None
+            # Multiple file inputs: score each input based on immediate field context
+            scored_inputs = []
             for inp in file_inputs:
-                score = await inp.evaluate('''el => {
+                score = await inp.evaluate(r'''el => {
+                    const attrs = `${el.name || ''} ${el.id || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('data-ui') || ''} ${el.getAttribute('data-qa') || ''}`.toLowerCase();
                     let curr = el;
-                    let text = '';
-                    while (curr && curr !== document.body) {
-                        const t = (curr.innerText || '').toLowerCase();
-                        if (t.includes('resume') || t.includes('curriculum') || t.includes('cv') || t.includes('hoja de vida') || t.includes('cover')) {
-                            text += ' ' + t;
-                        }
+                    let depth = 0;
+                    let localText = '';
+                    while (curr && curr !== document.body && depth < 3) {
+                        const tag = (curr.tagName || '').toLowerCase();
+                        if (tag === 'form' || tag === 'main' || tag === 'body') break;
+                        localText += ' ' + (curr.innerText || '').toLowerCase();
                         curr = curr.parentElement;
+                        depth++;
                     }
-                    const attrs = `${el.name || ''} ${el.id || ''} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
-                    const combined = (text + ' ' + attrs).toLowerCase();
+                    const combined = (attrs + ' ' + localText).toLowerCase();
+                    const hasResume = /resume|curriculum|cv\b|hoja de vida/i.test(combined);
+                    const hasCover = /cover[\s_-]?letter|carta de presentaci/i.test(combined);
 
-                    // If it specifically mentions cover letter, strongly reject (-100)
-                    if (combined.includes('cover letter') || combined.includes('cover_letter') || combined.includes('carta de presentación') || combined.includes('carta de presentacion') || combined.includes('coverletter') || combined.includes('cover')) {
-                        return -100;
-                    }
-
-                    // If it specifically mentions resume or cv, positive score (+10)
-                    if (combined.includes('resume') || combined.includes('curriculum') || combined.includes('cv') || combined.includes('hoja de vida')) {
+                    if (hasResume && !hasCover) return 50;
+                    if (hasCover && !hasResume) return -100;
+                    if (hasResume && hasCover) {
+                        if (/resume|curriculum|cv/i.test(attrs)) return 30;
+                        if (/cover/i.test(attrs)) return -50;
                         return 10;
                     }
-
                     return 0;
                 }''')
+                scored_inputs.append((score, inp))
 
-                if score > 0:
-                    best_input = inp
-                    break
-
-            if best_input:
+            # Pick highest positive score
+            scored_inputs.sort(key=lambda x: x[0], reverse=True)
+            if scored_inputs and scored_inputs[0][0] > 0:
+                best_input = scored_inputs[0][1]
                 await best_input.set_input_files(str(file_path.resolve()))
                 self.filled_fields["CV PDF"] = str(file_path.resolve())
                 print(f"  [OK] Uploaded Resume to contextual Resume input: {file_path.name}")
@@ -1994,17 +2026,8 @@ class BaseApplicator(ABC):
                 return True
 
             # If no input had positive score, pick the first one that is NOT a cover letter
-            for inp in file_inputs:
-                is_cover = await inp.evaluate('''el => {
-                    let curr = el;
-                    while (curr && curr !== document.body) {
-                        const t = (curr.innerText || '').toLowerCase();
-                        if (t.includes('cover letter') || t.includes('cover') || t.includes('carta')) return true;
-                        curr = curr.parentElement;
-                    }
-                    return false;
-                }''')
-                if not is_cover:
+            for score, inp in scored_inputs:
+                if score >= 0:
                     await inp.set_input_files(str(file_path.resolve()))
                     self.filled_fields["CV PDF"] = str(file_path.resolve())
                     print(f"  [OK] Uploaded Resume to non-cover file input: {file_path.name}")

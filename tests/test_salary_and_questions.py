@@ -563,6 +563,38 @@ async def test_safe_upload_resume_avoids_cover_letter(dummy_profile, tmp_path):
     cover_input.set_input_files.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_safe_upload_resume_single_input_uploads_when_cover_letter_present(dummy_profile, tmp_path):
+    page = MagicMock()
+    app = DummyApplicator(page, dummy_profile)
+
+    fake_pdf = tmp_path / "resume.pdf"
+    fake_pdf.write_text("dummy")
+
+    resume_input = MagicMock()
+    resume_input.evaluate = AsyncMock(return_value=False)
+    resume_input.set_input_files = AsyncMock()
+
+    explicit_mock = MagicMock()
+    explicit_mock.count = AsyncMock(return_value=0)
+
+    single_input_mock = MagicMock()
+    single_input_mock.count = AsyncMock(return_value=0)
+    single_input_mock.all = AsyncMock(return_value=[resume_input])
+
+    def locator_side_effect(sel):
+        if sel == "input[type='file']":
+            return single_input_mock
+        return explicit_mock
+
+    page.locator.side_effect = locator_side_effect
+
+    res = await app.safe_upload_resume(fake_pdf)
+    assert res is True
+    resume_input.set_input_files.assert_awaited_once_with(str(fake_pdf.resolve()))
+
+
+
 
 
 

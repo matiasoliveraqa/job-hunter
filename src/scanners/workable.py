@@ -87,6 +87,7 @@ class WorkableScanner(BaseScanner):
                             url=job_url,
                             required_years=req_years,
                             work_mode=self.detect_work_mode(title, loc, desc),
+                            has_captcha=True,
                         ))
         except Exception:
             pass

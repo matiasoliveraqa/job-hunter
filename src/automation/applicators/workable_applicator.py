@@ -15,7 +15,20 @@ class WorkableApplicator(BaseApplicator):
 
         # 1. Resume Upload (strictly targets Resume and excludes Cover Letter)
         if cv_pdf_path:
-            await self.safe_upload_resume(cv_pdf_path)
+            uploaded = await self.safe_upload_resume(cv_pdf_path)
+            if not uploaded:
+                for sel in [
+                    "[data-ui*='resume'] input[type='file']",
+                    "div[data-ui='file-upload'] input[type='file']",
+                    "div:has-text('Resume') input[type='file']",
+                    "input[type='file']",
+                ]:
+                    loc = self.page.locator(sel)
+                    if await loc.count() > 0:
+                        await loc.first.set_input_files(str(cv_pdf_path.resolve()))
+                        self.filled_fields["CV PDF"] = str(cv_pdf_path.resolve())
+                        print(f"  [OK] Uploaded Resume via Workable fallback ({sel}): {cv_pdf_path.name}")
+                        break
 
         # 2. Smart Name Filling (first/last or full name)
         await self.fill_name_fields()
@@ -45,4 +58,8 @@ class WorkableApplicator(BaseApplicator):
         # 6. Salary & Preferences
         await self.fill_common_preferences()
 
+        # 7. Check and attempt to interact with Turnstile if present
+        await self.handle_turnstile_if_present()
+
         return True
+

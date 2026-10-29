@@ -43,6 +43,11 @@ export function createStore(file) {
   return {
     list: read,
 
+    get: async (id) => {
+      const data = await read()
+      return data.find((a) => a.id === id) || null
+    },
+
     // Returns { item, created }. A posting with the same url is never duplicated.
     create: (input) =>
       mutate((data) => {

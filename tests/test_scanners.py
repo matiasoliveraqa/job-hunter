@@ -146,18 +146,27 @@ def test_captcha_model_and_filtering():
         url="https://jobs.lever.co/test-lever/456",
         has_captcha=True,
     )
+    jp3 = JobPosting(
+        ats=ATSPlatform.WORKABLE,
+        company="test-workable",
+        title="Senior QA Engineer",
+        location="Remote",
+        url="https://apply.workable.com/test-workable/j/789/",
+        has_captcha=True,
+    )
     assert jp1.has_captcha is False
     assert jp2.has_captcha is True
+    assert jp3.has_captcha is True
 
-    # When allow_captcha is False (default), jp2 is excluded
+    # When allow_captcha is False (default), jp2 and jp3 are excluded
     allow_captcha = False
-    filtered = [p for p in [jp1, jp2] if (allow_captcha or not p.has_captcha)]
+    filtered = [p for p in [jp1, jp2, jp3] if (allow_captcha or not p.has_captcha)]
     assert filtered == [jp1]
 
-    # When allow_captcha is True, both are kept
+    # When allow_captcha is True, all are kept
     allow_captcha = True
-    filtered_all = [p for p in [jp1, jp2] if (allow_captcha or not p.has_captcha)]
-    assert filtered_all == [jp1, jp2]
+    filtered_all = [p for p in [jp1, jp2, jp3] if (allow_captcha or not p.has_captcha)]
+    assert filtered_all == [jp1, jp2, jp3]
 
 
 def test_location_fixes_a1_residency_phrases():

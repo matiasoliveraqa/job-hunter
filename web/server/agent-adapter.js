@@ -170,23 +170,33 @@ async function checkCommandAvailable(bin, args = ['--version'], timeoutMs = 2500
 
 export async function checkBaseCv() {
   const myCvDir = path.join(ROOT, 'my_cv')
-  if (!existsSync(myCvDir)) {
-    return { exists: false, filename: null, relPath: null }
-  }
-  try {
-    const files = await fs.readdir(myCvDir)
-    const pdfs = files.filter((f) => f.toLowerCase().endsWith('.pdf') && !f.startsWith('skills_inventory'))
-    if (!pdfs.length) {
-      return { exists: false, filename: null, relPath: null }
+  if (existsSync(myCvDir)) {
+    try {
+      const files = await fs.readdir(myCvDir)
+      const pdfs = files.filter((f) => f.toLowerCase().endsWith('.pdf') && !f.startsWith('skills_inventory'))
+      if (pdfs.length) {
+        return {
+          exists: true,
+          filename: pdfs[0],
+          relPath: `my_cv/${pdfs[0]}`,
+        }
+      }
+    } catch {
+      // Fall through to demo CV fallback
     }
+  }
+
+  // Fallback to tracked demo CV when no user CV is present (e.g. CI environments, fresh clones)
+  const demoCv = path.join(ROOT, 'web', 'demo', 'demo_cv.pdf')
+  if (existsSync(demoCv)) {
     return {
       exists: true,
-      filename: pdfs[0],
-      relPath: `my_cv/${pdfs[0]}`,
+      filename: 'demo_cv.pdf',
+      relPath: 'web/demo/demo_cv.pdf',
     }
-  } catch {
-    return { exists: false, filename: null, relPath: null }
   }
+
+  return { exists: false, filename: null, relPath: null }
 }
 
 async function queryAnthropicApi(prompt, apiKey) {

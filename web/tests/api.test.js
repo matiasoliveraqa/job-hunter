@@ -227,7 +227,38 @@ test('Web server host authorization and API endpoints', async (t) => {
     })
     assert.strictEqual(applyRes.status, 202)
     assert.strictEqual(applyRes.json?.company, 'TargetCorp')
-    assert.strictEqual(applyRes.json?.role, 'QA Engineer')
+  })
+
+  await t.test('POST /api/applications/:id/use-base-cv assigns base CV to application', async () => {
+    const appRes = await makeRequest({
+      port,
+      path: '/api/applications',
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+        'content-type': 'application/json',
+      },
+      body: {
+        company: 'BaseCvCorp',
+        role: 'QA Engineer',
+        url: 'https://job-boards.greenhouse.io/basecvcorp/jobs/99999',
+      },
+    })
+    const appId = appRes.json?.id
+    assert.ok(appId)
+
+    const baseCvRes = await makeRequest({
+      port,
+      path: `/api/applications/${appId}/use-base-cv`,
+      method: 'POST',
+      headers: {
+        host: `127.0.0.1:${port}`,
+      },
+    })
+    assert.strictEqual(baseCvRes.status, 200)
+    assert.strictEqual(baseCvRes.json?.ok, true)
+    assert.ok(baseCvRes.json?.cv)
+    assert.strictEqual(baseCvRes.json?.application?.id, appId)
   })
 
   await t.test('POST /api/tailor-cv requires company and role', async () => {

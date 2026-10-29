@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-10-28
+
+### Added
+- Cloudflare Turnstile challenge interaction in `BaseApplicator.handle_turnstile_if_present`: detects Turnstile iframes and interacts with the verification checkbox when presented in interactive challenge mode.
+- Turnstile detection and challenge interaction handling in `WorkableApplicator` and CLI application flow.
+- Scanner test coverage in `tests/test_scanners.py` for Workable captcha model and Anti-CAPTCHA filtering.
+- Automated API test coverage in `web/tests/api.test.js` for base CV assignment (`POST /api/applications/:id/use-base-cv`).
+- Unit test in `tests/test_salary_and_questions.py` validating that a single Resume file input is uploaded when a Cover Letter field is present on the page.
+
+### Fixed
+- Workable ATS scanner (`WorkableScanner`): flagged postings with `has_captcha=True` so the Anti-CAPTCHA toggle (`--allow-captcha` / UI Anti-CAPTCHA switch) filters out Workable listings protected by Cloudflare Turnstile.
+- Playwright browser stealth launcher (`src/automation/browser.py`): passed `ignore_default_args=['--enable-automation']` to strip the default automation flag that caused Cloudflare Turnstile verification failures.
+- Native browser property simulation: updated stealth script with realistic `Plugin` and `PluginArray` structures, genuine `window.chrome` properties, and clean `navigator.webdriver` undefined getter handling across documents and child frames.
+- Base CV assignment in web backend (`web/server/store.js`): implemented `store.get(id)` in `createStore` to resolve the `store.get is not a function` error when calling `POST /api/applications/:id/use-base-cv`.
+- Resume upload routing when Cover Letter is present (`safe_upload_resume` in `src/automation/applicators/base.py`): bounded ancestor traversal to local field containers (depth < 3, stopping before `form`, `main`, or `body`) so presence of a Cover Letter textarea elsewhere on the form does not misclassify the single Resume file input as a cover letter.
+- Added explicit selectors for Workable dropzones (`[data-ui*='resume']`, `div[data-ui='file-upload']`, `div:has(> label:has-text('Resume'))`) and fallback file upload in `WorkableApplicator`.
+
 ## [1.4.0] - 2026-10-28
 
 ### Added

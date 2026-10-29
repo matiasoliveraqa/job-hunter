@@ -351,6 +351,10 @@ def apply_command(args):
             detected_captcha = await applicator.detect_captcha()
             if detected_captcha:
                 console.print(f"[yellow][CAPTCHA][/yellow] Form protected by [bold]{detected_captcha}[/bold]. Stealth evasion mode active.")
+                if "Turnstile" in detected_captcha:
+                    handled = await applicator.handle_turnstile_if_present()
+                    if handled:
+                        console.print("[green][CAPTCHA][/green] Turnstile challenge interaction completed.")
 
             # Save execution script and metadata with URL + completed fields inside the company folder
             target_url = page.url if page.url and not any(p in page.url for p in ["proxy.html", "about:blank", "googleapis.com"]) else url
