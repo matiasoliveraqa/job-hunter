@@ -359,6 +359,30 @@ test('Web server host authorization and API endpoints', async (t) => {
     assert.ok(typeof res.json?.platform === 'string')
   })
 
+  await t.test('POST /api/applications/:id/open-folder safely resolves and opens app folder', async () => {
+    const listRes = await makeRequest({
+      port,
+      path: '/api/applications',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    const firstApp = listRes.json?.[0]
+    if (firstApp?.id) {
+      const res = await makeRequest({
+        port,
+        path: `/api/applications/${firstApp.id}/open-folder`,
+        method: 'POST',
+        headers: {
+          host: `127.0.0.1:${port}`,
+          'content-type': 'application/json',
+        },
+        body: {},
+      })
+      assert.strictEqual(res.status, 200)
+      assert.strictEqual(res.json?.ok, true)
+      assert.ok(typeof res.json?.path === 'string')
+    }
+  })
+
   await t.test('GET /api/exclusions and POST /api/exclusions/import work properly', async () => {
     const listRes = await makeRequest({
       port,

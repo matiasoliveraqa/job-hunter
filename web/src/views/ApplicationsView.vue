@@ -537,6 +537,15 @@ async function confirmSent(item) {
   }
 }
 
+async function openAppFolder(item) {
+  try {
+    const res = await api.openApplicationFolder(item.id)
+    notify(t('applications.table.folderOpened', { folder: res.folderName || item.company }))
+  } catch (err) {
+    notify(err.message, 'error')
+  }
+}
+
 async function remove(item) {
   const compName = formatCompanyName(item.company)
   if (!confirm(`¿Eliminar la postulación a ${compName}?`)) return
@@ -903,6 +912,14 @@ async function clearDemos() {
                       >
                         {{ item.cv.split('/').pop() }}
                       </a>
+                      <button
+                        type="button"
+                        class="text-outline hover:text-amber-400 p-0.5 rounded transition-colors shrink-0"
+                        :title="$t('applications.table.openFolder')"
+                        @click="openAppFolder(item)"
+                      >
+                        <span class="material-symbols-outlined text-[13px] block">folder_open</span>
+                      </button>
                     </div>
                     <span v-else-if="item.notes" class="text-[11px] text-on-surface-variant truncate mt-0.5" :title="item.notes">
                       {{ item.notes }}
@@ -1001,6 +1018,17 @@ async function clearDemos() {
                     >
                       <span class="material-symbols-outlined text-[13px]">done_all</span>
                       <span>{{ $t('common.confirm') }}</span>
+                    </button>
+
+                    <!-- Abrir carpeta local con información enviada -->
+                    <button
+                      v-if="item.status !== 'pending' || item.cv"
+                      class="p-1 rounded text-outline hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                      :title="$t('applications.table.openFolder')"
+                      type="button"
+                      @click="openAppFolder(item)"
+                    >
+                      <span class="material-symbols-outlined text-[16px] block">folder_open</span>
                     </button>
 
                     <!-- Cambiar estado / notas -->

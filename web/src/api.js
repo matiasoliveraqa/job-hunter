@@ -29,6 +29,7 @@ export const api = {
   clearExclusions: () => request('/api/exclusions/clear', { method: 'POST', body: {} }),
   listFiles: () => request('/api/files'),
   openFolder: (folder = 'applications') => request('/api/open-folder', { method: 'POST', body: { folder } }),
+  openApplicationFolder: (id) => request(`/api/applications/${id}/open-folder`, { method: 'POST' }),
   launchApply: (body) => request('/api/apply', { method: 'POST', body }),
   listLaunches: () => request('/api/apply'),
   stopScan: () => request('/api/scan/stop', { method: 'POST', body: {} }),

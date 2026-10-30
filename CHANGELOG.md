@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [1.4.1] - 2026-10-28
 
 ### Added
+- Application folder opener in web UI (`POST /api/applications/:id/open-folder` and `ApplicationsView.vue`): opens the application directory in the operating system file manager (`xdg-open`, `open`, or `explorer`) via the Actions column and the assigned CV link.
+- Automatic full-page screenshot capture (`<company>_form_filled.png`) in `src/cli.py` (`apply_command`), with image path tracking recorded inside `application_info.json`.
+- Consolidation of legacy application files (captures, HTML templates, execution scripts) into unified `output/applications/<folder>` structures.
+- Automated API test coverage in `web/tests/api.test.js` for `POST /api/applications/:id/open-folder`.
 - Cloudflare Turnstile challenge interaction in `BaseApplicator.handle_turnstile_if_present`: detects Turnstile iframes and interacts with the verification checkbox when presented in interactive challenge mode.
 - Turnstile detection and challenge interaction handling in `WorkableApplicator` and CLI application flow.
 - Scanner test coverage in `tests/test_scanners.py` for Workable captcha model and Anti-CAPTCHA filtering.

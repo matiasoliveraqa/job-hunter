@@ -2,6 +2,7 @@ import express from 'express'
 import fs from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
@@ -330,6 +331,89 @@ app.post('/api/open-folder', async (req, res) => {
     res.json({ ok: true, path: folderPath, platform })
   } catch (err) {
     res.status(500).json({ error: 'No se pudo abrir la carpeta en el sistema', path: folderPath })
+  }
+})
+
+// ---- Open specific application folder in native file manager ----
+app.post('/api/applications/:id/open-folder', async (req, res) => {
+  const appItem = await store.get(req.params.id)
+  if (!appItem) return res.status(404).json({ error: 'Postulación no encontrada' })
+
+  let folderName = ''
+  if (appItem.cv && typeof appItem.cv === 'string' && appItem.cv.startsWith('applications/')) {
+    const parts = appItem.cv.split('/')
+    if (parts.length > 2) folderName = parts[1]
+  }
+  if (!folderName && appItem.notes) {
+    const match = appItem.notes.match(/Carpeta:\s*([^\s\r\n]+)/)
+    if (match) folderName = match[1]
+  }
+
+  const applicationsRoot = FILE_DIRS.applications
+  let folderPath = null
+
+  if (folderName) {
+    const cand = path.join(applicationsRoot, folderName)
+    if (existsSync(cand)) folderPath = cand
+  }
+
+  if (!folderPath) {
+    // Match directory by company name in applicationsRoot
+    const compSlug = (appItem.company || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+    if (compSlug && existsSync(applicationsRoot)) {
+      const entries = await fs.readdir(applicationsRoot, { withFileTypes: true }).catch(() => [])
+      const found = entries.find((e) => e.isDirectory() && e.name.toLowerCase().replace(/[^a-z0-9]+/g, '').includes(compSlug))
+      if (found) {
+        folderPath = path.join(applicationsRoot, found.name)
+        folderName = found.name
+      }
+    }
+  }
+
+  // Fallback to Documents/CV if needed
+  if (!folderPath && folderName) {
+    const docCvPath = path.join(os.homedir(), 'Documents', 'CV', folderName)
+    if (existsSync(docCvPath)) folderPath = docCvPath
+  }
+
+  // If still not found, create standard application directory
+  if (!folderPath) {
+    const ym = new Date().toISOString().slice(0, 7)
+    const sanitize = (s) => (s || '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
+    const cSlug = sanitize(appItem.company) || 'Company'
+    const rSlug = sanitize(appItem.role) || 'Role'
+    folderName = `${ym}_${cSlug}_${rSlug}`
+    folderPath = path.join(applicationsRoot, folderName)
+    await fs.mkdir(folderPath, { recursive: true })
+  }
+
+  const resolved = path.resolve(folderPath)
+  const allowedRoots = [path.resolve(applicationsRoot), path.resolve(os.homedir(), 'Documents', 'CV')]
+  const isAllowed = allowedRoots.some((r) => resolved === r || resolved.startsWith(r + path.sep))
+  if (!isAllowed) {
+    return res.status(403).json({ error: 'Ruta no permitida' })
+  }
+
+  const platform = process.platform
+  let cmd = 'xdg-open'
+  let args = [resolved]
+  if (platform === 'win32') {
+    cmd = 'explorer'
+    args = [resolved]
+  } else if (platform === 'darwin') {
+    cmd = 'open'
+    args = [resolved]
+  }
+
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
+    child.unref()
+    child.on('error', (err) => {
+      console.warn(`[open-app-folder] Error invoking ${cmd}:`, err.message)
+    })
+    res.json({ ok: true, path: resolved, folderName, platform })
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo abrir la carpeta en el sistema', path: resolved })
   }
 })
 

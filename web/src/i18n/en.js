@@ -276,6 +276,8 @@ export default {
       noNotes: 'No notes recorded',
       openUrl: 'Open job link',
       openPlaywright: 'Open in Playwright',
+      openFolder: 'Open application folder',
+      folderOpened: 'Folder opened in file manager ({folder})',
       editApp: 'Edit application',
       deleteApp: 'Delete application',
       emptyTitle: 'No applications match these filters',

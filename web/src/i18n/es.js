@@ -276,6 +276,8 @@ export default {
       noNotes: 'Sin notas registradas',
       openUrl: 'Abrir enlace de la vacante',
       openPlaywright: 'Abrir en Playwright',
+      openFolder: 'Abrir carpeta de la postulación',
+      folderOpened: 'Carpeta abierta en el explorador ({folder})',
       editApp: 'Editar postulación',
       deleteApp: 'Eliminar postulación',
       emptyTitle: 'No hay postulaciones con estos filtros',

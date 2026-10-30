@@ -66,6 +66,7 @@ def _save_application_artifacts(
     role: str,
     cv_path: Optional[Path],
     filled_fields: Dict[str, str],
+    screenshot_path: Optional[Path] = None,
 ) -> Path:
     """
     Save both application_info.json and a standalone executable script open_application.py
@@ -75,12 +76,14 @@ def _save_application_artifacts(
     app_dir.mkdir(parents=True, exist_ok=True)
     cv_name = cv_path.name if cv_path and cv_path.exists() else ""
     cv_str = str(cv_path.resolve()) if cv_path and cv_path.exists() else ""
+    screenshot_name = screenshot_path.name if screenshot_path and screenshot_path.exists() else ""
 
     info_payload = {
         "company": company,
         "role": role,
         "application_url": url,
         "tailored_cv_pdf": cv_str,
+        "screenshot": screenshot_name,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "completed_fields": filled_fields,
     }
@@ -356,6 +359,15 @@ def apply_command(args):
                     if handled:
                         console.print("[green][CAPTCHA][/green] Turnstile challenge interaction completed.")
 
+            # Capture full-page screenshot of the filled application form for visual reference
+            screenshot_filename = f"{sanitize_slug(company).lower()}_form_filled.png"
+            screenshot_path = app_dir / screenshot_filename
+            try:
+                await page.screenshot(path=str(screenshot_path), full_page=True)
+                console.print(f"[green][SCREENSHOT][/green] Full-page form screenshot saved: [cyan]{screenshot_path.name}[/cyan]")
+            except Exception as ss_err:
+                console.print(f"[yellow][SCREENSHOT][/yellow] Could not capture screenshot: {ss_err}")
+
             # Save execution script and metadata with URL + completed fields inside the company folder
             target_url = page.url if page.url and not any(p in page.url for p in ["proxy.html", "about:blank", "googleapis.com"]) else url
             script_path = _save_application_artifacts(
@@ -365,6 +377,7 @@ def apply_command(args):
                 role=role,
                 cv_path=cv_path,
                 filled_fields=applicator.filled_fields,
+                screenshot_path=screenshot_path if screenshot_path.exists() else None,
             )
 
             console.print("\n[bold green][SUCCESS] All fields pre-filled.[/bold green]")
