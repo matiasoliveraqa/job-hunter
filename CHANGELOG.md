@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-10-31
+
+### Security
+- Enabled automatic HTML/XML escaping (`autoescape=select_autoescape(['html', 'xml'])`) in `CVBuilder` Jinja2 environment (`src/cv/builder.py`) to prevent cross-site scripting (XSS) and template injection in generated CVs.
+- Added HTTP security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Content-Security-Policy`) in web backend (`web/server/index.js`).
+- Disabled `X-Powered-By: Express` response header in web backend to prevent server framework fingerprinting.
+- Added prototype pollution safeguards in i18n key traversal (`getNested` in `web/src/i18n/index.js`) blocking `__proto__`, `constructor`, and `prototype` property access.
+- Replaced non-literal template string interpolation in `console.warn` log calls (`web/server/index.js`) with constant prefix arguments.
+
 ## [1.4.1] - 2026-10-28
 
 ### Added

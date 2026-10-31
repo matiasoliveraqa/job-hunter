@@ -7,7 +7,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import unicodedata
 from src.core.config import TEMPLATES_DIR, OUTPUT_DIR, load_candidate_profile
@@ -71,7 +71,10 @@ def get_or_create_application_dir(company: str, role: str = "") -> Path:
 class CVBuilder:
     def __init__(self, templates_dir: Optional[Path] = None):
         self.templates_dir = templates_dir or TEMPLATES_DIR
-        self.env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
+        self.env = Environment(
+            loader=FileSystemLoader(str(self.templates_dir)),
+            autoescape=select_autoescape(["html", "xml"]),
+        )
 
     def enforce_profile_contact_info(self, html_path: Path) -> None:
         """

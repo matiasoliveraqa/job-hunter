@@ -80,3 +80,9 @@ test('i18n reactivity: setLanguage and toggleLanguage work correctly', () => {
   setLanguage('es');
   assert.equal(t('topbar.agentActive', { name: 'Claude' }), 'Motor activo: Claude. Clic para ajustar.');
 });
+
+test('i18n prototype pollution safeguard: forbidden props return key safely', () => {
+  assert.equal(t('__proto__.polluted'), '__proto__.polluted');
+  assert.equal(t('constructor.prototype'), 'constructor.prototype');
+  assert.equal(t('prototype.test'), 'prototype.test');
+});

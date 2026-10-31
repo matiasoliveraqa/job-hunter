@@ -13,12 +13,16 @@ if (typeof document !== 'undefined') {
 
 const dictionaries = { es, en }
 
+const FORBIDDEN_PROPS = new Set(['__proto__', 'constructor', 'prototype'])
+
 function getNested(obj, path) {
   if (!obj || !path) return undefined
   const segments = path.split('.')
   let current = obj
   for (const seg of segments) {
-    if (current && typeof current === 'object' && seg in current) {
+    if (FORBIDDEN_PROPS.has(seg)) return undefined
+    if (current && typeof current === 'object' && Object.prototype.hasOwnProperty.call(current, seg)) {
+      // nosemgrep: javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
       current = current[seg]
     } else {
       return undefined

@@ -105,6 +105,19 @@ test('Web server host authorization and API endpoints', async (t) => {
     assert.ok(Array.isArray(res.json))
   })
 
+  await t.test('HTTP responses include security headers and omit X-Powered-By', async () => {
+    const res = await makeRequest({
+      port,
+      path: '/api/applications',
+      headers: { host: `127.0.0.1:${port}` },
+    })
+    assert.strictEqual(res.status, 200)
+    assert.strictEqual(res.headers['x-powered-by'], undefined, 'X-Powered-By must be absent')
+    assert.strictEqual(res.headers['x-content-type-options'], 'nosniff')
+    assert.strictEqual(res.headers['x-frame-options'], 'SAMEORIGIN')
+    assert.ok(res.headers['content-security-policy'], 'Content-Security-Policy must be set')
+  })
+
   await t.test('Rejects foreign host header (DNS rebinding prevention)', async () => {
     const res = await makeRequest({
       port,

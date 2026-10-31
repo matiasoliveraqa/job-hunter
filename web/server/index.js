@@ -61,6 +61,18 @@ const demo = createDemo({ root: ROOT, host: HOST, port: PORT })
 const configFiles = createConfigFiles({ root: ROOT })
 const store = createStore(path.join(ROOT, 'output', 'applications.json'))
 const app = express()
+app.disable('x-powered-by')
+
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'",
+  )
+  next()
+})
 
 // Express 4 does not forward rejected promises from async handlers to the error
 // middleware (and Node would crash on them), so route registration is wrapped.
@@ -326,7 +338,7 @@ app.post('/api/open-folder', async (req, res) => {
     const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
     child.unref()
     child.on('error', (err) => {
-      console.warn(`[open-folder] Error invoking ${cmd}:`, err.message)
+      console.warn('[open-folder] Error invoking command:', cmd, err.message)
     })
     res.json({ ok: true, path: folderPath, platform })
   } catch (err) {
@@ -409,7 +421,7 @@ app.post('/api/applications/:id/open-folder', async (req, res) => {
     const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
     child.unref()
     child.on('error', (err) => {
-      console.warn(`[open-app-folder] Error invoking ${cmd}:`, err.message)
+      console.warn('[open-app-folder] Error invoking command:', cmd, err.message)
     })
     res.json({ ok: true, path: resolved, folderName, platform })
   } catch (err) {
