@@ -3,6 +3,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api.js'
 import { t } from '../i18n/index.js'
+import CvsKpis from '../components/cvs/CvsKpis.vue'
+import CvsSidebarList from '../components/cvs/CvsSidebarList.vue'
+import CvViewerPane from '../components/cvs/CvViewerPane.vue'
 
 const router = useRouter()
 
@@ -403,7 +406,7 @@ onMounted(() => {
         </p>
       </div>
 
-      <!-- Quick action buttons (cross-platform open folder, refresh) -->
+      <!-- Quick action buttons -->
       <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
         <button
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-border-subtle transition-colors shadow-sm active:scale-[0.98]"
@@ -430,484 +433,38 @@ onMounted(() => {
       </div>
     </section>
 
-    <!-- METRICS / KPIS ROW (OBSIDIAN PRECISION) -->
-    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- KPI 1: TOTAL CVS GENERADOS -->
-      <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.totalGenerated') }}</span>
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-accent font-mono text-[11px]">
-            {{ $t('cvs.kpi.thisWeek', { count: stats.recentWeek }) }}
-          </span>
-        </div>
-        <div class="flex items-baseline justify-between mt-3 mb-1">
-          <span class="text-2xl font-semibold text-on-surface tracking-tight">{{ stats.total }}</span>
-          <span class="font-mono text-xs text-outline">output/applications/*</span>
-        </div>
-        <div class="h-7 w-full mt-1">
-          <svg class="w-full h-full text-accent overflow-visible" fill="none" preserveAspectRatio="none" viewBox="0 0 100 28">
-            <path :d="totalSparkline.linePath" stroke="currentColor" stroke-linecap="round" stroke-width="1.75" />
-            <path :d="totalSparkline.areaPath" fill="currentColor" fill-opacity="0.08" />
-          </svg>
-        </div>
-      </div>
-
-      <!-- KPI 2: ADAPTACIONES ATS -->
-      <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.atsTailored') }}</span>
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-sky-400 font-mono text-[11px]">
-            {{ $t('cvs.kpi.atsPlatforms') }}
-          </span>
-        </div>
-        <div class="flex items-baseline justify-between mt-3 mb-1">
-          <span class="text-2xl font-semibold text-on-surface tracking-tight">
-            {{ stats.tailored }} <span class="text-xs text-outline font-normal">/ {{ stats.total }}</span>
-          </span>
-          <span class="font-mono text-xs text-sky-400">{{ $t('cvs.kpi.tailoredRatio', { ratio: stats.tailoredRatio }) }}</span>
-        </div>
-        <div class="h-7 w-full mt-1">
-          <svg class="w-full h-full text-sky-400 overflow-visible" fill="none" preserveAspectRatio="none" viewBox="0 0 100 28">
-            <path :d="tailoredSparkline.linePath" stroke="currentColor" stroke-linecap="round" stroke-width="1.75" />
-            <path :d="tailoredSparkline.areaPath" fill="currentColor" fill-opacity="0.08" />
-          </svg>
-        </div>
-      </div>
-
-      <!-- KPI 3: POSTULACIONES ACTIVAS -->
-      <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.activeApps') }}</span>
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-high text-amber-400 font-mono text-[11px]">
-            {{ $t('cvs.kpi.inTracking') }}
-          </span>
-        </div>
-        <div class="flex items-baseline justify-between mt-3 mb-1">
-          <span class="text-2xl font-semibold text-amber-400 tracking-tight">{{ stats.activeCount }}</span>
-          <span class="font-mono text-xs text-outline">{{ $t('cvs.kpi.inProcessRatio', { ratio: stats.activeRatio }) }}</span>
-        </div>
-        <div class="h-7 w-full mt-1">
-          <svg class="w-full h-full text-amber-400 overflow-visible" fill="none" preserveAspectRatio="none" viewBox="0 0 100 28">
-            <path :d="activeSparkline.linePath" stroke="currentColor" stroke-linecap="round" stroke-width="1.75" />
-            <path :d="activeSparkline.areaPath" fill="currentColor" fill-opacity="0.08" />
-          </svg>
-        </div>
-      </div>
-
-      <!-- KPI 4: ALMACENAMIENTO LOCAL -->
-      <div class="p-4 rounded-xl bg-surface-card border border-border-subtle flex flex-col justify-between hover:border-border-muted transition-all group">
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono uppercase tracking-wider text-outline">{{ $t('cvs.kpi.localStorage') }}</span>
-          <span class="inline-flex items-center gap-1.5 text-emerald-400 font-mono text-[11px]">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            {{ $t('cvs.kpi.synced') }}
-          </span>
-        </div>
-        <div class="flex items-baseline justify-between mt-3 mb-1">
-          <span class="text-2xl font-semibold text-on-surface tracking-tight">
-            {{ stats.totalMb }} <span class="text-xs text-outline font-normal">MB</span>
-          </span>
-          <span class="font-mono text-xs text-outline">{{ $t('cvs.kpi.avgPerPdf', { avg: stats.avgKb }) }}</span>
-        </div>
-        <div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden mt-3">
-          <div class="bg-accent h-full rounded-full transition-all" style="width: 28%;"></div>
-        </div>
-      </div>
-    </section>
+    <!-- METRICS / KPIS ROW -->
+    <CvsKpis
+      :stats="stats"
+      :total-sparkline="totalSparkline"
+      :tailored-sparkline="tailoredSparkline"
+      :active-sparkline="activeSparkline"
+    />
 
     <!-- MASTER-DETAIL MAIN SECTION: SPLIT PANE -->
     <section class="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-      <!-- LEFT COLUMN: CV LIST (xl:col-span-5 2xl:col-span-4) -->
-      <div class="xl:col-span-5 2xl:col-span-4 flex flex-col gap-3 bg-surface-card border border-border-subtle p-3.5 rounded-xl">
-        <!-- Search and filter box -->
-        <div class="flex flex-col gap-2">
-          <div class="relative flex items-center">
-            <span class="material-symbols-outlined absolute left-3 text-[17px] text-outline">search</span>
-            <input
-              v-model="search"
-              class="w-full pl-9 pr-8 py-1.5 rounded-lg bg-surface-container text-on-surface text-xs placeholder:text-outline border border-border-subtle focus:outline-none focus:border-accent transition-colors"
-              :placeholder="$t('cvs.list.searchPlaceholder')"
-              type="text"
-            />
-            <button
-              v-if="search"
-              class="absolute right-2 text-outline hover:text-on-surface text-xs"
-              type="button"
-              @click="search = ''"
-            >
-              ✕
-            </button>
-          </div>
+      <!-- LEFT COLUMN: CV LIST -->
+      <CvsSidebarList
+        v-model:search="search"
+        v-model:selected-platform="selectedPlatform"
+        :stats="stats"
+        :filtered-files="filteredFiles"
+        :selected-cv="selectedCv"
+        :loading="loading"
+        @select-item="selectItem"
+        @download-pdf="downloadPdf"
+        @copy-path="copyPath"
+      />
 
-          <!-- Filter Tabs / Pills -->
-          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'all'
-                  ? 'bg-surface-container-high text-on-surface border border-border-muted font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'all'"
-            >
-              {{ $t('common.all') }} ({{ stats.total }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'Greenhouse'
-                  ? 'bg-surface-container-high text-sky-400 border border-sky-500/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'Greenhouse'"
-            >
-              Greenhouse ({{ stats.greenhouse }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'Lever'
-                  ? 'bg-surface-container-high text-amber-400 border border-amber-500/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'Lever'"
-            >
-              Lever ({{ stats.lever }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'Ashby'
-                  ? 'bg-surface-container-high text-emerald-400 border border-emerald-500/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'Ashby'"
-            >
-              Ashby ({{ stats.ashby }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'Workable'
-                  ? 'bg-surface-container-high text-blue-400 border border-blue-500/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'Workable'"
-            >
-              Workable ({{ stats.workable }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'Breezy'
-                  ? 'bg-surface-container-high text-teal-400 border border-teal-500/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'Breezy'"
-            >
-              Breezy ({{ stats.breezy }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'Recruitee'
-                  ? 'bg-surface-container-high text-rose-400 border border-rose-500/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'Recruitee'"
-            >
-              Recruitee ({{ stats.recruitee }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'BambooHR'
-                  ? 'bg-surface-container-high text-lime-400 border border-lime-500/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'BambooHR'"
-            >
-              BambooHR ({{ stats.bamboohr }})
-            </button>
-
-            <button
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-              :class="[
-                selectedPlatform === 'Base'
-                  ? 'bg-surface-container-high text-primary border border-primary/30 font-semibold'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-              ]"
-              type="button"
-              @click="selectedPlatform = 'Base'"
-            >
-              Base ({{ stats.base }})
-            </button>
-          </div>
-        </div>
-
-        <!-- Scrollable List of CV Cards -->
-        <div class="flex flex-col gap-1.5 max-h-[calc(100vh-340px)] min-h-[520px] overflow-y-auto pr-1">
-          <div
-            v-if="!filteredFiles.length && !loading"
-            class="p-6 text-center text-xs text-outline font-mono bg-surface-container/30 rounded-lg border border-border-subtle"
-          >
-            {{ $t('cvs.list.emptySearch') }}
-          </div>
-
-          <div
-            v-for="item in filteredFiles"
-            :key="item.key"
-            class="p-3 rounded-lg border transition-all flex items-start gap-3 relative group cursor-pointer"
-            :class="[
-              selectedCv && selectedCv.key === item.key
-                ? 'bg-surface-container-high border-accent shadow-sm'
-                : 'bg-surface-container/50 border-border-subtle hover:bg-surface-container hover:border-border-muted'
-            ]"
-            @click="selectItem(item)"
-          >
-            <!-- PDF Icon Box -->
-            <div
-              class="w-7 h-8 rounded flex flex-col items-center justify-center shrink-0 transition-colors"
-              :class="[
-                selectedCv && selectedCv.key === item.key
-                  ? 'bg-accent/20 text-accent'
-                  : 'bg-surface-container-highest text-outline group-hover:text-on-surface'
-              ]"
-            >
-              <span class="material-symbols-outlined text-[17px]">picture_as_pdf</span>
-            </div>
-
-            <!-- Card Content -->
-            <div class="flex flex-col min-w-0 flex-1">
-              <div class="flex items-center justify-between gap-2">
-                <span
-                  class="text-xs font-medium truncate"
-                  :class="[selectedCv && selectedCv.key === item.key ? 'text-accent font-semibold' : 'text-on-surface']"
-                >
-                  {{ item.company }} · {{ item.role }}
-                </span>
-                <span class="font-mono text-[11px] text-outline shrink-0">{{ item.formattedDate }}</span>
-              </div>
-
-              <p class="font-mono text-[11px] text-on-surface-variant truncate mt-0.5">
-                {{ item.fileName }}
-              </p>
-
-              <div class="flex items-center gap-2 mt-2 font-mono text-[11px] text-outline flex-wrap">
-                <span
-                  class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-sans"
-                  :class="[
-                    item.platform === 'Greenhouse'
-                      ? 'bg-sky-500/10 text-sky-400'
-                      : item.platform === 'Lever'
-                        ? 'bg-amber-500/10 text-amber-400'
-                        : item.platform === 'Ashby'
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : item.platform === 'Workable'
-                            ? 'bg-blue-500/10 text-blue-400'
-                            : item.platform === 'Breezy'
-                              ? 'bg-teal-500/10 text-teal-400'
-                              : item.platform === 'Recruitee'
-                                ? 'bg-rose-500/10 text-rose-400'
-                                : item.platform === 'BambooHR'
-                                  ? 'bg-lime-500/10 text-lime-400'
-                                  : 'bg-surface-container-highest text-on-surface-variant'
-                  ]"
-                >
-                  {{ item.company }} • {{ item.platform }}
-                </span>
-                <span>•</span>
-                <span>{{ item.formattedSize }}</span>
-
-                <span
-                  v-if="item.applicationStatus"
-                  class="ml-auto inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-sans uppercase"
-                  :class="[
-                    item.applicationStatus === 'applied'
-                      ? 'bg-sky-500/10 text-sky-400'
-                      : item.applicationStatus === 'interview'
-                        ? 'bg-amber-500/15 text-amber-300'
-                        : item.applicationStatus === 'offer'
-                          ? 'bg-emerald-500/15 text-emerald-400'
-                          : item.applicationStatus === 'pending'
-                            ? 'bg-amber-500/10 text-amber-400'
-                            : 'bg-surface-container text-outline'
-                  ]"
-                >
-                  {{ $t('status.' + item.applicationStatus) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Quick actions on hover -->
-            <div class="absolute right-2 bottom-2 hidden group-hover:flex items-center gap-1 bg-surface-container-highest px-1.5 py-0.5 rounded shadow">
-              <button
-                class="p-1 hover:text-accent transition-colors text-outline"
-                :title="$t('cvs.detail.downloadPdf')"
-                type="button"
-                @click.stop="downloadPdf(item)"
-              >
-                <span class="material-symbols-outlined text-[15px]">download</span>
-              </button>
-              <button
-                class="p-1 hover:text-accent transition-colors text-outline"
-                :title="$t('cvs.detail.copyLocalPath')"
-                type="button"
-                @click.stop="copyPath(item)"
-              >
-                <span class="material-symbols-outlined text-[15px]">content_copy</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- List Footer Counter -->
-        <div class="pt-2 flex items-center justify-between font-mono text-[11px] text-outline border-t border-border-subtle">
-          <span>{{ $t('cvs.list.fileCount', { shown: filteredFiles.length, total: stats.total }) }}</span>
-          <span v-if="selectedPlatform !== 'all'" class="text-accent">{{ $t('cvs.list.activeFilter', { filter: selectedPlatform }) }}</span>
-        </div>
-      </div>
-
-      <!-- RIGHT COLUMN: HIGH-FIDELITY PDF VIEWER CANVAS (xl:col-span-7 2xl:col-span-8) -->
-      <div class="xl:col-span-7 2xl:col-span-8 flex flex-col rounded-xl overflow-hidden bg-surface-card border border-border-subtle shadow-lg">
-        <!-- VIEWER TOP TOOLBAR -->
-        <div class="h-14 px-4 bg-surface-container border-b border-border-subtle flex items-center justify-between gap-3 select-none flex-wrap">
-          <!-- Left: Title & ATS Badge -->
-          <div class="flex items-center gap-2.5 min-w-0">
-            <span class="material-symbols-outlined text-[18px] text-accent">description</span>
-            <div class="flex flex-col min-w-0">
-              <span class="text-xs font-semibold text-on-surface truncate max-w-xs md:max-w-md">
-                {{ selectedCv?.company }} · {{ selectedCv?.role }}
-              </span>
-              <span class="font-mono text-[10px] text-outline truncate">
-                {{ selectedCv?.fileName || $t('cvs.detail.noFileSelected') }}
-              </span>
-            </div>
-            <span
-              class="hidden sm:inline-flex items-center px-2 py-0.5 rounded font-mono text-[10px] ml-1"
-              :class="[
-                selectedCv?.isBase
-                  ? 'bg-surface-container-highest text-on-surface-variant'
-                  : 'bg-accent/15 text-accent border border-accent/20'
-              ]"
-            >
-              {{ selectedCv?.isBase ? $t('cvs.detail.baseCv') : `${selectedCv?.platform} ATS-Ready` }}
-            </span>
-          </div>
-
-          <!-- Right: Actions -->
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <!-- BOTÓN: VER VACANTE ASOCIADA -->
-            <button
-              v-if="selectedCv?.applicationUrl"
-              class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-xs font-medium transition-colors shadow-sm"
-              :title="$t('cvs.detail.openVacancyTip')"
-              type="button"
-              @click="openAssociatedVacancy(selectedCv)"
-            >
-              <span class="material-symbols-outlined text-[15px]">open_in_new</span>
-              <span>{{ $t('cvs.detail.openVacancy') }}</span>
-            </button>
-
-            <!-- BOTÓN: VER EN POSTULACIONES -->
-            <button
-              v-if="selectedCv?.applicationId"
-              class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-medium border border-border-subtle transition-colors"
-              :title="$t('cvs.detail.goToAppTip')"
-              type="button"
-              @click="goToApplications(selectedCv)"
-            >
-              <span class="material-symbols-outlined text-[15px] text-accent">send</span>
-              <span>{{ $t('cvs.detail.goToApp') }}</span>
-            </button>
-
-            <!-- Quick icon actions -->
-            <button
-              class="p-1.5 rounded hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors"
-              :title="$t('cvs.detail.copyPathTip')"
-              type="button"
-              @click="copyPath(selectedCv)"
-            >
-              <span class="material-symbols-outlined text-[17px]">content_copy</span>
-            </button>
-
-            <button
-              class="p-1.5 rounded hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors"
-              :title="$t('cvs.detail.downloadTip')"
-              type="button"
-              @click="downloadPdf(selectedCv)"
-            >
-              <span class="material-symbols-outlined text-[17px]">download</span>
-            </button>
-
-            <button
-              class="p-1.5 rounded hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors"
-              :title="$t('cvs.detail.openNewTabTip')"
-              type="button"
-              @click="openInNewTab(selectedCv)"
-            >
-              <span class="material-symbols-outlined text-[17px]">open_in_browser</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- VIEWER DESK / REAL PDF CANVAS -->
-        <div class="p-2 sm:p-4 bg-surface-dim/95 flex justify-center items-center viewer-desk">
-          <iframe
-            v-if="selectedCv?.downloadUrl"
-            :key="selectedCv.downloadUrl"
-            class="viewer-frame rounded-md border border-border-subtle shadow-2xl"
-            :src="selectedCv.downloadUrl"
-            :title="$t('cvs.detail.previewFrameTitle')"
-          />
-          <div
-            v-else
-            class="flex flex-col items-center justify-center p-12 text-center text-outline gap-2"
-          >
-            <span class="material-symbols-outlined text-4xl text-outline">description</span>
-            <span class="text-xs font-mono">{{ $t('cvs.detail.selectCvPrompt') }}</span>
-          </div>
-        </div>
-
-        <!-- VIEWER BOTTOM METADATA BAR -->
-        <div class="h-10 px-4 bg-surface-container border-t border-border-subtle flex items-center justify-between text-outline font-mono text-[11px] flex-wrap gap-2">
-          <div class="flex items-center gap-2.5">
-            <span>{{ $t('cvs.detail.fileLabel') }} <code class="text-on-surface-variant">{{ selectedCv?.fileName }}</code></span>
-            <span>•</span>
-            <span>{{ $t('cvs.detail.sizeLabel') }} <span class="text-on-surface">{{ selectedCv?.formattedSize }}</span></span>
-            <span class="hidden md:inline">•</span>
-            <span class="hidden md:inline">{{ $t('cvs.detail.modifiedLabel') }} <span class="text-on-surface">{{ selectedCv?.fullDate }}</span></span>
-          </div>
-
-          <div class="flex items-center gap-2.5">
-            <span
-              v-if="selectedCv?.applicationStatus"
-              class="inline-flex items-center gap-1 text-sky-400"
-            >
-              <span class="material-symbols-outlined text-[13px]">verified</span>
-              {{ $t('cvs.detail.applicationStatus', { status: $t('status.' + selectedCv.applicationStatus) }) }}
-            </span>
-            <span v-else class="text-outline">
-              {{ selectedCv?.isBase ? $t('cvs.detail.baseTemplate') : $t('cvs.detail.localTailored') }}
-            </span>
-          </div>
-        </div>
-      </div>
+      <!-- RIGHT COLUMN: HIGH-FIDELITY PDF VIEWER CANVAS -->
+      <CvViewerPane
+        :selected-cv="selectedCv"
+        @open-associated-vacancy="openAssociatedVacancy"
+        @go-to-applications="goToApplications"
+        @copy-path="copyPath"
+        @download-pdf="downloadPdf"
+        @open-in-new-tab="openInNewTab"
+      />
     </section>
 
     <!-- NOTIFICACIONES TOAST -->
@@ -930,15 +487,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.viewer-desk {
-  min-height: 640px;
-}
-.viewer-frame {
-  width: 100%;
-  height: calc(100vh - 360px);
-  min-height: 620px;
-  background-color: #1e1e20;
-}
-</style>
