@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-11-01
+
+### Changed
+- Modularized Express backend server (`web/server/index.js`) from 1,118 lines to 152 lines by extracting route handlers into `web/server/routes/` (`agent.js`, `applications.js`, `apply.js`, `exclusions.js`, `files.js`, `profile.js`, `scan.js`, `system.js`), server context into `web/server/context.js`, and router utilities into `web/server/router-utils.js`.
+- Decomposed monolithic `BaseApplicator` (`src/automation/applicators/base.py`) from 2,315 lines to 48 lines through 7 specialized mixin classes: `HUDMixin` (`hud.py`), `SalaryMixin` (`salary.py`), `QuestionsEngineMixin` (`questions_engine.py`), `CustomQuestionsMixin` (`custom_questions.py`), `FormControlsMixin` (`form_controls.py`), `FileUploaderMixin` (`file_uploader.py`), and `AuditMixin` (`audit.py`).
+- Modularized Vue single-file views into 16 reusable components under `web/src/components/`:
+  - `ProfileView.vue` (from 1,625 to 326 lines): extracted `ProfilePersonalTab.vue`, `ProfileQuestionsTab.vue`, and `ProfileAiTab.vue`.
+  - `SearchView.vue` (from 1,473 to 134 lines): extracted `SearchKpis.vue`, `SearchFiltersCard.vue`, `SearchLiveProgress.vue`, and `SearchResultsTable.vue`.
+  - `ApplicationsView.vue` (from 1,375 to 368 lines): extracted `ApplicationsKpiCards.vue`, `ApplicationsStatusTabs.vue`, `ApplicationsToolbar.vue`, `ApplicationsTable.vue`, `ApplicationStatusModal.vue`, and `NewApplicationModal.vue`.
+  - `CvsView.vue` (from 945 to 280 lines): extracted `CvsKpis.vue`, `CvsSidebarList.vue`, and `CvViewerPane.vue`.
+- Decomposed `BaseScanner` (`src/scanners/base.py`) from 676 lines to 88 lines by moving regex tables and constants to `src/scanners/constants.py` and location, residency, and experience filtering methods to `src/scanners/location_filter.py`.
+- Modularized AI agent adapter in Node (`web/server/agent-adapter.js`) from 646 lines to 34 lines by separating direct HTTP and CLI callers into `web/server/ai/api-clients.js`, provider configuration and status checking into `web/server/ai/providers.js`, and task prompt builders into `web/server/ai/tasks.js`.
+- Modularized Python agent adapter (`src/automation/agent_adapter.py`) from 383 lines to 179 lines by moving API calls and CLI process invocation to `src/automation/ai_client.py`.
+
 ## [1.4.2] - 2026-10-31
 
 ### Security
